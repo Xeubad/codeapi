@@ -17,28 +17,29 @@
 | `upstream` | 官方仓库 `Wei-Shaw/sub2api` |
 | `origin` | 二开 fork `Xeubad/codeapi` |
 | `upstream/main` | 只读的官方主线 |
-| `develop` | 二开日常集成分支 |
-| `main` | 生产稳定分支 |
-| `feature/custom-*` | 私有功能开发 |
-| `fix/custom-*` | 私有缺陷修复 |
-| `sync/upstream-*` | 单次上游同步与冲突处理 |
+| `main` | 二开唯一长期分支，同时是集成分支和生产分支 |
+| `feature/custom-*` | 私有功能开发，合入 `main` 后删除 |
+| `fix/custom-*` | 私有缺陷修复，合入 `main` 后删除 |
+| `sync/upstream-*` | 单次上游同步与冲突处理，快进 `main` 后保留作审计 |
+
+本 fork 单人维护、没有预发环境，因此不设 `develop`。两条长期分支只会在每次同步时多制造一次「谁提升谁」的人工步骤，收益要等有第二套部署才出现。
 
 推荐流向：
 
 ```text
 upstream/main
       |
-      v
+      v  merge --no-ff
 sync/upstream-YYYYMMDD-SHA
       |
-      v
-   develop <--- feature/custom-* / fix/custom-*
+      v  merge --ff-only
+     main  <--- feature/custom-* / fix/custom-*
       |
-      v
-     main ---> vX.Y.Z-custom.N
+      v  tag
+  vX.Y.Z-custom.N
 ```
 
-`main` 和 `develop` 都是共享分支。不要对它们 rebase 或 force push。
+`main` 是共享分支。不要对它 rebase 或 force push。
 
 ## Agent 指令如何生效
 
@@ -71,12 +72,12 @@ git fetch --prune origin
 git remote get-url upstream
 ```
 
-首次建立集成分支：
+主干 `main` 在 fork 建立时就已存在并跟踪 `origin/main`，不需要额外初始化集成分支。
+
+把上游的 push 地址禁掉，让误推在 git 层面直接失败，而不是靠自觉：
 
 ```bash
-git switch main
-git switch -c develop
-git push -u origin develop
+git remote set-url --push upstream DISABLED
 ```
 
 建议启用冲突复用与更清晰的冲突上下文：
@@ -121,11 +122,11 @@ Agent 会自动：
 
 Agent 会基于报告中固定的上游 SHA：
 
-1. 从 `develop` 创建 `sync/upstream-*`；
+1. 从 `main` 创建 `sync/upstream-*`；
 2. 使用 merge 吸收 `upstream/main`；
 3. 解决确定性冲突；
 4. 运行完整测试和构建；
-5. 测试通过后，将本地 `develop` 快进到同步结果；
+5. 测试通过后，将本地 `main` 快进到同步结果；
 6. 汇报冲突处理、测试结果和残余风险。
 
 如果上游 SHA、工作区或基线在确认前发生变化，Agent 必须重新分析，旧确认自动失效。
@@ -140,15 +141,17 @@ Agent 会基于报告中固定的上游 SHA：
 
 Agent 会先列出目标远端、分支和提交范围，再执行普通 push。默认不允许 force push。
 
-### 提升生产
+### 发布二开版本
 
-需要更新生产分支时说：
+需要发布时说：
 
 ```text
-检查 develop 是否可以合并到 main
+从当前 main 打 tag 发布 v0.2.17-custom.1
 ```
 
-Agent 会比较差异、复核迁移和配置、运行验证，并在真正更新 `main` 前再次请求确认。上游同步确认不自动包含生产提升。
+`main` 同时承担集成与生产，因此不存在 develop→main 的提升确认；但发布确认仍然独立于同步确认——同步授权不会顺带打 tag。Agent 在打 tag 前会确认 `main` HEAD 已通过完整验证、与上一个 tag 做过差异复核、并检查迁移与配置兼容性。
+
+发布后需要知道：版本号数字段必须严格递增，`-custom.N` 后缀不参与更新判定。
 
 ## 上游分析报告应包含什么
 
@@ -252,11 +255,11 @@ make build
 
 ## 失败与恢复
 
-- 合并失败：保留 `sync/upstream-*` 分支，不更新 `develop`。
+- 合并失败：保留 `sync/upstream-*` 分支，不更新 `main`。
 - 测试失败：在同步分支修复或等待决策，不把失败结果推进共享分支。
 - 工作区存在用户改动：不自动 stash，不开始合并。
 - 上游在确认后变化：固定 SHA 不一致时重新分析。
-- 已更新本地 `develop` 但尚未 push：保留同步分支作为审计和恢复点。
+- 已更新本地 `main` 但尚未 push：保留同步分支作为审计和恢复点。
 - 已推送后发现问题：使用新的 revert/fix 提交，不重写共享历史。
 
 ## 发布产物命名

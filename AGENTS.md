@@ -13,10 +13,9 @@
 - 二开发布产物：镜像名跟随仓库名 → `ghcr.io/xeubad/codeapi`；二进制名、systemd 服务名、`INSTALL_DIR` 仍为 `sub2api` / `/opt/sub2api`
 - 应用内检查更新的仓库：`Xeubad/codeapi`（禁止指回上游，否则会用官方二进制覆盖本地改动）
 - 上游基线：`upstream/main`
-- 二开集成分支：`develop`
-- 生产稳定分支：`main`
-- 功能分支：`feature/custom-*`、`fix/custom-*`
-- 上游同步分支：`sync/upstream-YYYYMMDD-<short-sha>`
+- 二开主干：`main`，唯一长期分支，同时承担集成与生产。本 fork 单人维护、无预发环境，因此不设 `develop`
+- 功能分支：`feature/custom-*`、`fix/custom-*`，合入 `main` 后删除
+- 上游同步分支：`sync/upstream-YYYYMMDD-<short-sha>`，一次性，验证通过后快进 `main`，之后保留作审计
 
 不要修改 Go module path `github.com/Wei-Shaw/sub2api`，除非用户明确要求并接受全仓导入路径迁移。
 
@@ -24,8 +23,8 @@
 
 - 开始任何修改前，先读取 `git status --short --branch`、当前分支和相关文件。
 - 工作区可能包含用户改动。不得丢弃、覆盖、自动暂存或自动 stash 用户改动。
-- 不在 `main` 或 `develop` 上直接开发功能；使用短生命周期分支。
-- 已共享的 `main`、`develop` 和 `sync/*` 不做 rebase，不强推。
+- 不在 `main` 上直接开发功能；使用短生命周期分支。
+- 已共享的 `main` 和 `sync/*` 不做 rebase，不强推。
 - 未经用户明确授权，不执行 `git push`、创建/移动 tag、发布、部署或创建 PR。
 - 不使用 `git reset --hard`、`git checkout -- <file>`、`git clean` 等破坏性命令处理冲突。
 - 合并冲突必须理解双方语义。无法确定业务意图时保留同步分支并询问用户。
@@ -49,7 +48,7 @@
 - “合并”
 - “按方案执行”
 
-该确认授权创建同步分支、合并、解决确定性冲突、运行验证，并在全部通过后快进本地 `develop`。它不授权 push、更新 `main`、打 tag、发布或部署。
+该确认授权创建同步分支、合并、解决确定性冲突、运行验证，并在全部通过后把本地 `main` 快进到同步结果。它不授权 `git push`、打 tag、发布或部署。
 
 如果用户一开始明确说“拉取、分析并确认后合并”，仍必须在分析报告后停在确认门，不得把最初请求当作提前确认。
 
@@ -63,7 +62,7 @@
 3. 若 `upstream` 已存在但 URL 不同，不自动覆盖；报告差异并等待用户决定。
 4. 验证 `origin`。若与当前 fork 地址不同，不自动覆盖。
 5. 执行 `git fetch --prune upstream`。需要了解 fork 状态时再执行 `git fetch --prune origin`。
-6. 选择二开基线：优先本地 `develop`；若不存在，使用 `origin/develop`；仍不存在则用本地 `main`，并在报告中提出初始化 `develop`。
+6. 二开基线固定为本地 `main`（跟踪 `origin/main`）。若本地 `main` 与 `origin/main` 或上游存在分叉，先写入报告再规划。
 7. 记录待合并的完整 `upstream/main` SHA。后续确认只对该 SHA 有效。
 8. 分析并汇报：
    - 二开基线与上游各自 ahead/behind 数量；
@@ -82,30 +81,32 @@
 
 用户确认刚刚的计划后：
 
-1. 重新检查工作区、基线分支和 `upstream/main` SHA。
+1. 重新检查工作区、`main` 和 `upstream/main` SHA。
 2. 若工作区变脏或上游 SHA 已变化，停止并重新分析；旧确认失效。
-3. 若 `develop` 不存在，按已确认计划从当前二开基线创建本地 `develop`。
-4. 从 `develop` 创建计划中的 `sync/upstream-*` 分支。
-5. 执行 `git merge --no-ff upstream/main`。不得用 rebase 改写二开历史。
-6. 解决确定性冲突，完成合并提交，并记录每个冲突采用上游、本地或组合方案的原因。
-7. 特别检查迁移文件名冲突、已发布迁移被修改、Ent 生成代码、锁文件、配置默认值与前端嵌入产物。
-8. 运行与变更匹配的验证。上游同步默认运行完整验证：
+3. 从 `main` 创建计划中的 `sync/upstream-*` 分支。
+4. 执行 `git merge --no-ff upstream/main`。不得用 rebase 改写二开历史。
+5. 解决确定性冲突，完成合并提交，并记录每个冲突采用上游、本地或组合方案的原因。
+6. 特别检查迁移文件名冲突、已发布迁移被修改、Ent 生成代码、锁文件、配置默认值与前端嵌入产物。
+7. 运行与变更匹配的验证。上游同步默认运行完整验证：
    - `git diff --check`
    - `make test`
    - `make build`
-9. 若验证失败，保留同步分支和现场，报告失败原因；不得更新 `develop`。
-10. 若验证通过，将本地 `develop` 快进到同步分支：
-    `git switch develop && git merge --ff-only <sync-branch>`。
-11. 汇报最终提交、冲突决策、测试结果、未验证风险和建议的下一步。
+8. 若验证失败，保留同步分支和现场，报告失败原因；不得更新 `main`。
+9. 若验证通过，将本地 `main` 快进到同步分支：
+   `git switch main && git merge --ff-only <sync-branch>`。
+10. 汇报最终提交、冲突决策、测试结果、未验证风险和建议的下一步。
 
 不要自动删除同步分支。不要自动 push。用户明确要求推送时，先展示将推送的远端、分支和提交范围，再执行普通 push；禁止 force push。
 
-## Promotion and Release
+若 `main` 恰好是 `upstream/main` 的祖先（领先 0、落后 N），不要先合功能分支再同步：先把 `main` 快进到上游（纯快进，零冲突），再把功能分支合进 `main`。这样大批量上游提交不进入三方合并，冲突只在功能分支那一侧出现一次。
 
-- `develop -> main` 是生产提升，不属于上游同步确认的授权范围。
-- 用户要求提升生产时，先比较 `main...develop`、复核迁移和配置兼容性、运行完整验证，再请求最终确认。
-- 发布标签采用能区分二开的版本，例如 `v0.2.7-custom.1`。
+## Release and Rollback
+
+- `main` 同时是集成分支和生产分支，不存在 `develop -> main` 提升步骤。
+- 发布即从验证通过的 `main` HEAD 打 tag，版本号形如 `v0.2.17-custom.1`。
+- 数字段必须严格递增：`update_service.go` 的 `parseVersion` 丢弃 `-custom.N` 后缀，更新判定只比较三段数字，同版本号的二开 tag 永远显示"无更新"。
 - 创建或推送标签、触发 Release workflow、部署前必须得到明确授权。
+- 回滚用新的前向提交完成：对同步合并执行 `git revert -m 1 <merge-commit>`；已应用的数据库迁移不可回退，必须新增前向修正迁移。
 
 ## Project-Specific Change Rules
 

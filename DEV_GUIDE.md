@@ -266,12 +266,14 @@ psql -U sub2api -h 127.0.0.1 -d sub2api -f migration.sql
 ```bash
 # 获取上游，先分析再合并
 git fetch upstream
-git switch develop
+git switch main
 git switch -c sync/upstream-YYYYMMDD-SHA
 git merge --no-ff upstream/main
+# 验证通过后才快进主干
+git switch main && git merge --ff-only sync/upstream-YYYYMMDD-SHA
 
 # 创建功能分支
-git switch develop
+git switch main
 git switch -c feature/custom-xxx
 
 # 验证同步结果
@@ -279,7 +281,7 @@ make test
 make build
 ```
 
-不要在共享的 `main` 或 `develop` 上 rebase 或 force push。日常推荐直接让 Agent 执行：说“拉取源仓库更新”，Agent 会 fetch、分析并等待确认，确认后再创建同步分支、合并和验证。完整规则见 [Fork 二次开发与上游同步手册](docs/FORK_MAINTENANCE_CN.md)。
+不要在共享的 `main` 上 rebase 或 force push。日常推荐直接让 Agent 执行：说“拉取源仓库更新”，Agent 会 fetch、分析并等待确认，确认后再创建同步分支、合并和验证。完整规则见 [Fork 二次开发与上游同步手册](docs/FORK_MAINTENANCE_CN.md)。
 
 ### 前端操作
 

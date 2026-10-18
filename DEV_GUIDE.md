@@ -1,13 +1,13 @@
 # sub2api 项目开发指南
 
-> 本文档记录项目环境配置、常见坑点和注意事项，供 Claude Code 和团队成员参考。
+> 本文档记录项目环境配置、常见坑点和注意事项，供编码 Agent 和团队成员参考。Fork 分支模型、上游同步和确认边界见 [Fork 二次开发与上游同步手册](docs/FORK_MAINTENANCE_CN.md)。
 
 ## 一、项目基本信息
 
 | 项目 | 说明 |
 |------|------|
 | **上游仓库** | Wei-Shaw/sub2api |
-| **Fork 仓库** | bayma888/sub2api-bmai |
+| **Fork 仓库** | Xeubad/codeapi（原 Xeubad/sub2api） |
 | **技术栈** | Go 后端 (Ent ORM + Gin) + Vue3 前端 (pnpm) |
 | **数据库** | PostgreSQL 16 + Redis |
 | **包管理** | 后端: go modules, 前端: **pnpm**（不是 npm） |
@@ -264,19 +264,24 @@ psql -U sub2api -h 127.0.0.1 -d sub2api -f migration.sql
 ### Git 操作
 
 ```bash
-# 同步上游
+# 获取上游，先分析再合并
 git fetch upstream
-git checkout main
-git merge upstream/main
-git push origin main
+git switch main
+git switch -c sync/upstream-YYYYMMDD-SHA
+git merge --no-ff upstream/main
+# 验证通过后才快进主干
+git switch main && git merge --ff-only sync/upstream-YYYYMMDD-SHA
 
 # 创建功能分支
-git checkout -b feature/xxx
+git switch main
+git switch -c feature/custom-xxx
 
-# Rebase 到最新 main
-git fetch upstream
-git rebase upstream/main
+# 验证同步结果
+make test
+make build
 ```
+
+不要在共享的 `main` 上 rebase 或 force push。日常推荐直接让 Agent 执行：说“拉取源仓库更新”，Agent 会 fetch、分析并等待确认，确认后再创建同步分支、合并和验证。完整规则见 [Fork 二次开发与上游同步手册](docs/FORK_MAINTENANCE_CN.md)。
 
 ### 前端操作
 
@@ -313,7 +318,7 @@ golangci-lint run ./...
 ## 六、项目结构速览
 
 ```
-sub2api-bmai/
+sub2api/
 ├── backend/
 │   ├── cmd/server/          # 主程序入口
 │   ├── ent/                 # Ent ORM 生成代码
@@ -334,13 +339,15 @@ sub2api-bmai/
 │   │   └── i18n/            # 国际化
 │   ├── package.json         # 依赖配置
 │   └── pnpm-lock.yaml       # pnpm 锁文件（必须提交）
-└── .claude/
-    └── CLAUDE.md            # 本文档
+├── AGENTS.md                 # Agent 执行规则
+└── docs/
+    └── FORK_MAINTENANCE_CN.md # Fork 维护手册
 ```
 
 ## 七、参考资源
 
 - [上游仓库](https://github.com/Wei-Shaw/sub2api)
+- [Fork 二次开发与上游同步手册](docs/FORK_MAINTENANCE_CN.md)
 - [Ent 文档](https://entgo.io/docs/getting-started)
 - [Vue3 文档](https://vuejs.org/)
 - [pnpm 文档](https://pnpm.io/)

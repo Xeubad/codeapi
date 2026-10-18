@@ -30,7 +30,8 @@ var (
 const (
 	updateCacheKey = "update_check_cache"
 	updateCacheTTL = 1200 // 20 minutes
-	githubRepo     = "Wei-Shaw/sub2api"
+	// 二开发布走自己的仓库；指向上游会让"一键更新"用官方二进制覆盖本地改动。
+	githubRepo = "Xeubad/codeapi"
 
 	// Security: allowed download domains for updates
 	allowedDownloadHost = "github.com"

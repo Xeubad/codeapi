@@ -272,7 +272,8 @@ make build
 - **二进制名 `sub2api` 不可改。** 它被 `Dockerfile.goreleaser` 的 `COPY sub2api /app/sub2api`、`release_matrix.py` 的归档名 `sub2api_{ver}_{os}_{arch}` 与 tar 成员名、`test_release_matrix.py` 的 fixture、`deploy/install.sh` 的 `SERVICE_NAME` 与 `/opt/sub2api` 共同依赖。只改「镜像名的最后一段」不影响这条链。
 - 发布标签 `v0.2.7-custom.1` 可以通过校验（`release_matrix.py` 的 `VERSION_RE` 允许 `-` 后缀），流水线会把该版本号写入 `backend/cmd/server/VERSION` 再嵌入二进制。
 - **已知后果：** `update_service.go` 的 `parseVersion` 丢弃 `-` 之后的一切且只比较三段数字，所以 `0.2.7-custom.1` 相对 `0.2.7` 判定为「无更新」，后台的更新与回滚按钮实际不会亮。当前决定是保留 `-custom.N` 命名并接受这一点：升级一律走 Git + 自行发版，不要把「一键更新」当升级通道。
-- Docker Hub 当前未启用（仓库 Actions secrets 为空），`release-images.sh` 与 goreleaser 的 DockerHub 分支恒 skip；Telegram 发布通知同样因缺少 secret 而跳过。将来若启用 Docker Hub，需要同时做三件事：配置 `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN`、把 `release.yml` 中 `dockerhub-description` 步骤的 `repository:` 由 `sub2api` 改成仓库名、更新 `VersionBadge.vue` 的 `DOCKER_IMAGE`。
+- Docker Hub 当前未启用（仓库 Actions secrets 为空），`release-images.sh` 与 goreleaser 的 DockerHub 分支恒 skip；Telegram 发布通知同样因缺少 secret 而跳过。GHCR 侧已经自洽：`release.yml` 通知里的 `GHCR_IMAGE="ghcr.io/${REPO,,}"` 与 `release-images.sh` 同源，都取仓库名。
+- 将来若启用 Docker Hub，`release-images.sh` 会自动推 `<hub>/<仓库名>`，但 `release.yml` 里还有两处字面量仍写着 `sub2api`，必须一起改：`:304` 的 `dockerhub-description` `repository:`，和 `:350` Telegram 文案里的 `DOCKER_IMAGE=`。再加上 `VersionBadge.vue` 的 `DOCKER_IMAGE`，共三处。
 
 自己的部署入口：
 

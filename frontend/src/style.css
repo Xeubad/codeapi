@@ -18,7 +18,7 @@
 
   body {
     @apply bg-gray-50 text-gray-900 dark:bg-dark-950 dark:text-gray-100;
-    @apply min-h-screen;
+    @apply min-h-screen tabular-nums;
   }
 
   /* 自定义滚动条 - 仅针对 Firefox，避免 Chrome 取消 webkit 的全局定制 */
@@ -73,17 +73,16 @@
   .btn {
     @apply inline-flex items-center justify-center gap-2;
     @apply rounded-xl px-4 py-2.5 text-sm font-medium;
-    @apply transition-all duration-200 ease-out;
-    @apply focus:outline-none focus:ring-2 focus:ring-primary-500/50 focus:ring-offset-2;
-    @apply disabled:transform-none disabled:cursor-not-allowed disabled:opacity-50;
-    @apply active:scale-[0.98];
+    @apply transition-colors duration-150 ease-out;
+    @apply focus:outline-none focus:ring-2 focus:ring-primary-500/45 focus:ring-offset-2;
+    @apply disabled:cursor-not-allowed disabled:opacity-50;
   }
 
+  /* 主按钮走墨黑纯色，强调色不参与大面积填充 */
   .btn-primary {
-    @apply bg-gradient-to-r from-primary-500 to-primary-600;
-    @apply text-white shadow-md shadow-primary-500/25;
-    @apply hover:from-primary-600 hover:to-primary-700 hover:shadow-lg hover:shadow-primary-500/30;
-    @apply dark:shadow-primary-500/20;
+    @apply bg-gray-900 text-white shadow-sm;
+    @apply hover:bg-gray-800;
+    @apply dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white;
   }
 
   .btn-secondary {
@@ -100,51 +99,45 @@
   }
 
   .btn-danger {
-    @apply bg-gradient-to-r from-red-500 to-red-600;
-    @apply text-white shadow-md shadow-red-500/25;
-    @apply hover:from-red-600 hover:to-red-700 hover:shadow-lg hover:shadow-red-500/30;
+    @apply bg-red-600 text-white shadow-sm;
+    @apply hover:bg-red-700;
   }
 
   .btn-success {
-    @apply bg-gradient-to-r from-emerald-500 to-emerald-600;
-    @apply text-white shadow-md shadow-emerald-500/25;
-    @apply hover:from-emerald-600 hover:to-emerald-700 hover:shadow-lg hover:shadow-emerald-500/30;
-    @apply dark:shadow-emerald-500/20;
+    @apply bg-emerald-600 text-white shadow-sm;
+    @apply hover:bg-emerald-700;
   }
 
   .btn-warning {
-    @apply bg-gradient-to-r from-amber-500 to-amber-600;
-    @apply text-white shadow-md shadow-amber-500/25;
-    @apply hover:from-amber-600 hover:to-amber-700 hover:shadow-lg hover:shadow-amber-500/30;
-    @apply dark:shadow-amber-500/20;
+    @apply bg-amber-500 text-white shadow-sm;
+    @apply hover:bg-amber-600;
   }
 
+  /* 支付品牌色保持原样，只去掉彩色光晕 */
   .btn-stripe {
-    @apply bg-[#635bff] text-white shadow-md shadow-[#635bff]/25;
-    @apply hover:bg-[#5851ea] hover:shadow-lg hover:shadow-[#635bff]/30;
-    @apply dark:bg-[#7a73ff] dark:shadow-[#7a73ff]/20;
+    @apply bg-[#635bff] text-white shadow-sm;
+    @apply hover:bg-[#5851ea];
+    @apply dark:bg-[#7a73ff];
     @apply dark:hover:bg-[#635bff];
   }
 
   .btn-airwallex {
-    @apply bg-[#14171A] text-white shadow-md shadow-emerald-500/20;
-    @apply hover:bg-[#20252a] hover:shadow-lg hover:shadow-emerald-500/25;
-    @apply dark:bg-[#7AF0C4] dark:text-gray-950 dark:shadow-emerald-500/20;
+    @apply bg-[#14171A] text-white shadow-sm;
+    @apply hover:bg-[#20252a];
+    @apply dark:bg-[#7AF0C4] dark:text-gray-950;
     @apply dark:hover:bg-[#62d9ad];
   }
 
   .btn-alipay {
-    @apply bg-[#00AEEF] text-white shadow-md shadow-[#00AEEF]/25;
-    @apply hover:bg-[#009dd6] hover:shadow-lg hover:shadow-[#00AEEF]/30;
+    @apply bg-[#00AEEF] text-white shadow-sm;
+    @apply hover:bg-[#009dd6];
     @apply active:bg-[#008cbe];
-    @apply dark:shadow-[#00AEEF]/20;
   }
 
   .btn-wxpay {
-    @apply bg-[#2BB741] text-white shadow-md shadow-[#2BB741]/25;
-    @apply hover:bg-[#24a038] hover:shadow-lg hover:shadow-[#2BB741]/30;
+    @apply bg-[#2BB741] text-white shadow-sm;
+    @apply hover:bg-[#24a038];
     @apply active:bg-[#1d8a2f];
-    @apply dark:shadow-[#2BB741]/20;
   }
 
   .btn-sm {
@@ -748,9 +741,9 @@
 }
 
 @layer utilities {
-  /* 文字渐变 */
+  /* 文字渐变：原为 primary→accent（换色板后会变成青柠配灰，发浊），改为同族深浅 */
   .text-gradient {
-    @apply bg-gradient-to-r from-primary-500 to-accent-500 bg-clip-text text-transparent;
+    @apply bg-gradient-to-r from-primary-600 to-primary-300 bg-clip-text text-transparent;
   }
 
   /* 玻璃效果 */

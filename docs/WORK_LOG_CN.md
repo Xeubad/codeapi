@@ -48,6 +48,7 @@
 - `deploy/install.sh`：`config.yaml` 不存在时不再自动启动服务，收尾提示改为「先跑 `--setup`，再 `systemctl start`」。
 - 修复 flaky 测试：`TestInflightEstimate_AccountMappingNoDBAndBoundedMemory` 的堆增长上限 8MB → 12MB。
 - 二开护栏写入 `AGENTS.md` 的「二开范围与安全护栏」。
+- 建立按天工作日志 `docs/WORK_LOG_CN.md`，并把补记规则接入 `AGENTS.md`（上游整目录忽略 `docs/*`，需在 `.gitignore` 白名单里放行）。
 
 ### 关键决策
 

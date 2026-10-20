@@ -285,6 +285,13 @@ curl -sSL https://raw.githubusercontent.com/Xeubad/codeapi/main/deploy/install.s
 docker pull ghcr.io/xeubad/codeapi:latest
 ```
 
+本 fork **屏蔽了 Web 安装向导**：没有安装锁时服务直接退出并打印指引，不会在主端口上起向导。首次配置走两条终端路径：
+
+- 脚本安装（systemd）：`cd /opt/sub2api && sudo -u sub2api ./sub2api --setup`，完成后 `sudo systemctl start sub2api`。`install.sh` 在 `config.yaml` 不存在时会跳过自动启动，避免 `Restart=always` 造成崩溃循环。
+- 容器部署：`AUTO_SETUP=true` 配合 `DATABASE_*`、`REDIS_*`、`ADMIN_EMAIL`、`ADMIN_PASSWORD` 无人值守安装。
+
+保留 `internal/setup` 包是为了这两条路径；只移除了 HTTP 入口、前端路由和启动守卫。
+
 ## 刻意保留指向上游的位置
 
 以下内容不随改名和品牌化修改，目的是压缩与上游的冲突面：

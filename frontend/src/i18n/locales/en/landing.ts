@@ -14,8 +14,16 @@ export default {
     login: 'Login',
     getStarted: 'Get Started',
     goToDashboard: 'Go to Dashboard',
+    backHome: 'Back to home',
+    console: {
+      billedBy: 'Billed live',
+      oneKey: 'One key, many models',
+      stickySession: 'Stays on one upstream',
+      realtimeBilling: 'Billed per token'
+    },
     // User-focused value proposition
-    heroSubtitle: 'One Key, All AI Models',
+    heroTitleLead: 'One Key,',
+    heroTitleMain: 'All AI Models',
     heroDescription: 'No need to manage multiple subscriptions. Access Claude, GPT, Gemini and more with a single API key',
     tags: {
       subscriptionToApi: 'Subscription to API',

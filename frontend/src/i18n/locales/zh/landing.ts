@@ -14,8 +14,16 @@ export default {
     login: '登录',
     getStarted: '立即开始',
     goToDashboard: '进入控制台',
+    backHome: '返回首页',
+    console: {
+      billedBy: '实时计费',
+      oneKey: '单密钥多模型',
+      stickySession: '命中同一上游账号',
+      realtimeBilling: '按 token 实时结算'
+    },
     // 新增：面向用户的价值主张
-    heroSubtitle: '一个密钥，畅用多个 AI 模型',
+    heroTitleLead: '一个密钥，',
+    heroTitleMain: '畅用多个 AI 模型',
     heroDescription: '无需管理多个订阅账号，一站式接入 Claude、GPT、Gemini 等主流 AI 服务',
     tags: {
       subscriptionToApi: '订阅转 API',

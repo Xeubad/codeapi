@@ -2,8 +2,8 @@
   <AuthLayout>
     <div class="space-y-6">
       <!-- Title -->
-      <div class="text-center">
-        <h2 class="text-2xl font-bold text-gray-900 dark:text-white">
+      <div>
+        <h2 class="text-2xl font-semibold tracking-tight text-gray-900 dark:text-white">
           {{ t('auth.welcomeBack') }}
         </h2>
         <p class="mt-2 text-sm text-gray-500 dark:text-dark-400">
@@ -29,7 +29,7 @@
               autofocus
               autocomplete="email"
               :disabled="authActionDisabled"
-              class="input pl-11"
+              class="input auth-field pl-11"
               :class="{ 'input-error': errors.email }"
               :placeholder="t('auth.emailPlaceholder')"
             />
@@ -52,7 +52,7 @@
               required
               autocomplete="current-password"
               :disabled="authActionDisabled"
-              class="input pl-11 pr-11"
+              class="input auth-field pl-11 pr-11"
               :class="{ 'input-error': errors.password }"
               :placeholder="t('auth.passwordPlaceholder')"
             />
@@ -101,7 +101,7 @@
         <button
           type="submit"
           :disabled="authActionDisabled || (turnstileEnabled && !turnstileToken)"
-          class="btn btn-primary w-full"
+          class="btn btn-primary w-full py-3"
         >
           <svg
             v-if="isLoading"
@@ -734,6 +734,13 @@ function handle2FACancel(): void {
 </script>
 
 <style scoped>
+/* 毛玻璃输入框：与卡片同源的半透明底 + 细描边 */
+.auth-field {
+  @apply bg-white/70 backdrop-blur-md;
+  @apply border-gray-300/80 dark:border-dark-600/80;
+  @apply dark:bg-dark-800/60;
+}
+
 .fade-enter-active,
 .fade-leave-active {
   transition: all 0.3s ease;

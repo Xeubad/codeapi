@@ -10,25 +10,12 @@ import { useAdminSettingsStore } from '@/stores/adminSettings'
 import { useAdminComplianceStore } from '@/stores/adminCompliance'
 import { useNavigationLoadingState } from '@/composables/useNavigationLoading'
 import { useRoutePrefetch } from '@/composables/useRoutePrefetch'
-import { getSetupStatus } from '@/api/setup'
-import { resolveCompletedSetupRedirectPath } from './setupRedirect'
 import { resolveRouteDocumentTitle } from './title'
 
 /**
  * Route definitions with lazy loading
  */
 const routes: RouteRecordRaw[] = [
-  // ==================== Setup Routes ====================
-  {
-    path: '/setup',
-    name: 'Setup',
-    component: () => import('@/views/setup/SetupWizardView.vue'),
-    meta: {
-      requiresAuth: false,
-      title: 'Setup'
-    }
-  },
-
   // ==================== Public Routes ====================
   {
     path: '/home',
@@ -800,21 +787,9 @@ router.beforeEach(async (to, _from, next) => {
   ]
   document.title = resolveRouteDocumentTitle(to, appStore.siteName, customMenuItems)
 
-  // Check if route requires authentication
+    // Check if route requires authentication
   const requiresAuth = to.meta.requiresAuth !== false // Default to true
   const requiresAdmin = to.meta.requiresAdmin === true
-
-  if (to.path === '/setup') {
-    try {
-      const status = await getSetupStatus()
-      if (!status.needs_setup) {
-        next(resolveCompletedSetupRedirectPath(authStore.isAuthenticated, authStore.isAdmin))
-        return
-      }
-    } catch {
-      // If setup status cannot be determined, keep the setup page reachable.
-    }
-  }
 
   // If route doesn't require auth, allow access
   if (!requiresAuth) {

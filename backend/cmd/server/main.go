@@ -19,11 +19,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
-	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/setup"
-	"github.com/Wei-Shaw/sub2api/internal/web"
-
-	"github.com/gin-gonic/gin"
 )
 
 //go:embed VERSION
@@ -84,51 +80,14 @@ func main() {
 			}
 			// Continue to main server after auto-setup
 		} else {
-			log.Println("First run detected, starting setup wizard...")
-			runSetupServer()
-			return
+			// This fork does not expose the HTTP setup wizard. Provision through
+			// AUTO_SETUP env vars (containers) or the interactive --setup CLI.
+			log.Fatal("No installation found. Set AUTO_SETUP=true with DATABASE_*, REDIS_* and ADMIN_EMAIL/ADMIN_PASSWORD, or run this binary with --setup.")
 		}
 	}
 
 	// Normal server mode
 	runMainServer()
-}
-
-func runSetupServer() {
-	r := gin.New()
-	r.Use(middleware.Recovery())
-	r.Use(middleware.CORS(config.CORSConfig{}))
-	r.Use(middleware.SecurityHeaders(config.CSPConfig{Enabled: true, Policy: config.DefaultCSPPolicy}, nil))
-
-	// Register setup routes
-	setup.RegisterRoutes(r)
-
-	// Serve embedded frontend if available
-	if web.HasEmbeddedFrontend() {
-		r.Use(web.ServeEmbeddedFrontend())
-	}
-
-	// Get server address from config.yaml or environment variables (SERVER_HOST, SERVER_PORT)
-	// This allows users to run setup on a different address if needed
-	addr := config.GetServerAddress()
-	log.Printf("Setup wizard available at http://%s", addr)
-	log.Println("Complete the setup wizard to configure Sub2API")
-
-	protocols := new(http.Protocols)
-	protocols.SetHTTP1(true)
-	protocols.SetUnencryptedHTTP2(true)
-
-	server := &http.Server{
-		Addr:              addr,
-		Handler:           r,
-		ReadHeaderTimeout: 30 * time.Second,
-		IdleTimeout:       120 * time.Second,
-		Protocols:         protocols,
-	}
-
-	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Fatalf("Failed to start setup server: %v", err)
-	}
 }
 
 func runMainServer() {

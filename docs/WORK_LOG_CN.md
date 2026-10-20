@@ -100,7 +100,7 @@
 ### 验证
 
 - 同步后 `main` 相对 `upstream/main` 为 ahead 19 / behind 0，基线完全包含上游。
-- 上游带来的变更覆盖：Go 1.27.2、x/net、SheetJS、Vue/source-map 与 Axios 安全升级、迁移 240–245、四个 Ent schema 文件。
+- 上游带来的变更覆盖：Go 1.27.0 → 1.27.2、`golang.org/x/net` v0.58.0 → v0.60.0、axios ^1.18 → ^1.20、vue ^3.4 → ^3.5、`source-map-js` 提升；`xlsx` 补安全公告豁免说明（CVE-2023-30533 / CVE-2024-22363，版本仍是 ^0.18.5，仓库只做写不读）；数据库迁移 240–245；4 个 Ent schema 变更（`composite_model_route.go`、`group.go`、`payment_order.go`、`user_platform_quota.go`）。
 
 ### 产出
 

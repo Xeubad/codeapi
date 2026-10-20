@@ -88,7 +88,7 @@ declare -A MSG_ZH=(
     ["dirs_configured"]="目录配置完成"
     ["installing_service"]="正在安装 systemd 服务..."
     ["service_installed"]="systemd 服务已安装"
-    ["ready_for_setup"]="准备就绪，可以启动设置向导"
+    ["ready_for_setup"]="准备就绪，需要先完成安装配置"
 
     # Completion
     ["install_complete"]="Sub2API 安装完成！"
@@ -97,8 +97,11 @@ declare -A MSG_ZH=(
     ["step1_check_services"]="确保 PostgreSQL 和 Redis 正在运行："
     ["step2_start_service"]="启动 Sub2API 服务："
     ["step3_enable_autostart"]="设置开机自启："
-    ["step4_open_wizard"]="在浏览器中打开设置向导："
-    ["wizard_guide"]="设置向导将引导您完成："
+    ["step4_run_setup"]="在终端完成安装配置（本版本不提供 Web 向导）"
+    ["setup_cmd_hint"]="在安装目录下以服务用户运行："
+    ["setup_start_after"]="配置完成后启动服务："
+    ["setup_required_before_start"]="尚未完成安装配置，已跳过自动启动"
+    ["wizard_guide"]="该命令会引导您完成："
     ["wizard_db"]="数据库配置"
     ["wizard_redis"]="Redis 配置"
     ["wizard_admin"]="管理员账号创建"
@@ -213,7 +216,7 @@ declare -A MSG_EN=(
     ["dirs_configured"]="Directories configured"
     ["installing_service"]="Installing systemd service..."
     ["service_installed"]="Systemd service installed"
-    ["ready_for_setup"]="Ready for Setup Wizard"
+    ["ready_for_setup"]="Ready — installation setup required"
 
     # Completion
     ["install_complete"]="Sub2API installation completed!"
@@ -222,8 +225,11 @@ declare -A MSG_EN=(
     ["step1_check_services"]="Make sure PostgreSQL and Redis are running:"
     ["step2_start_service"]="Start Sub2API service:"
     ["step3_enable_autostart"]="Enable auto-start on boot:"
-    ["step4_open_wizard"]="Open the Setup Wizard in your browser:"
-    ["wizard_guide"]="The Setup Wizard will guide you through:"
+    ["step4_run_setup"]="Complete setup in a terminal (this build has no web wizard)"
+    ["setup_cmd_hint"]="Run from the install directory as the service user:"
+    ["setup_start_after"]="Then start the service:"
+    ["setup_required_before_start"]="Setup is not complete; skipping auto-start"
+    ["wizard_guide"]="It will prompt you for:"
     ["wizard_db"]="Database configuration"
     ["wizard_redis"]="Redis configuration"
     ["wizard_admin"]="Admin account creation"
@@ -786,6 +792,13 @@ get_public_ip() {
 
 # Start service
 start_service() {
+    # Setup runs in the terminal now; starting before config.yaml exists would
+    # only crash-loop under Restart=always.
+    if [ ! -f "$INSTALL_DIR/config.yaml" ]; then
+        print_warning "$(msg 'setup_required_before_start')"
+        return 0
+    fi
+
     print_info "$(msg 'starting_service')"
 
     if systemctl start sub2api; then
@@ -828,17 +841,30 @@ print_completion() {
     echo "$(msg 'install_dir'): $INSTALL_DIR"
     echo "$(msg 'server_config_summary'): ${SERVER_HOST}:${SERVER_PORT}"
     echo ""
-    echo "=============================================="
-    echo "  $(msg 'step4_open_wizard')"
-    echo "=============================================="
-    echo ""
-    print_info "     http://${display_host}:${SERVER_PORT}"
-    echo ""
-    echo "     $(msg 'wizard_guide')"
-    echo "     - $(msg 'wizard_db')"
-    echo "     - $(msg 'wizard_redis')"
-    echo "     - $(msg 'wizard_admin')"
-    echo ""
+    if [ -f "$INSTALL_DIR/config.yaml" ]; then
+        echo "=============================================="
+        echo "  $(msg 'next_steps')"
+        echo "=============================================="
+        echo ""
+        print_info "     http://${display_host}:${SERVER_PORT}"
+        echo ""
+    else
+        echo "=============================================="
+        echo "  $(msg 'step4_run_setup')"
+        echo "=============================================="
+        echo ""
+        echo "     $(msg 'setup_cmd_hint')"
+        print_info "     cd ${INSTALL_DIR} && sudo -u ${SERVICE_USER} ./${SERVICE_NAME} --setup"
+        echo ""
+        echo "     $(msg 'wizard_guide')"
+        echo "     - $(msg 'wizard_db')"
+        echo "     - $(msg 'wizard_redis')"
+        echo "     - $(msg 'wizard_admin')"
+        echo ""
+        echo "     $(msg 'setup_start_after')"
+        print_info "     sudo systemctl start ${SERVICE_NAME}"
+        echo ""
+    fi
     echo "=============================================="
     echo "  $(msg 'useful_commands')"
     echo "=============================================="

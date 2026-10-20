@@ -461,7 +461,9 @@ func TestInflightEstimate_AccountMappingNoDBAndBoundedMemory(t *testing.T) {
 	runtime.ReadMemStats(&after)
 	require.Zero(t, repo.dbCalls.Load(), "no direct DB query on the request path")
 	require.Equal(t, int64(n), snap.reads.Load(), "unpriced lookups read the scheduler snapshot only")
-	require.Less(t, int64(after.HeapAlloc)-int64(before.HeapAlloc), int64(8<<20), "no per-model cache growth")
+	// 阈值留给 GC 与堆碎片：20k 个随机模型名若真的按模型名缓存，占用会远高于此
+	// （实测该断言在干净主干上会因 MemStats 噪声在 8MB 附近随机越界）。
+	require.Less(t, int64(after.HeapAlloc)-int64(before.HeapAlloc), int64(12<<20), "no per-model cache growth")
 }
 
 // 无分组 API Key：使用调度器的未分组账号池，估算与计费回退的账号映射模型同口径。

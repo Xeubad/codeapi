@@ -304,6 +304,12 @@ docker pull ghcr.io/xeubad/codeapi:latest
 
 需要改的功能性指向只有三处，已经改完：`backend/internal/service/update_service.go` 的 `githubRepo`、`frontend/src/components/common/VersionBadge.vue` 的 `GITHUB_REPO` 与 `DOCKER_IMAGE`、`deploy/install.sh` 与 `deploy/docker-deploy.sh` 的仓库地址。
 
+## 工作日志
+
+按天记录二开工作的过程文档在 [WORK_LOG_CN.md](./WORK_LOG_CN.md)。每次工作结束后补记当天一节，格式为 `## 2026年10月20日`，固定包含**改动 / 关键决策 / 验证 / 产出**四块。
+
+日志记的是决策过程，不是 `git log` 的复制：为什么这么做、否决了哪些方案、踩了什么坑、验证到底跑了没跑。提交 SHA 写短号，便于和历史对照。
+
 ## 提交和发布约定
 
 建议提交格式：

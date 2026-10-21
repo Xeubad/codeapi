@@ -256,7 +256,7 @@ docker compose down -v
 | `POSTGRES_PASSWORD` | **Yes** | - | PostgreSQL password |
 | `JWT_SECRET` | **Recommended** | *(auto-generated)* | JWT secret (fixed for persistent sessions) |
 | `TOTP_ENCRYPTION_KEY` | **Recommended** | *(auto-generated)* | TOTP encryption key (fixed for persistent 2FA) |
-| `SERVER_PORT` | No | `8080` | Server port |
+| `SERVER_PORT` | No | `8080` | Host port published to the container; the service inside always listens on 8080 |
 | `ADMIN_EMAIL` | No | *(auto-generated)* | Admin email (login username) |
 | `ADMIN_PASSWORD` | No | *(auto-generated)* | Admin password (8-72 bytes) |
 | `TZ` | No | `Asia/Shanghai` | Timezone |
@@ -453,9 +453,11 @@ sudo systemctl enable sub2api
 
 #### Server Address and Port
 
-During installation, you will be prompted to configure the server listen address and port. These settings are stored in the systemd service file as environment variables.
+During installation, you are prompted for the server listen address only. The listen port is pinned to **8080** by this build: `server.port` in `config.yaml` and the `SERVER_PORT` environment variable are validated at startup and any other value aborts the start.
 
-To change after installation:
+If 8080 is already taken, the binary prints which process holds it (PID, user, start time, command line). From a terminal it asks whether to send `SIGTERM` to that process before binding; under systemd or Docker nothing is killed and the start aborts with the same report.
+
+To change the listen address after installation:
 
 1. Edit the systemd service:
    ```bash
@@ -466,7 +468,6 @@ To change after installation:
    ```ini
    [Service]
    Environment=SERVER_HOST=0.0.0.0
-   Environment=SERVER_PORT=3000
    ```
 
 3. Reload and restart:
@@ -595,7 +596,7 @@ sudo systemctl status redis
 
 ### Common Issues
 
-1. **Port already in use**: Change `SERVER_PORT` in `.env` or systemd config
+1. **Port already in use**: the startup log names the holding process (PID, user, command). The port cannot be switched in this build — free it, or start the binary from a terminal to confirm terminating the holder.
 2. **Database connection failed**: Check PostgreSQL is running and credentials are correct
 3. **Redis connection failed**: Check Redis is running and password is correct
 4. **Permission denied**: Ensure proper file ownership for binary install

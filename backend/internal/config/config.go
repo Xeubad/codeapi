@@ -1541,6 +1541,11 @@ type GatewaySchedulingConfig struct {
 	FullRebuildIntervalSeconds int `mapstructure:"full_rebuild_interval_seconds"`
 }
 
+// RequiredServerPort 是本 fork 的硬性约束：服务只能监听 8080。
+// 上游允许自由改端口，但二开的 systemd/Caddy/防火墙规则与安装脚本都按 8080 固化，
+// 换端口会让这些外部约定静默失效，因此非 8080 的配置一律拒绝启动。
+const RequiredServerPort = 8080
+
 func (s *ServerConfig) Address() string {
 	return fmt.Sprintf("%s:%d", s.Host, s.Port)
 }
@@ -2044,7 +2049,7 @@ func setDefaults() {
 
 	// Server
 	viper.SetDefault("server.host", "0.0.0.0")
-	viper.SetDefault("server.port", 8080)
+	viper.SetDefault("server.port", RequiredServerPort)
 	viper.SetDefault("server.mode", "release")
 	viper.SetDefault("server.enable_server_timing", false)
 	viper.SetDefault("server.frontend_url", "")
@@ -2733,6 +2738,9 @@ func (c *Config) Validate() error {
 	}
 	if c.Plugins.StartTimeoutSeconds < 1 || c.Plugins.StartTimeoutSeconds > 120 {
 		return fmt.Errorf("plugins.start_timeout_seconds must be between 1 and 120")
+	}
+	if c.Server.Port != RequiredServerPort {
+		return fmt.Errorf("server.port must be %d (this build only starts on port %d), got %d; drop the override in config.yaml server.port and the SERVER_PORT environment variable", RequiredServerPort, RequiredServerPort, c.Server.Port)
 	}
 	if c.Server.ReadHeaderTimeout < 1 || c.Server.ReadHeaderTimeout > 60 {
 		return fmt.Errorf("server.read_header_timeout must be between 1 and 60 seconds")

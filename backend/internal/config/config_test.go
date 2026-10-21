@@ -1366,6 +1366,35 @@ func TestGetServerAddressFromConfigFile(t *testing.T) {
 	require.Equal(t, "192.0.2.40:9191", GetServerAddress())
 }
 
+func TestValidateRejectsPortOtherThanPinned(t *testing.T) {
+	resetViperWithJWTSecret(t)
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.Equal(t, RequiredServerPort, cfg.Server.Port)
+	require.NoError(t, cfg.Validate())
+
+	cfg.Server.Port = 3000
+	require.ErrorContains(t, cfg.Validate(), "server.port must be 8080")
+}
+
+func TestLoadRejectsPinnedPortOverrideFromEnv(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	t.Setenv("SERVER_PORT", "9090")
+
+	_, err := Load()
+	require.ErrorContains(t, err, "server.port must be 8080")
+}
+
+func TestLoadAcceptsExplicitPinnedPortFromEnv(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	t.Setenv("SERVER_PORT", "8080")
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.Equal(t, 8080, cfg.Server.Port)
+}
+
 func TestValidateAbsoluteHTTPURL(t *testing.T) {
 	if err := ValidateAbsoluteHTTPURL("https://example.com/path"); err != nil {
 		t.Fatalf("ValidateAbsoluteHTTPURL valid url error: %v", err)

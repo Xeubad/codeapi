@@ -150,7 +150,40 @@
 
 ### 产出
 
-- `docs/custom-solo-pr-flow`（从 `origin/main` 切出）：`docs(fork): freeze the branch-plus-PR landing flow` + 本条工作日志。PR 编号与合并后的 SHA 由下一次日志补记——流程文档的落地记录无法自含自己的合并号，这是这套按天日志的已知限制。
+- `docs/custom-solo-pr-flow`（从 `origin/main` 切出）：`docs(fork): freeze the branch-plus-PR landing flow` + 本条工作日志。**经 PR #5 合入，merge commit `8d32780d8`**（补记于同日第四次工作；流程文档的落地记录无法自含自己的合并号，这类补记统一并进下一条日志）。
+
+---
+
+**主题（同日第四次工作）**：README 中文化并改成 fork 视角，删除非中文版本
+
+### 改动
+
+- 三份 README 合并为一份：`git rm README.md README_JA.md` + `git mv README_CN.md README.md`，git 识别为 rename，历史可追溯。
+- fork 化：品牌 `Sub2API` → `CodeAPI`（15 处；小写的 `sub2api` 服务名、`/opt/sub2api` 安装目录刻意不动，那是 fork 保留的二进制名与路径）；仓库地址 `Wei-Shaw/sub2api` → `Xeubad/codeapi`（`git clone` ×3、`install.sh` ×2、`docker-deploy.sh` ×1）；logo 从 `assets/logo.svg` 换成 `frontend/public/logo.png`。
+- 头部：删掉指向上游的 Trendshift 徽章与三语切换链接，补一行 fork 出处说明（`Sub2API` 与上游仓库链接保留在出处里，出处不品牌化）。
+- 结尾：Star History 图表（展示的是上游 star）换成「上游项目」致谢段。
+- `docs/FORK_MAINTENANCE_CN.md`：「刻意保留指向上游的位置」第一条翻案，写明理由与遗留项。
+- 补记上一条产出：PR #5 / merge `8d32780d8`。
+
+### 关键决策
+
+- **翻案**：原方案把 README 的 curl 安装命令刻意指向上游以压缩冲突面。今天改指 fork——README 是用户照抄命令的地方，上游 `install.sh` 会把官方二进制装进 `/opt/sub2api` 覆盖二开改动，正是 AGENTS.md 明令禁止的路径。冲突收益抵不过这个风险。
+- README 只留中文一份：GitHub 首页只自动渲染 `README.md`，保留 `README_CN.md` 会丢首页；日文版没有维护者，删除。
+- 品牌替换用大小写精确匹配的 `Sub2API`，不碰小写 `sub2api`（服务名、安装目录、systemd 单元）与社区项目名 `Sub2ApiPay`，避免误伤。
+- GPL 许可证、Copyright（Wesley Liddick）与服务条款风险提醒原样保留——那是上游的法律声明，fork 不改。
+- `deploy/README.md` 与 `deploy/APPLE_CONTAINER.md` 还有 3+ 条指向 `Wei-Shaw/sub2api` 的安装命令（同一隐患），本次按「只处理三份 README」的既定范围不动，留待决定。
+- 日志条目与本次文档改动同 PR 提交：本 PR 本身就是纯文档主题，为一行补记单开 PR 违背「PR 成本花在真实功能上」；此解释只针对文档类 PR，功能 PR 仍不夹日志。
+
+### 验证
+
+- `grep` 核验：`README.md` 内 `Wei-Shaw` 仅剩 2 处（头部出处行 + 上游致谢行），`Sub2API` 仅剩 1 处（出处行），`CodeAPI` 15 处、`Xeubad` 7 处；`assets/logo`、`trendshift`、`star-history`、`README_CN`/`README_JA` 引用清零。
+- 端口说法复核：只剩「端口固定为 8080（本二开版本不可修改）」，无自定义端口残留。
+- 全仓引用 `README_CN`/`README_JA` 的位置仅剩 `docs/FORK_MAINTENANCE_CN.md` 一处，已一并改掉。
+- 未运行：`make test` / `make build`（纯 markdown 改动，不涉及代码与构建）。
+
+### 产出
+
+- `docs/custom-readme-cn`（从 `origin/main` 切出）：README 重写 + 删除两份非中文版 + 维护手册翻案说明 + 本条日志（含 PR #5 补记）。PR 编号与合并 SHA 同样并进下一条日志。
 
 ## 2026年10月20日
 

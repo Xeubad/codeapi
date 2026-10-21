@@ -320,7 +320,7 @@ docker pull ghcr.io/xeubad/codeapi:latest
 
 以下内容不随改名和品牌化修改，目的是压缩与上游的冲突面：
 
-- `README.md` / `README_CN.md` / `README_JA.md` 的 curl 安装命令与 star-history 图片；`deploy/README.md`、`deploy/APPLE_CONTAINER.md`
+- `deploy/README.md`、`deploy/APPLE_CONTAINER.md` 的 curl 安装命令。**2026-10-21 变更**：三份根 README（英文/中文/日文）的 curl、`git clone` 与 star-history 已改指 fork，README 合并为唯一一份中文 `README.md`，删除英文与日文版。原方案「保留指向上游以压缩冲突面」被否决——用户照抄 README 的安装命令时，上游 `install.sh` 会把官方二进制装进 `/opt/sub2api` 覆盖二开改动，冲突收益远抵不过这个风险。`deploy/README.md`、`deploy/APPLE_CONTAINER.md` 仍指向 `Wei-Shaw/sub2api`，属于同一隐患，待定。
 - `Dockerfile`、`deploy/Dockerfile`、`Dockerfile.goreleaser` 里的 `LABEL maintainer` 与 `org.opencontainers.image.source`。后者在构建时被 `release-images.sh` 传入的 `--label org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY` 覆盖，实际发布镜像的 source 已经是你自己的仓库
 - `deploy/sub2api.service` 与 `install.sh` 生成的 systemd `Documentation=` 行
 - 法务与支付文档链接：`admin_compliance.go`、`stores/adminCompliance.ts`、`SettingsView.vue`

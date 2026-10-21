@@ -36,6 +36,87 @@
 
 ---
 
+## 2026年10月21日
+
+**主题**：首页与登录页二次重构 —— 苹果式毛玻璃、宣传型版面、真实访问延迟实测
+
+### 改动
+
+- 重写默认宣传首页（`HomeView.vue` 的 promo 分支）：悬浮玻璃顶栏、Hero + 控制台界面预览、事实条、真实延迟面板、能力四宫格、curl 接入、模型条、CTA、纯内链页脚。
+- 重写登录外壳 `AuthLayout.vue` 与 `LoginView.vue`：与首页共用背景、玻璃面板、字阶与 ink/lime 色；登录逻辑（验证码、2FA、协议、Passkey、OAuth）保持不变。
+- `style.css` 增加共用品牌类：`brand-backdrop` / `brand-orb` / `brand-grain` / `brand-glass(-strong)` / `brand-field` / `brand-ink-panel`。
+- 首页新增真实延迟实测：浏览器每 5 秒向本站静态资源发 Range 请求（1 KB），展示当前/平均/P95/抖动/样本数、SVG 折线、TTFB、连接复用、传输量、协议与最近样本；页面隐藏时暂停，重新可见立即补测。
+- 移除首页与登录页的所有外链（文档、GitHub、`target="_blank"`），compact 分支同样去掉文档外链；更新 `docUrlSanitization.spec.ts` 断言首页不再渲染外链。
+- 更新 zh/en `landing.ts` 的 `home` 文案块，新增导航、Hero、延迟、能力、接入、模型、CTA、页脚与登录安全说明。
+
+### 关键决策
+
+- 延迟数据坚持真实测量而不是伪造多地区数字：用当前浏览器 → 本站静态资源的真实往返，UI 明确标注「当前设备 → 本站静态资源」。多地区合成探针需要后端存储与隐私设计，本轮不做。
+- 视图色仍沿用控制台 token：ink `#111620/#0b0e14` + lime `#6f9e12`，lime 只做状态点、细小强调与进度条，不铺大面积背景或主按钮；主按钮继续走 ink/白。
+- 保留上游的 `home_content`（iframe/HTML）与 compact 模式分支，避免破坏管理员已配置的首页覆盖能力；本次只重写默认宣传页。
+- 背景改成全局共用的 `brand-backdrop` + 柔光团 + 颗粒，登录页直接复用，避免两页各写一套色场导致漂移。
+- 延迟请求加 `Range: bytes=0-1023`，把每次探测传输从整张 logo（约 70 KB）降到约 1 KB；采样 5 秒一次，隐藏页暂停。
+- 折线 y 轴从 0 起算且最小量程 50 ms，避免样本少时把几毫秒的波动放大成假趋势。
+- 登录页只改 UI/布局，不动任何校验与认证流程；新增的「复制」按钮带 `execCommand` 兜底并如实显示失败状态。
+
+### 验证
+
+- `npx pnpm@9 run typecheck` rc=0。
+- `npx pnpm@9 run check:i18n` 3 tests 通过。
+- `npx pnpm@9 run test:run` 371 文件 / 2868 用例全部通过（含更新后的 `docUrlSanitization.spec.ts`）。
+- `npx pnpm@9 run build` 通过，产物写入 `backend/internal/web/dist`。
+- 浏览器实测（Vite dev + CDP 设备模拟）：390 / 1024 / 1280 / 1440 宽，浅色与深色均无横向溢出（`scrollWidth === innerWidth`）；首页无任何 `http(s)` 外链与 `target="_blank"`；延迟面板采样数随时间增长、折线真实绘制，传输量约 1.3 KB；主题切换按钮生效；「复制」在受限环境显示「复制失败」，不误报成功。
+- 未运行后端测试：本次只改前端视图与文案，未触碰后端。
+
+### 产出
+
+- `af4087b4f` feat(landing): rebuild the promo home and the glass login shell（在 `feature/custom-brand-pages` 上，与首轮品牌页工作同一个 PR）
+
+---
+
+**主题（同日第二次工作）**：后端监听端口锁死 8080，冲突时识别占用进程并在人工确认后终止
+
+### 改动
+
+- 新增 `backend/internal/portguard/`（`portguard.go` + 测试）：`Listen()` 在应用初始化之前绑定并持有监听器。端口被占时打印占用者 PID / 用户 / 启动时间 / 完整命令行；TTY 下要求输入 `y` 才发 `SIGTERM`，随后 5 秒内轮询重绑；非交互环境只打印报告并返回错误。PID ≤ 1 与本进程自身标为 protected，连提问都不出现。
+- `backend/internal/config/config.go`：新增 `RequiredServerPort = 8080`，`Config.Validate()` 拒绝任何非 8080 的 `server.port`（`config.yaml` 与 `SERVER_PORT` 都走这条校验）。
+- `backend/cmd/server/main.go`：接入 portguard，并把 `app.Server.ListenAndServe()` 改为 `app.Server.Serve(ln)`，消除「绑定失败前就打印 Server started」的竞态与二次 bind。
+- `backend/internal/setup/`：CLI 向导不再询问端口，`AUTO_SETUP` 遇到非 8080 的 `SERVER_PORT` 直接报错，写配置统一取 `config.RequiredServerPort`。
+- `deploy/install.sh`：移除端口提问与 `validate_port()`，中英两套文案换成「端口已固定」提示。
+- 文档：`AGENTS.md` 新增「监听端口硬性条件（8080）」小节；同步 `deploy/README.md`、`deploy/DOCKER.md`、`deploy/config.example.yaml`、`deploy/.env.example` 与三份根 README。顺带纠正 `DOCKER.md` 里并不生效的 `PORT` 变量（viper 只认 `SERVER_PORT`）。
+
+### 关键决策
+
+- 选 fail-fast 校验而不是代码里写死 8080：强制覆盖会让 `SERVER_PORT`/`config.yaml` 变成「改了也不生效」的死字段，排障时误导人；拒绝启动并报出实际值更可预测。
+- 占用检测与确认放在 Go 二进制内的独立 package，而不是 deploy 下的 shell 脚本：裸跑二进制、systemd、Docker 三条启动路径行为一致，脚本方案只覆盖安装路径。
+- 非交互只报告不杀：无人值守自动 SIGTERM 可能杀掉同机 nginx 或其它业务。代价是 systemd `Restart=always` 下端口被占会每 5 秒重跑一次并刷日志，本次未改 restart 策略。
+- 不升级到 `SIGKILL`：`SIGTERM` 后 5 秒仍占用就报错退出，强杀留给人工决定。
+- 监听器绑定后由 `Serve(ln)` 持有，避免「探测通过 → 释放 → 重绑」之间的 TOCTOU 窗口。
+- 前端 Vite dev 的 3000 与 compose 的宿主机发布端口不受约束：前者是开发服务器，后者只是 `docker -p` 映射，容器内仍是 8080。
+- 复用已有依赖 `gopsutil/v4`（net + process）与 `x/term`，`go.mod`/`go.sum` 零改动。
+- 本轮起改走 GitHub PR 而不是本地合并后直接 push `main`：三个主题各开一个 PR（① 品牌页与页面重构 ② 端口锁死 8080 ③ 工作日志）。端口分支原先带着品牌页的合并提交，直接开 PR 会把两个主题混进同一份 diff，所以改成从 `origin/main` 重新 cherry-pick 出 `feature/custom-port-8080`——**代价是端口三个提交的 SHA 与最初记录不同**，本节日志按 cherry-pick 后的新 SHA 记录。
+
+### 验证
+
+- `go test ./internal/portguard/ -count=1 -v`：8 PASS / 1 SKIP。含真实子进程持有端口 → 回答 `y` → 断言发出 SIGTERM、端口释放、拿到可用监听器；回答 `no`、以及占用者就是本进程两种情况下均不误杀。
+- `go test ./internal/config/ ./internal/setup/ ./internal/server/... ./internal/server/middleware/` 通过（新增 3 个端口校验用例）。
+- `go build ./...` 与 `go vet`（4 个受影响 package）干净；按 backend Makefile 同参数 `CGO_ENABLED=0 -trimpath -ldflags` 构建通过。
+- `go test ./... -count=1`（backend 全量）exit 0，52 个包 ok，无 FAIL/panic。
+- 真二进制端到端（演示前本机 8080 正被 `./bin/server` PID 65977 占用）：非交互 → exit 1，报告准确列出该 PID / 用户 / 启动时间 / 命令行且占用者存活；`SERVER_PORT=3000` → exit 1 并打印 pin 错误；PTY 交互回答 `n` → exit 1，占用者仍存活。
+- PTY 交互回答 `y`（用户授权后执行）→ 打印 `Sent SIGTERM to PID 65977.` 与 `Port 8080 is free now; continuing startup.`，随后走到 `repository/ent.go` 的数据库初始化，因配置的 Postgres 指向 127.0.0.1:1 而 `connection refused` 退出，证明端口守卫确实跑在应用初始化之前且监听器成功交接；PID 65977 已被终止。
+- 未运行：`make build` 的前端部分（会把手上未提交的 `frontend/` 改动写进 `backend/internal/web/dist`）。
+- CI `golangci-lint`（v2.14.0）首轮 fail 两处，都在 `portguard_test.go`：仓库 `.golangci.yml` 开了 `errcheck.check-type-assertions`，`ln.Addr().(*net.TCPAddr)` 这种单值断言会被报；gosec G702 把「测试自 spawn 自身二进制」判成命令注入。修复在 `ddd740649`：断言改 comma-ok，G702 按仓库既有约定逐点 `//nolint:gosec` 并写明信任边界，生产代码的检查一个没放宽。
+- **踩坑**：`golangci-lint` 其实装着（`~/go/bin/golangci-lint`，不在 PATH 上），但它是 2.13.2，对 Go 1.27.2 的标准库直接 `export data version 5 is greater than maximum supported version 4`  typecheck 失败，本地跑不出真实结论，只能靠 CI。之前记的「本机未安装该二进制」是错的。
+- `git diff --check` 干净。
+- 已知不一致但无害：`backend/internal/setup/handler.go` 的 Web 向导仍允许 1-65535 的端口输入。该路由在本 fork 未注册，且它写出的配置会在下次启动被 `Config.Validate()` 拒绝，硬性条件不依赖它。
+
+### 产出
+
+- 分支 `feature/custom-port-8080`（从 `origin/main` 切出，只含端口这一主题），三个提交：
+  - `a9efab94e` feat(port): pin the listen port to 8080 and guard it before startup
+  - `7faa370c4` feat(deploy): drop the port prompt and document the pinned 8080
+  - `76cd53d18` refactor(config): take the viper port default from RequiredServerPort
+
 ## 2026年10月20日
 
 **主题**：二开收尾 —— UI 风格落地、品牌化、屏蔽 Web 安装向导、修复安装脚本，合入 `main`；随后屏蔽合规承诺与新手引导、换 logo、重构首页与登录页

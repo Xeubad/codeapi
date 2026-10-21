@@ -69,7 +69,7 @@ Docker restores existing containers after a host restart.
 |----------|-------------|----------|---------|
 | `DATABASE_URL` | PostgreSQL connection string | Yes | - |
 | `REDIS_URL` | Redis connection string | Yes | - |
-| `PORT` | Server port | No | `8080` |
+| `SERVER_PORT` | Server port; this build only accepts 8080 | No | `8080` |
 | `GIN_MODE` | Gin framework mode (`debug`/`release`) | No | `release` |
 
 ## Supported Architectures

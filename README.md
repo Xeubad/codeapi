@@ -342,7 +342,7 @@ TOTP_ENCRYPTION_KEY=your_totp_key_here
 ADMIN_EMAIL=
 ADMIN_PASSWORD=
 
-# Optional: Custom port
+# Listen port is pinned to 8080 in this build (not configurable)
 SERVER_PORT=8080
 ```
 

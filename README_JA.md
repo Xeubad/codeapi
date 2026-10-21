@@ -343,7 +343,7 @@ TOTP_ENCRYPTION_KEY=your_totp_key_here
 ADMIN_EMAIL=
 ADMIN_PASSWORD=
 
-# オプション: カスタムポート
+# このビルドではポートを 8080 に固定（変更不可）
 SERVER_PORT=8080
 ```
 

@@ -37,7 +37,7 @@ SERVICE_NAME="sub2api"
 SERVICE_USER="sub2api"
 CONFIG_DIR="/etc/sub2api"
 
-# Server configuration (will be set by user)
+# Server configuration (port is pinned: this build only starts on 8080)
 SERVER_HOST="0.0.0.0"
 SERVER_PORT="8080"
 
@@ -161,10 +161,8 @@ declare -A MSG_ZH=(
     ["server_config_desc"]="配置 Sub2API 服务监听地址"
     ["server_host_prompt"]="服务器监听地址"
     ["server_host_hint"]="0.0.0.0 表示监听所有网卡，127.0.0.1 仅本地访问"
-    ["server_port_prompt"]="服务器端口"
-    ["server_port_hint"]="建议使用 1024-65535 之间的端口"
+    ["server_port_fixed"]="监听端口已固定为（本构建不可修改）"
     ["server_config_summary"]="服务器配置"
-    ["invalid_port"]="无效端口号，请输入 1-65535 之间的数字"
 
     # Service management
     ["starting_service"]="正在启动服务..."
@@ -289,10 +287,8 @@ declare -A MSG_EN=(
     ["server_config_desc"]="Configure Sub2API server listen address"
     ["server_host_prompt"]="Server listen address"
     ["server_host_hint"]="0.0.0.0 listens on all interfaces, 127.0.0.1 for local only"
-    ["server_port_prompt"]="Server port"
-    ["server_port_hint"]="Recommended range: 1024-65535"
+    ["server_port_fixed"]="Listen port is fixed (this build cannot change it)"
     ["server_config_summary"]="Server configuration"
-    ["invalid_port"]="Invalid port number, please enter a number between 1-65535"
 
     # Service management
     ["starting_service"]="Starting service..."
@@ -369,15 +365,6 @@ select_language() {
     echo ""
 }
 
-# Validate port number
-validate_port() {
-    local port="$1"
-    if [[ "$port" =~ ^[0-9]+$ ]] && [ "$port" -ge 1 ] && [ "$port" -le 65535 ]; then
-        return 0
-    fi
-    return 1
-}
-
 # Configure server settings
 configure_server() {
     # If not interactive (piped), use default settings
@@ -403,20 +390,8 @@ configure_server() {
 
     echo ""
 
-    # Server port
-    echo -e "${YELLOW}$(msg 'server_port_hint')${NC}"
-    while true; do
-        read -p "$(msg 'server_port_prompt') [${SERVER_PORT}]: " input_port < /dev/tty
-        if [ -z "$input_port" ]; then
-            # Use default
-            break
-        elif validate_port "$input_port"; then
-            SERVER_PORT="$input_port"
-            break
-        else
-            print_error "$(msg 'invalid_port')"
-        fi
-    done
+    # Server port is pinned by this build (see config.RequiredServerPort).
+    echo -e "${BLUE}$(msg 'server_port_fixed'): ${SERVER_PORT}${NC}"
 
     echo ""
     print_info "$(msg 'server_config_summary'): ${SERVER_HOST}:${SERVER_PORT}"

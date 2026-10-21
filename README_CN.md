@@ -368,7 +368,7 @@ TOTP_ENCRYPTION_KEY=your_totp_key_here
 ADMIN_EMAIL=
 ADMIN_PASSWORD=
 
-# 可选：自定义端口
+# 端口固定为 8080（本二开版本不可修改）
 SERVER_PORT=8080
 ```
 

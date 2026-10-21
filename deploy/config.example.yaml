@@ -14,8 +14,8 @@ server:
   # Bind address (0.0.0.0 for all interfaces)
   # 绑定地址（0.0.0.0 表示监听所有网络接口）
   host: "0.0.0.0"
-  # Port to listen on
-  # 监听端口
+  # Port to listen on — pinned to 8080 by this fork, any other value aborts startup
+  # 监听端口——本二开版本固定为 8080，其他值会拒绝启动
   port: 8080
   # Mode: "debug" for development, "release" for production
   # 运行模式："debug" 用于开发，"release" 用于生产环境

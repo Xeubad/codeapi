@@ -26,7 +26,11 @@ func freePort(t *testing.T) int {
 	if err != nil {
 		t.Fatalf("reserve free port: %v", err)
 	}
-	port := ln.Addr().(*net.TCPAddr).Port
+	tcpAddr, ok := ln.Addr().(*net.TCPAddr)
+	if !ok {
+		t.Fatalf("reserved address is not TCP: %v", ln.Addr())
+	}
+	port := tcpAddr.Port
 	if err := ln.Close(); err != nil {
 		t.Fatalf("release free port: %v", err)
 	}
@@ -200,7 +204,9 @@ func TestHelperHoldsPort(t *testing.T) {
 // startPortHolder runs a child that listens on 127.0.0.1:port and dies on SIGTERM.
 func startPortHolder(t *testing.T, port int) *exec.Cmd {
 	t.Helper()
-	child := exec.Command(os.Args[0], "-test.run="+childTestRun, "-test.timeout=60s")
+	// 信任边界：可执行文件就是当前测试二进制自身（os.Args[0]），参数全是包内常量，
+	// 不接受任何外部输入；这是 Go 自 spawn 子进程跑 helper 测试的标准写法。
+	child := exec.Command(os.Args[0], "-test.run="+childTestRun, "-test.timeout=60s") //nolint:gosec // G702 见上：无外部输入
 	child.Env = append(os.Environ(), childEnvKey+"="+addrOf(port))
 	child.Stdout = os.Stderr
 	child.Stderr = os.Stderr

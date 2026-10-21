@@ -2,11 +2,12 @@
   <AuthLayout>
     <div class="space-y-6">
       <!-- Title -->
-      <div class="text-center">
-        <h2 class="text-2xl font-bold text-gray-900 dark:text-white">
+      <div>
+        <div class="h-1 w-10 rounded-full bg-primary-500"></div>
+        <h2 class="mt-4 text-[1.65rem] font-semibold tracking-[-0.02em] text-gray-900 dark:text-white">
           {{ t('auth.welcomeBack') }}
         </h2>
-        <p class="mt-2 text-sm text-gray-500 dark:text-dark-400">
+        <p class="mt-1.5 text-sm text-gray-500 dark:text-dark-400">
           {{ t('auth.signInToAccount') }}
         </p>
       </div>
@@ -14,7 +15,7 @@
       <form @submit.prevent="handleLogin" class="space-y-5">
         <!-- Email Input -->
         <div>
-          <label for="email" class="input-label">
+          <label for="email" class="mb-1.5 block text-[13px] font-medium text-gray-700 dark:text-gray-300">
             {{ t('auth.emailLabel') }}
           </label>
           <div class="relative">
@@ -29,8 +30,8 @@
               autofocus
               autocomplete="email"
               :disabled="authActionDisabled"
-              class="input pl-11"
-              :class="{ 'input-error': errors.email }"
+              class="brand-field pl-11"
+              :class="{ 'brand-field-error': errors.email }"
               :placeholder="t('auth.emailPlaceholder')"
             />
           </div>
@@ -38,7 +39,7 @@
 
         <!-- Password Input -->
         <div>
-          <label for="password" class="input-label">
+          <label for="password" class="mb-1.5 block text-[13px] font-medium text-gray-700 dark:text-gray-300">
             {{ t('auth.passwordLabel') }}
           </label>
           <div class="relative">
@@ -52,8 +53,8 @@
               required
               autocomplete="current-password"
               :disabled="authActionDisabled"
-              class="input pl-11 pr-11"
-              :class="{ 'input-error': errors.password }"
+              class="brand-field pl-11 pr-11"
+              :class="{ 'brand-field-error': errors.password }"
               :placeholder="t('auth.passwordPlaceholder')"
             />
             <button
@@ -101,7 +102,7 @@
         <button
           type="submit"
           :disabled="authActionDisabled || (turnstileEnabled && !turnstileToken)"
-          class="btn btn-primary w-full"
+          class="btn btn-primary w-full rounded-xl py-3"
         >
           <svg
             v-if="isLoading"
@@ -141,17 +142,17 @@
 
         <div v-if="showPasskeyLogin || showOAuthLogin" class="space-y-3 pt-1">
           <div class="flex items-center gap-3">
-            <div class="h-px flex-1 bg-gray-200 dark:bg-dark-700"></div>
+            <div class="h-px flex-1 bg-gray-900/10 dark:bg-white/10"></div>
             <span class="text-xs text-gray-500 dark:text-dark-400">
               {{ t('auth.oauthOrContinue') }}
             </span>
-            <div class="h-px flex-1 bg-gray-200 dark:bg-dark-700"></div>
+            <div class="h-px flex-1 bg-gray-900/10 dark:bg-white/10"></div>
           </div>
 
           <button
             v-if="showPasskeyLogin"
             type="button"
-            class="btn btn-secondary w-full"
+            class="btn btn-secondary w-full rounded-xl"
             :disabled="authActionDisabled"
             @click="handlePasskeyLogin"
           >
@@ -732,16 +733,3 @@ function handle2FACancel(): void {
   totpUserEmailMasked.value = ''
 }
 </script>
-
-<style scoped>
-.fade-enter-active,
-.fade-leave-active {
-  transition: all 0.3s ease;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-  transform: translateY(-8px);
-}
-</style>

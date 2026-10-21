@@ -769,3 +769,102 @@
     padding-bottom: env(safe-area-inset-bottom);
   }
 }
+
+@layer components {
+  /* ============ 品牌页（首页 / 登录）共用视觉 ============ */
+  /* 色场取自控制台：lime 强调 + ink 中性，大面积保持低饱和 */
+  .brand-backdrop {
+    @apply pointer-events-none fixed inset-0 z-0 overflow-hidden;
+    background-color: #f1f3f6;
+    background-image:
+      radial-gradient(110% 80% at 6% -10%, rgba(111, 158, 18, 0.2), transparent 58%),
+      radial-gradient(80% 62% at 102% 0%, rgba(56, 132, 160, 0.18), transparent 62%),
+      radial-gradient(90% 70% at 48% 112%, rgba(255, 243, 219, 0.85), transparent 66%);
+  }
+
+  .dark .brand-backdrop {
+    background-color: #080b10;
+    background-image:
+      radial-gradient(110% 80% at 6% -10%, rgba(111, 158, 18, 0.2), transparent 58%),
+      radial-gradient(80% 62% at 102% 0%, rgba(56, 132, 160, 0.17), transparent 62%),
+      radial-gradient(90% 70% at 48% 112%, rgba(47, 74, 13, 0.42), transparent 68%);
+  }
+
+  /* 柔光团：给毛玻璃提供可折射的内容，避免糊成一片纯色 */
+  .brand-orb {
+    @apply pointer-events-none absolute rounded-full blur-3xl;
+  }
+
+  .brand-grain {
+    @apply pointer-events-none absolute inset-0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23g)' opacity='0.42'/%3E%3C/svg%3E");
+    background-size: 180px 180px;
+    opacity: 0.035;
+  }
+
+  .dark .brand-grain {
+    opacity: 0.06;
+  }
+
+  /* 苹果式毛玻璃：半透明面板 + 高饱和模糊 + 上缘高光 */
+  .brand-glass {
+    @apply rounded-2xl border border-white/70 bg-white/[0.55];
+    @apply backdrop-blur-2xl backdrop-saturate-150;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.9),
+      0 28px 70px -34px rgba(11, 14, 20, 0.45);
+  }
+
+  .dark .brand-glass {
+    @apply border-white/10 bg-dark-900/[0.55];
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.06),
+      0 34px 90px -38px rgba(0, 0, 0, 0.9);
+  }
+
+  .brand-glass-strong {
+    @apply rounded-2xl border border-white/80 bg-white/[0.68];
+    @apply backdrop-blur-2xl backdrop-saturate-150;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.95),
+      0 18px 40px -28px rgba(11, 14, 20, 0.4);
+  }
+
+  .dark .brand-glass-strong {
+    @apply border-white/10 bg-dark-900/[0.7];
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.07),
+      0 22px 50px -30px rgba(0, 0, 0, 0.9);
+  }
+
+  /* 毛玻璃容器内的输入框：比面板再亮一层，聚焦只换描边与光晕 */
+  .brand-field {
+    @apply w-full rounded-xl border border-gray-900/[0.09] bg-white/[0.72] px-4 py-3 text-sm text-gray-900;
+    @apply backdrop-blur-md transition-all duration-200;
+    @apply placeholder:text-gray-400;
+    @apply focus:border-primary-500/60 focus:outline-none focus:ring-4 focus:ring-primary-500/15;
+    @apply disabled:cursor-not-allowed disabled:bg-gray-100/70 disabled:text-gray-500;
+    @apply dark:border-white/10 dark:bg-dark-900/[0.62] dark:text-gray-100;
+    @apply dark:placeholder:text-dark-400 dark:disabled:bg-dark-900/70;
+    box-shadow: inset 0 1px 2px rgba(11, 14, 20, 0.04);
+  }
+
+  .brand-field-error {
+    @apply border-red-400/80 focus:border-red-500 focus:ring-red-500/15;
+  }
+
+  .brand-eyebrow {
+    @apply font-mono text-[10px] font-medium uppercase tracking-[0.22em] text-gray-500 dark:text-dark-400;
+  }
+
+  .brand-ink-panel {
+    @apply rounded-2xl bg-gray-900 text-gray-100 ring-1 ring-black/40;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.06),
+      0 30px 80px -34px rgba(11, 14, 20, 0.75);
+  }
+
+  .dark .brand-ink-panel {
+    @apply bg-dark-900/90 ring-white/10;
+  }
+}

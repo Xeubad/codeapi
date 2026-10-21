@@ -29,9 +29,9 @@ func RegisterAdminRoutes(
 	admin.Use(panelRateLimiter.Global())
 	// 审计中间件挂在认证之后：所有管理面变更类操作 + 敏感读取入审计日志
 	admin.Use(gin.HandlerFunc(auditLog))
-	admin.Use(middleware.AdminComplianceGuard(settingService))
 	{
-		// 部署与运营合规确认
+		// 部署与运营合规确认：本 fork 不再把确认作为进入控制台的前置条件，
+		// 路由与留痕逻辑保留，仅不拦截管理面请求。
 		registerAdminComplianceRoutes(admin, h)
 
 		// 仪表盘

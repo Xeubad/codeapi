@@ -38,7 +38,7 @@
 
 ## 2026年10月20日
 
-**主题**：二开收尾 —— UI 风格落地、品牌化、屏蔽 Web 安装向导、修复安装脚本，合入 `main`
+**主题**：二开收尾 —— UI 风格落地、品牌化、屏蔽 Web 安装向导、修复安装脚本，合入 `main`；随后屏蔽合规承诺与新手引导、换 logo、重构首页与登录页
 
 ### 改动
 
@@ -49,6 +49,14 @@
 - 修复 flaky 测试：`TestInflightEstimate_AccountMappingNoDBAndBoundedMemory` 的堆增长上限 8MB → 12MB。
 - 二开护栏写入 `AGENTS.md` 的「二开范围与安全护栏」。
 - 建立按天工作日志 `docs/WORK_LOG_CN.md`，并把补记规则接入 `AGENTS.md`（上游整目录忽略 `docs/*`，需在 `.gitignore` 白名单里放行）。
+- 屏蔽管理员合规承诺弹窗：前端移除 `App.vue` 的弹窗挂载与 `router/index.ts` 的进入校验；后端摘掉 `AdminComplianceGuard` 中间件注册（`routes/admin.go`、`routes/payment.go`、`handler/page_handler.go`）。`internal/service/admin_compliance.go` 与 `registerAdminComplianceRoutes` 原样保留。
+- 屏蔽新手引导：删除 `AppHeader.vue` 的「重新查看新手引导」下拉入口、`AppLayout.vue` 的 `useOnboardingTour` 实例化，以及 `AppSidebar/KeysView/GroupsView` 里的 `isCurrentStep/nextStep` 钩子。
+- 换平台 logo：新增 `frontend/public/logo.png`（256×256 RGBA，70893 B），删除 `frontend/public/logo.svg`；同步 `index.html` favicon、侧边栏、顶栏、首页、登录页、模型广场、法务页、用法页的全部引用，并把 `backend/internal/web/embed_test.go` 的静态资源断言从 `/logo.svg` 换成 `/logo.png`。
+- 首页重构为宣传页：默认首页（`data-testid="promo-home"`）改成「暗色控制台预览 + 编号能力 + 对比表 + 供应商标签」的编辑式版面，色调取自控制台的 ink + lime；保留上游的自定义首页（iframe/HTML）与 compact 模式。
+- 登录页重构：新增 `AuthLayout.vue` 毛玻璃外壳（`backdrop-blur-2xl` + `backdrop-saturate-150` + 高光描边 + 长投影），与首页共用同一套色场、颗粒纹理与 headline。
+- 修掉首页/登录页背景色场不显示的问题：背景层原先是 `-z-10`，会被根元素不透明底色盖住（截图像素实测整片 `#f6f7f9`），改成 `z-0` 并把 `main`/`footer` 提到 `relative z-10`。
+- 修掉标题在窄屏把词拆断的问题：headline 拆成 `home.heroTitleLead` / `home.heroTitleMain` 两个 key（zh「一个密钥，」/「畅用多个 AI 模型」），不再依赖 `text-balance` 的自动断行。
+- 修掉 `router/__tests__/title.spec.ts` 的过期断言：仍期望默认站点名 `Sub2API`，与 `a9df0609d` 之后的 `CodeAPI` 默认值不符（该失败在本次改动前的 HEAD 上已存在）。
 
 ### 关键决策
 
@@ -56,6 +64,11 @@
 - flaky 断言选择**放宽阈值**而不是删测试或改实现：该断言在干净主干上同样会因 MemStats 的 GC 噪声在 8MB 附近随机越界（实测 8.63 / 8.68 / 8.74MB），12MB 留出余量又不至于放过真正的按模型名缓存。
 - 屏蔽 setup 采用**移除入口、保留 `internal/setup` 包**：容器走 `AUTO_SETUP=true` + 环境变量，systemd 走 `sudo -u sub2api ./sub2api --setup`，两条终端路径都保留，只是不再在主端口上开 Web 向导。
 - 继续保留指向上游的位置（README、`org.opencontainers.image.source` 之外的镜像 LABEL、法务与支付文档链接、首页与 Header 的 GitHub 外链），目的是压低与上游的冲突面。
+- 合规承诺**只摘闸门、不删留痕**：上游 `admin_compliance` 的服务、路由与落库（版本/时间/账号/IP/UA）全部保留，只是不再拦截管理员请求。这套逻辑属于上游自带的审计能力，按二开护栏不能删除或弱化；触发 423 的中间件注册被摘掉，管理员登录后不再被弹窗打断。
+- 新手引导**掐入口、不删文件**：driver.js、`useOnboardingTour.ts`、`stores/onboarding.ts`、`styles/onboarding.css` 全部留在仓库里，只是取消自动播放与重播入口，后续同步上游时冲突面最小。
+- 首页默认走宣传页，但**保留上游自定义首页能力**：`home_content`（iframe/HTML）与 compact 模式的判断逻辑沿用原样，管理员在设置里写入 `home_content` 仍会覆盖宣传页。
+- 背景层用 `z-0` + 内容 `z-10`，而不是负 z-index：固定层挂 `-z-10` 时会被根元素的不透明底色盖住，实测截图像素整片是 `#f6f7f9`，色场根本没渲染出来。
+- 视觉语言沿用控制台既有 token（ink `#0b0e14`、lime `#6f9e12`、hairline 分隔线、等宽控制台预览），不另起一套配色；浅色下的背景色场保持低饱和，避免变成彩虹渐变。
 
 ### 验证
 
@@ -63,6 +76,10 @@
 - 无安装锁时服务不监听任何端口，直接退出并打印指引。
 - `go test -tags=unit ./internal/service/ -count=1` 全包通过（201.1s）。
 - `main` 分支 CI 5/5 成功：`shell` / `release-helpers` / `frontend` / `test` / `golangci-lint`（run `39426046924`，headSha `52e7eaf9e`）。
+- 前端全量检查：`npx pnpm@9 run typecheck` rc=0；`npx pnpm@9 run check:i18n` 3 tests 通过；`npx pnpm@9 run test:run` 371 文件 / 2868 用例全绿（其中修掉 1 个 HEAD 上已存在的失败）；`npx pnpm@9 run build` 通过，产物落到 `backend/internal/web/dist`。
+- 后端：`go build ./...` rc=0；`go build -tags=embed -o bin/server ./cmd/server` rc=0；`go test -tags=unit -count=1 ./internal/web/... ./internal/server/...` 全通过（web / server / middleware / routes）。
+- 浏览器实测（`127.0.0.1:8080`，管理员 `admin@codeapi.local`）：登录后直接进 `/admin/dashboard`，页面无合规弹窗、DOM 里搜不到「合规承诺」字样；顶栏用户下拉只剩「个人资料 / API 密钥 / GitHub / 退出登录」，没有「重新查看新手引导」，也没有 driver.js 遮罩；侧边栏与顶栏 logo 都是 `/logo.png`。
+- 视觉走查：headless Chrome 截 `/home`、`/login` 的明暗两版；移动端改用 CDP `Emulation.setDeviceMetricsOverride` 以 390×844 真机宽度复核（Chrome 桌面版最小窗口宽 500px，直接改 `--window-size` 截图只会被裁切而不是重排）。
 
 ### 产出
 
@@ -76,6 +93,9 @@
 - `eb9417f4c` test(billing): widen the inflight-cache ceiling to absorb GC noise
 - `2ddc8a1eb` docs(fork): pin the fork's scope and the no-weakening rule
 - `52e7eaf9e` merge: 二开 UI 风格重做与首轮功能定制 (feature/custom-ui-tech-mono)
+- `9917d4239` feat(admin): unhook the upstream compliance acknowledgement gate
+- `2ec9f0e4d` feat(ui): disable the onboarding tour and its replay entry
+- `59e3d5376` feat(brand): swap the platform logo and rebuild the home and login pages
 
 ---
 

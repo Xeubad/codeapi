@@ -615,6 +615,10 @@ func getEnvIntOrDefault(key string, defaultValue int) int {
 // AutoSetupFromEnv performs automatic setup using environment variables
 // This is designed for Docker deployment where all config is passed via env vars
 func AutoSetupFromEnv() error {
+	if raw := strings.TrimSpace(os.Getenv("SERVER_PORT")); raw != "" && raw != strconv.Itoa(config.RequiredServerPort) {
+		return fmt.Errorf("SERVER_PORT=%q is not allowed: this build only starts on port %d", raw, config.RequiredServerPort)
+	}
+
 	logger.LegacyPrintf("setup", "%s", "Auto setup enabled, configuring from environment variables...")
 	logger.LegacyPrintf("setup", "Data directory: %s", GetDataDir())
 
@@ -648,7 +652,7 @@ func AutoSetupFromEnv() error {
 		},
 		Server: ServerConfig{
 			Host: getEnvOrDefault("SERVER_HOST", "0.0.0.0"),
-			Port: getEnvIntOrDefault("SERVER_PORT", 8080),
+			Port: config.RequiredServerPort,
 			Mode: getEnvOrDefault("SERVER_MODE", "release"),
 		},
 		JWT: JWTConfig{

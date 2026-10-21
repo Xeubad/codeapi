@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
 	"golang.org/x/term"
 )
 
@@ -52,7 +53,7 @@ func RunCLI() error {
 	cfg := &SetupConfig{
 		Server: ServerConfig{
 			Host: "0.0.0.0",
-			Port: 8080,
+			Port: config.RequiredServerPort,
 			Mode: "release",
 		},
 		JWT: JWTConfig{
@@ -185,17 +186,10 @@ func RunCLI() error {
 		break
 	}
 
-	// Server configuration with validation
+	// Server configuration: the listening port is pinned by this build.
 	fmt.Println()
 	fmt.Println("── Server Configuration ──")
-
-	for {
-		cfg.Server.Port = promptInt(reader, "Server Port", 8080)
-		if cliValidatePort(cfg.Server.Port) {
-			break
-		}
-		fmt.Println("  Invalid port. Must be between 1 and 65535.")
-	}
+	fmt.Printf("  Server port is fixed to %d by this build.\n", config.RequiredServerPort)
 
 	// Confirm and install
 	fmt.Println()

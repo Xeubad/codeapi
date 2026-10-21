@@ -19,6 +19,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	"github.com/Wei-Shaw/sub2api/internal/portguard"
 	"github.com/Wei-Shaw/sub2api/internal/setup"
 )
 
@@ -102,6 +103,15 @@ func runMainServer() {
 		log.Println("⚠️  WARNING: Running in SIMPLE mode - billing and quota checks are DISABLED")
 	}
 
+	// Bind before any further initialization: the held listener keeps the pinned
+	// port reserved while the database, scheduler and plugins come up, and an
+	// occupied port aborts the start instead of leaving a half-built application.
+	ln, err := portguard.Listen(context.Background(), cfg.Server.Host, cfg.Server.Port, portguard.NewUI(os.Stdin, os.Stdout))
+	if err != nil {
+		log.Fatalf("Startup aborted: %v", err)
+	}
+	defer func() { _ = ln.Close() }()
+
 	buildInfo := handler.BuildInfo{
 		Version:   Version,
 		BuildType: BuildType,
@@ -127,9 +137,9 @@ func runMainServer() {
 		}
 	}
 
-	// 启动服务器
+	// 启动服务器（监听器已由 portguard 绑定，此处不会再遇到端口冲突）
 	go func() {
-		if err := app.Server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := app.Server.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("Failed to start server: %v", err)
 		}
 	}()

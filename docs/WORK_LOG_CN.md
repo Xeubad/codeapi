@@ -70,7 +70,7 @@
 
 ### 产出
 
-- 未提交（工作区改动待确认）：`HomeView.vue`、`AuthLayout.vue`、`LoginView.vue`、`style.css`、`landing.ts`×2、`docUrlSanitization.spec.ts`
+- `af4087b4f` feat(landing): rebuild the promo home and the glass login shell（在 `feature/custom-brand-pages` 上，与首轮品牌页工作同一个 PR）
 
 ---
 
@@ -94,6 +94,7 @@
 - 监听器绑定后由 `Serve(ln)` 持有，避免「探测通过 → 释放 → 重绑」之间的 TOCTOU 窗口。
 - 前端 Vite dev 的 3000 与 compose 的宿主机发布端口不受约束：前者是开发服务器，后者只是 `docker -p` 映射，容器内仍是 8080。
 - 复用已有依赖 `gopsutil/v4`（net + process）与 `x/term`，`go.mod`/`go.sum` 零改动。
+- 本轮起改走 GitHub PR 而不是本地合并后直接 push `main`：三个主题各开一个 PR（① 品牌页与页面重构 ② 端口锁死 8080 ③ 工作日志）。端口分支原先带着品牌页的合并提交，直接开 PR 会把两个主题混进同一份 diff，所以改成从 `origin/main` 重新 cherry-pick 出 `feature/custom-port-8080`——**代价是端口三个提交的 SHA 与最初记录不同**，本节日志按 cherry-pick 后的新 SHA 记录。
 
 ### 验证
 
@@ -101,7 +102,6 @@
 - `go test ./internal/config/ ./internal/setup/ ./internal/server/... ./internal/server/middleware/` 通过（新增 3 个端口校验用例）。
 - `go build ./...` 与 `go vet`（4 个受影响 package）干净；按 backend Makefile 同参数 `CGO_ENABLED=0 -trimpath -ldflags` 构建通过。
 - `go test ./... -count=1`（backend 全量）exit 0，52 个包 ok，无 FAIL/panic。
-- `go build ./...` 与 `go vet`（4 个受影响 package）干净；按 backend Makefile 同参数 `CGO_ENABLED=0 -trimpath -ldflags` 构建通过。
 - 真二进制端到端（演示前本机 8080 正被 `./bin/server` PID 65977 占用）：非交互 → exit 1，报告准确列出该 PID / 用户 / 启动时间 / 命令行且占用者存活；`SERVER_PORT=3000` → exit 1 并打印 pin 错误；PTY 交互回答 `n` → exit 1，占用者仍存活。
 - PTY 交互回答 `y`（用户授权后执行）→ 打印 `Sent SIGTERM to PID 65977.` 与 `Port 8080 is free now; continuing startup.`，随后走到 `repository/ent.go` 的数据库初始化，因配置的 Postgres 指向 127.0.0.1:1 而 `connection refused` 退出，证明端口守卫确实跑在应用初始化之前且监听器成功交接；PID 65977 已被终止。
 - 未运行：`make test` 的 `golangci-lint`（本机未安装该二进制）；`make build` 的前端部分（会把手上未提交的 `frontend/` 改动写进 `backend/internal/web/dist`）。
@@ -110,11 +110,10 @@
 
 ### 产出
 
-- 分支 `feature/custom-hard-port-8080`（从 `main` 切出，携带上述未提交的前端改动），三个提交，均未 push：
-  - `ca071c94e` feat(port): pin the listen port to 8080 and guard it before startup
-  - `d24ef92f5` feat(deploy): drop the port prompt and document the pinned 8080
-  - `845b51f2d` refactor(config): take the viper port default from RequiredServerPort
-- 本条工作日志留在工作区未提交：`docs/WORK_LOG_CN.md` 同时含有上面那次首页/登录页工作的未提交记录，拆开提交会把两者混在一起。
+- 分支 `feature/custom-port-8080`（从 `origin/main` 切出，只含端口这一主题），三个提交：
+  - `a9efab94e` feat(port): pin the listen port to 8080 and guard it before startup
+  - `7faa370c4` feat(deploy): drop the port prompt and document the pinned 8080
+  - `76cd53d18` refactor(config): take the viper port default from RequiredServerPort
 
 ## 2026年10月20日
 

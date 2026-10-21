@@ -104,7 +104,9 @@
 - `go test ./... -count=1`（backend 全量）exit 0，52 个包 ok，无 FAIL/panic。
 - 真二进制端到端（演示前本机 8080 正被 `./bin/server` PID 65977 占用）：非交互 → exit 1，报告准确列出该 PID / 用户 / 启动时间 / 命令行且占用者存活；`SERVER_PORT=3000` → exit 1 并打印 pin 错误；PTY 交互回答 `n` → exit 1，占用者仍存活。
 - PTY 交互回答 `y`（用户授权后执行）→ 打印 `Sent SIGTERM to PID 65977.` 与 `Port 8080 is free now; continuing startup.`，随后走到 `repository/ent.go` 的数据库初始化，因配置的 Postgres 指向 127.0.0.1:1 而 `connection refused` 退出，证明端口守卫确实跑在应用初始化之前且监听器成功交接；PID 65977 已被终止。
-- 未运行：`make test` 的 `golangci-lint`（本机未安装该二进制）；`make build` 的前端部分（会把手上未提交的 `frontend/` 改动写进 `backend/internal/web/dist`）。
+- 未运行：`make build` 的前端部分（会把手上未提交的 `frontend/` 改动写进 `backend/internal/web/dist`）。
+- CI `golangci-lint`（v2.14.0）首轮 fail 两处，都在 `portguard_test.go`：仓库 `.golangci.yml` 开了 `errcheck.check-type-assertions`，`ln.Addr().(*net.TCPAddr)` 这种单值断言会被报；gosec G702 把「测试自 spawn 自身二进制」判成命令注入。修复在 `ddd740649`：断言改 comma-ok，G702 按仓库既有约定逐点 `//nolint:gosec` 并写明信任边界，生产代码的检查一个没放宽。
+- **踩坑**：`golangci-lint` 其实装着（`~/go/bin/golangci-lint`，不在 PATH 上），但它是 2.13.2，对 Go 1.27.2 的标准库直接 `export data version 5 is greater than maximum supported version 4`  typecheck 失败，本地跑不出真实结论，只能靠 CI。之前记的「本机未安装该二进制」是错的。
 - `git diff --check` 干净。
 - 已知不一致但无害：`backend/internal/setup/handler.go` 的 Web 向导仍允许 1-65535 的端口输入。该路由在本 fork 未注册，且它写出的配置会在下次启动被 `Config.Validate()` 拒绝，硬性条件不依赖它。
 

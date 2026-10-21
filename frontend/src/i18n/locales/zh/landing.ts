@@ -5,7 +5,6 @@ export default {
   },
   // Home Page
   home: {
-    viewOnGithub: '在 GitHub 上查看',
     viewDocs: '查看文档',
     docs: '文档',
     switchToLight: '切换到浅色模式',
@@ -15,91 +14,144 @@ export default {
     getStarted: '立即开始',
     goToDashboard: '进入控制台',
     backHome: '返回首页',
+    nav: {
+      capabilities: '能力',
+      latency: '实测延迟',
+      integration: '快速接入',
+      models: '模型'
+    },
+    hero: {
+      statusLabel: '服务在线',
+      probeValue: '往返 {ms} ms',
+      probePending: '正在测量本机延迟',
+      titleLead: '一个密钥，',
+      titleAccent: '接管全部模型调用',
+      description: 'Claude、GPT、Gemini 走同一个入口。账号池调度、粘性会话、按 token 结算，全部收在同一个控制台里。',
+      primaryCta: '开始使用',
+      primaryCtaAuthed: '进入控制台',
+      secondaryCta: '查看本机实测延迟',
+      note: '登录后在控制台创建 API Key 即可调用，每一次用量和费用都能查到。'
+    },
+    facts: {
+      models: { title: '统一入口', value: 'Claude · GPT · Gemini' },
+      sticky: { title: '粘性会话', value: '同一会话固定上游' },
+      billing: { title: '实时计费', value: '按 token 逐次结算' }
+    },
+    preview: {
+      console: 'console / overview',
+      badge: '界面预览',
+      overview: '今日概览',
+      balance: '余额',
+      todayRequests: '今日请求',
+      todayCost: '今日成本',
+      rpm: 'RPM',
+      recentCalls: '最近调用',
+      fiveHour: '5 小时',
+      daily: '每日',
+      replay: '会话保持',
+      replayNote: '同一会话命中同一上游'
+    },
+    latency: {
+      eyebrow: 'LIVE / 实测',
+      title: '你的访问延迟，是真的',
+      description: '从当前浏览器向本站静态资源发起真实请求，每 5 秒采样一次。这里没有模拟数据，数字就是此刻的网络往返。',
+      current: '当前往返',
+      avg: '平均',
+      p95: 'P95',
+      jitter: '抖动',
+      sampleCount: '采样',
+      ttfb: '首字节',
+      connection: '连接',
+      reused: '复用',
+      fresh: '新建',
+      transfer: '传输',
+      protocol: '协议',
+      window: '已采样 {count} 次',
+      recent: '最近样本',
+      waiting: '正在积累样本',
+      failed: '测量失败，正在重试',
+      fast: '流畅',
+      normal: '正常',
+      slow: '有波动',
+      measuring: '测量中',
+      retry: '立即重测',
+      source: '数据来源：当前设备 → 本站静态资源，真实往返时延。',
+      noData: '暂无数据'
+    },
+    capabilities: {
+      eyebrow: 'CONTROL ROOM',
+      title: '控制台里已经有的能力',
+      subtitle: '不是概念图。下面每一块都能在登录后的控制台里找到对应页面。',
+      mockNote: '示意图 · 数据为示例',
+      routing: {
+        title: '账号池调度',
+        desc: '多个上游账号轮流承接请求，失败自动切换，不需要手动改配置。',
+        sticky: '会话保持',
+        pool: '上游池'
+      },
+      billing: {
+        title: '按 token 实时计费',
+        desc: '每次调用结束立刻结算，输入、输出、缓存分开记账。',
+        input: '输入',
+        output: '输出',
+        cache: '缓存',
+        cost: '本次费用'
+      },
+      quota: {
+        title: '配额与限额',
+        desc: '5 小时、每日、每周限额各自独立，用超之前就能看到趋势。',
+        fiveHour: '5 小时',
+        daily: '每日',
+        weekly: '每周'
+      },
+      audit: {
+        title: '调用明细与审计',
+        desc: '每一条请求都有时间、密钥、模型、状态和延迟，便于对账与排错。',
+        time: '时间',
+        key: '密钥',
+        model: '模型',
+        status: '状态',
+        latency: '延迟'
+      }
+    },
+    integration: {
+      eyebrow: 'QUICK START',
+      title: '改一行 base_url，就能接上',
+      description: '保留原有 SDK 调用方式，只把地址换成本站。Anthropic 与 OpenAI 两种请求格式都支持。',
+      compatible: '兼容 Anthropic / OpenAI SDK 的调用格式',
+      copy: '复制',
+      copied: '已复制',
+      copyFailed: '复制失败',
+      point: {
+        baseUrl: '把 SDK 的 base_url 指向本站',
+        key: '用控制台创建的 API Key 替换原密钥',
+        done: '其余参数不变，直接发起调用'
+      }
+    },
+    models: {
+      title: '一个密钥覆盖的模型',
+      description: '已接入的模型会持续补充，控制台里能看到每个模型的实际可用状态。'
+    },
+    cta: {
+      title: '把模型调用收拢到一个控制台',
+      description: '创建密钥、充值、看用量、查延迟，都在同一个地方完成。',
+      primaryGuest: '注册并开始',
+      secondary: '查询 Key 用量'
+    },
+    footer: {
+      allRightsReserved: '保留所有权利。',
+      status: '服务运行中',
+      keyUsage: 'Key 用量查询',
+      login: '登录'
+    },
+    auth: {
+      secureNote: '登录态由安全 Cookie 与会话令牌维护；验证码、双因素与登录协议校验保持不变。'
+    },
     console: {
       billedBy: '实时计费',
       oneKey: '单密钥多模型',
       stickySession: '命中同一上游账号',
       realtimeBilling: '按 token 实时结算'
-    },
-    // 新增：面向用户的价值主张
-    heroTitleLead: '一个密钥，',
-    heroTitleMain: '畅用多个 AI 模型',
-    heroDescription: '无需管理多个订阅账号，一站式接入 Claude、GPT、Gemini 等主流 AI 服务',
-    tags: {
-      subscriptionToApi: '订阅转 API',
-      stickySession: '会话保持',
-      realtimeBilling: '按量计费'
-    },
-    // 用户痛点区块
-    painPoints: {
-      title: '你是否也遇到这些问题？',
-      items: {
-        expensive: {
-          title: '订阅费用高',
-          desc: '每个 AI 服务都要单独订阅，每月支出越来越多'
-        },
-        complex: {
-          title: '多账号难管理',
-          desc: '不同平台的账号、密钥分散各处，管理起来很麻烦'
-        },
-        unstable: {
-          title: '服务不稳定',
-          desc: '单一账号容易触发限制，影响正常使用'
-        },
-        noControl: {
-          title: '用量无法控制',
-          desc: '不知道钱花在哪了，也无法限制团队成员的使用'
-        }
-      }
-    },
-    // 解决方案区块
-    solutions: {
-      title: '我们帮你解决',
-      subtitle: '简单三步，开始省心使用 AI'
-    },
-    features: {
-      unifiedGateway: '一键接入',
-      unifiedGatewayDesc: '获取一个 API 密钥，即可调用所有已接入的 AI 模型，无需分别申请。',
-      multiAccount: '稳定可靠',
-      multiAccountDesc: '智能调度多个上游账号，自动切换和负载均衡，告别频繁报错。',
-      balanceQuota: '用多少付多少',
-      balanceQuotaDesc: '按实际使用量计费，支持设置配额上限，团队用量一目了然。'
-    },
-    // 优势对比
-    comparison: {
-      title: '为什么选择我们？',
-      headers: {
-        feature: '对比项',
-        official: '官方订阅',
-        us: '本平台'
-      },
-      items: {
-        pricing: {
-          feature: '付费方式',
-          official: '固定月费，用不完也付',
-          us: '按量付费，用多少付多少'
-        },
-        models: {
-          feature: '模型选择',
-          official: '单一服务商',
-          us: '多模型随意切换'
-        },
-        management: {
-          feature: '账号管理',
-          official: '每个服务单独管理',
-          us: '统一密钥，一站管理'
-        },
-        stability: {
-          feature: '服务稳定性',
-          official: '单账号易触发限制',
-          us: '多账号池，自动切换'
-        },
-        control: {
-          feature: '用量控制',
-          official: '无法限制',
-          us: '可设配额、查明细'
-        }
-      }
     },
     providers: {
       title: '已支持的 AI 模型',
@@ -110,15 +162,6 @@ export default {
       gemini: 'Gemini',
       antigravity: 'Antigravity',
       more: '更多'
-    },
-    // CTA 区块
-    cta: {
-      title: '准备好开始了吗？',
-      description: '注册即可获得免费试用额度，体验一站式 AI 服务',
-      button: '免费注册'
-    },
-    footer: {
-      allRightsReserved: '保留所有权利。'
     }
   },
 

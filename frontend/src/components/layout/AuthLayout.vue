@@ -1,43 +1,26 @@
 <template>
-  <div class="relative flex min-h-screen flex-col overflow-hidden bg-gray-50 dark:bg-dark-950">
-    <!-- 背景：柔和色场 + 细颗粒，与首页同一套语言 -->
-    <div class="pointer-events-none fixed inset-0 z-0 overflow-hidden">
-      <div
-        class="absolute inset-0 bg-[radial-gradient(85%_55%_at_18%_-8%,rgba(111,158,18,0.28),transparent_60%)] dark:bg-[radial-gradient(85%_55%_at_18%_-8%,rgba(111,158,18,0.28),transparent_60%)]"
-      ></div>
-      <div
-        class="absolute inset-0 bg-[radial-gradient(75%_55%_at_95%_12%,rgba(21,94,117,0.26),transparent_62%)] dark:bg-[radial-gradient(75%_55%_at_95%_12%,rgba(56,132,160,0.22),transparent_62%)]"
-      ></div>
-      <div
-        class="absolute inset-0 bg-[radial-gradient(70%_55%_at_45%_112%,rgba(255,246,220,0.85),transparent_62%)] dark:bg-[radial-gradient(70%_55%_at_45%_112%,rgba(40,56,34,0.6),transparent_62%)]"
-      ></div>
-      <!-- 卡片背后的柔光团，让毛玻璃有可透的内容 -->
-      <div
-        class="absolute -top-24 -right-16 h-[26rem] w-[26rem] rounded-full bg-[radial-gradient(circle,rgba(111,158,18,0.20),transparent_68%)] blur-2xl dark:bg-[radial-gradient(circle,rgba(111,158,18,0.26),transparent_68%)]"
-      ></div>
-      <div
-        class="absolute bottom-[-10rem] left-1/4 h-[24rem] w-[24rem] rounded-full bg-[radial-gradient(circle,rgba(21,94,117,0.16),transparent_70%)] blur-2xl dark:bg-[radial-gradient(circle,rgba(56,132,160,0.22),transparent_70%)]"
-      ></div>
-      <div class="brand-grain absolute inset-0"></div>
+  <div class="relative flex min-h-screen flex-col overflow-x-clip bg-gray-50 dark:bg-dark-950">
+    <!-- 与首页同源的毛玻璃背景 -->
+    <div class="brand-backdrop" aria-hidden="true">
+      <div class="brand-orb -left-28 -top-32 h-[30rem] w-[30rem] bg-[rgba(111,158,18,0.20)]"></div>
+      <div class="brand-orb -right-28 top-10 h-[26rem] w-[26rem] bg-[rgba(56,132,160,0.16)]"></div>
+      <div class="brand-orb bottom-[-14rem] left-1/3 h-[28rem] w-[28rem] bg-[rgba(255,243,219,0.6)] dark:bg-[rgba(47,74,13,0.35)]"></div>
+      <div class="brand-grain"></div>
     </div>
 
-    <!-- 顶栏 -->
-    <header class="relative z-10 border-b border-gray-200/60 dark:border-dark-800/60">
-      <nav class="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-6">
+    <!-- 悬浮毛玻璃顶栏 -->
+    <header class="relative z-20 px-3 pt-3 sm:px-5 sm:pt-4">
+      <nav class="brand-glass-strong mx-auto flex h-14 max-w-6xl items-center gap-2 px-3 sm:px-4">
         <router-link to="/" class="flex min-w-0 items-center gap-2.5">
-          <img
-            :src="siteLogo || '/logo.png'"
-            alt="Logo"
-            class="h-8 w-8 shrink-0 object-contain"
-          />
+          <img :src="siteLogo || '/logo.png'" alt="Logo" class="h-8 w-8 shrink-0 object-contain" />
           <span class="truncate text-[15px] font-semibold tracking-tight">{{ siteName }}</span>
         </router-link>
 
-        <div class="flex shrink-0 items-center gap-1">
+        <div class="ml-auto flex shrink-0 items-center gap-1">
           <LocaleSwitcher />
           <button
             class="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-900/5 hover:text-gray-900 dark:text-dark-400 dark:hover:bg-white/5 dark:hover:text-white"
-            :title="isDark ? t('nav.lightMode') : t('nav.darkMode')"
+            :title="isDark ? t('home.switchToLight') : t('home.switchToDark')"
             @click="toggleTheme"
           >
             <Icon v-if="isDark" name="sun" size="sm" />
@@ -45,7 +28,7 @@
           </button>
           <router-link
             to="/"
-            class="ml-1 inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-900/5 hover:text-gray-900 dark:text-dark-300 dark:hover:bg-white/5 dark:hover:text-white"
+            class="ml-1 inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-[13px] font-medium text-gray-600 transition-colors hover:bg-gray-900/5 hover:text-gray-900 dark:text-dark-300 dark:hover:bg-white/5 dark:hover:text-white"
           >
             <Icon name="home" size="sm" />
             <span class="hidden sm:inline">{{ t('home.backHome') }}</span>
@@ -55,44 +38,53 @@
     </header>
 
     <!-- 主体 -->
-    <main class="relative z-10 flex flex-1 items-center justify-center px-4 py-10 sm:px-6 lg:py-16">
+    <main class="relative z-10 flex flex-1 items-center px-4 py-8 sm:px-6 lg:py-12">
       <div
-        class="grid w-full max-w-5xl items-center gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,25rem)] lg:gap-20"
+        class="mx-auto grid w-full max-w-6xl grid-cols-1 items-center gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,26.5rem)] lg:gap-16"
       >
         <!-- 品牌侧 -->
-        <section class="hidden lg:block">
-          <p class="flex items-center gap-2 text-sm font-medium text-primary-700 dark:text-primary-400">
+        <section class="hidden min-w-0 lg:block">
+          <p class="flex items-center gap-2 text-[10px] font-medium uppercase tracking-[0.22em] text-gray-500 dark:text-dark-400">
             <span class="h-1.5 w-1.5 rounded-full bg-primary-500"></span>
             {{ siteSubtitle }}
           </p>
+
           <h1
-            class="mt-5 text-[2.6rem] font-semibold leading-[1.12] tracking-[-0.02em] text-gray-900 dark:text-white"
+            class="mt-5 text-[2.55rem] font-semibold leading-[1.1] tracking-[-0.035em] text-gray-900 dark:text-white"
           >
-            <span class="block">{{ t('home.heroTitleLead') }}</span>
-            <span class="block">{{ t('home.heroTitleMain') }}</span>
+            <span class="block">{{ t('home.hero.titleLead') }}</span>
+            <span class="block">{{ t('home.hero.titleAccent') }}</span>
           </h1>
-          <p class="mt-5 max-w-md text-base leading-relaxed text-gray-600 dark:text-dark-300">
-            {{ t('home.heroDescription') }}
+          <div class="mt-5 h-1 w-12 rounded-full bg-primary-500"></div>
+          <p class="mt-5 max-w-md text-[15px] leading-relaxed text-gray-600 dark:text-dark-300">
+            {{ t('home.hero.description') }}
           </p>
 
-          <ul class="mt-10 space-y-4">
-            <li v-for="tag in tags" :key="tag.label" class="flex items-start gap-3">
-              <span class="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary-500"></span>
-              <span class="text-sm text-gray-700 dark:text-dark-200">
-                <span class="font-medium text-gray-900 dark:text-gray-100">{{ tag.label }}</span>
-                <span class="text-gray-500 dark:text-dark-400"> · {{ tag.note }}</span>
+          <dl class="mt-9 divide-y divide-gray-900/10 border-y border-gray-900/10 dark:divide-white/10 dark:border-white/10">
+            <div v-for="(fact, index) in facts" :key="fact.title" class="flex items-baseline gap-4 py-3.5">
+              <span class="w-6 shrink-0 font-mono text-[10px] text-primary-600 dark:text-primary-400">
+                {{ String(index + 1).padStart(2, '0') }}
               </span>
-            </li>
-          </ul>
+              <div class="min-w-0">
+                <dt class="text-[13px] font-semibold text-gray-900 dark:text-gray-100">{{ fact.title }}</dt>
+                <dd class="mt-0.5 text-[12px] text-gray-500 dark:text-dark-400">{{ fact.value }}</dd>
+              </div>
+            </div>
+          </dl>
+
+          <p class="mt-6 flex items-start gap-2.5 text-[12px] leading-relaxed text-gray-500 dark:text-dark-400">
+            <Icon name="shield" size="sm" class="mt-0.5 shrink-0 text-primary-600 dark:text-primary-400" />
+            {{ t('home.auth.secureNote') }}
+          </p>
         </section>
 
-        <!-- 表单 -->
-        <section class="w-full">
-          <div class="auth-glass p-7 sm:p-8">
+        <!-- 表单卡片 -->
+        <section class="w-full min-w-0">
+          <div class="brand-glass p-6 sm:p-8">
             <slot />
           </div>
 
-          <div class="mt-6 text-center text-sm">
+          <div class="mt-5 text-center text-sm">
             <slot name="footer" />
           </div>
         </section>
@@ -100,7 +92,7 @@
     </main>
 
     <!-- 版权 -->
-    <footer class="relative z-10 px-6 pb-8 text-center text-xs text-gray-500 dark:text-dark-500">
+    <footer class="relative z-10 px-6 pb-6 pt-2 text-center text-[11px] text-gray-500 dark:text-dark-500">
       &copy; {{ currentYear }} {{ siteName }}. All rights reserved.
     </footer>
   </div>
@@ -128,10 +120,10 @@ const siteSubtitle = computed(
   () => appStore.cachedPublicSettings?.site_subtitle || 'Subscription to API Conversion Platform'
 )
 
-const tags = computed(() => [
-  { label: t('home.tags.subscriptionToApi'), note: t('home.console.oneKey') },
-  { label: t('home.tags.stickySession'), note: t('home.console.stickySession') },
-  { label: t('home.tags.realtimeBilling'), note: t('home.console.realtimeBilling') }
+const facts = computed(() => [
+  { title: t('home.facts.models.title'), value: t('home.facts.models.value') },
+  { title: t('home.facts.sticky.title'), value: t('home.facts.sticky.value') },
+  { title: t('home.facts.billing.title'), value: t('home.facts.billing.value') }
 ])
 
 const isDark = ref(document.documentElement.classList.contains('dark'))
@@ -156,27 +148,3 @@ onMounted(() => {
   appStore.fetchPublicSettings()
 })
 </script>
-
-<style scoped>
-/* 苹果式毛玻璃：半透明面板 + 高斯模糊 + 细高光描边 */
-.auth-glass {
-  @apply rounded-2xl border border-white/80 bg-white/55;
-  @apply backdrop-blur-2xl backdrop-saturate-150;
-  @apply shadow-[0_28px_80px_-36px_rgba(11,14,20,0.55)];
-}
-
-.dark .auth-glass {
-  @apply border-white/10 bg-dark-900/55;
-  @apply shadow-[0_28px_80px_-36px_rgba(0,0,0,0.85)];
-}
-
-.brand-grain {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23g)' opacity='0.42'/%3E%3C/svg%3E");
-  background-size: 180px 180px;
-  opacity: 0.035;
-}
-
-.dark .brand-grain {
-  opacity: 0.06;
-}
-</style>

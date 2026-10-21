@@ -5,7 +5,6 @@ export default {
   },
   // Home Page
   home: {
-    viewOnGithub: 'View on GitHub',
     viewDocs: 'View Documentation',
     docs: 'Docs',
     switchToLight: 'Switch to Light Mode',
@@ -15,110 +14,154 @@ export default {
     getStarted: 'Get Started',
     goToDashboard: 'Go to Dashboard',
     backHome: 'Back to home',
+    nav: {
+      capabilities: 'Capabilities',
+      latency: 'Live latency',
+      integration: 'Quick start',
+      models: 'Models'
+    },
+    hero: {
+      statusLabel: 'Service online',
+      probeValue: 'round trip {ms} ms',
+      probePending: 'Measuring this device',
+      titleLead: 'One key.',
+      titleAccent: 'Runs every model call you make',
+      description: 'Claude, GPT and Gemini behind one endpoint. Account pooling, sticky sessions and per-token billing all live in the same console.',
+      primaryCta: 'Get started',
+      primaryCtaAuthed: 'Open console',
+      secondaryCta: 'See live latency',
+      note: 'Create an API key in the console after signing in. Every call and every cost stays visible.'
+    },
+    facts: {
+      models: { title: 'One endpoint', value: 'Claude · GPT · Gemini' },
+      sticky: { title: 'Sticky sessions', value: 'Same session, same upstream' },
+      billing: { title: 'Live billing', value: 'Settled per token' }
+    },
+    preview: {
+      console: 'console / overview',
+      badge: 'UI preview',
+      overview: 'Today',
+      balance: 'Balance',
+      todayRequests: 'Requests today',
+      todayCost: 'Cost today',
+      rpm: 'RPM',
+      recentCalls: 'Recent calls',
+      fiveHour: '5 hours',
+      daily: 'Daily',
+      replay: 'Sticky session',
+      replayNote: 'Same session hits one upstream'
+    },
+    latency: {
+      eyebrow: 'LIVE / MEASURED',
+      title: 'Your latency here is real',
+      description: 'This browser requests a static asset from this site every 5 seconds. No simulated numbers: what you see is the actual round trip.',
+      current: 'Current round trip',
+      avg: 'Average',
+      p95: 'P95',
+      jitter: 'Jitter',
+      sampleCount: 'Samples',
+      ttfb: 'Time to first byte',
+      connection: 'Connection',
+      reused: 'Reused',
+      fresh: 'New',
+      transfer: 'Transfer',
+      protocol: 'Protocol',
+      window: 'Samples so far: {count}',
+      recent: 'Recent samples',
+      waiting: 'Collecting samples',
+      failed: 'Probe failed, retrying',
+      fast: 'Smooth',
+      normal: 'Normal',
+      slow: 'Unstable',
+      measuring: 'Measuring',
+      retry: 'Probe now',
+      source: 'Source: this device → this site\'s static asset, real round-trip time.',
+      noData: 'No data yet'
+    },
+    capabilities: {
+      eyebrow: 'CONTROL ROOM',
+      title: 'What already lives in the console',
+      subtitle: 'Not a concept sketch. Every block below maps to a page you can open after signing in.',
+      mockNote: 'Illustration · sample data',
+      routing: {
+        title: 'Account pool routing',
+        desc: 'Several upstream accounts take requests in turn, failover is automatic, and nothing needs manual rewiring.',
+        sticky: 'Sticky',
+        pool: 'Upstream pool'
+      },
+      billing: {
+        title: 'Per-token billing',
+        desc: 'Each call settles immediately, with input, output and cache accounted separately.',
+        input: 'Input',
+        output: 'Output',
+        cache: 'Cache',
+        cost: 'This call'
+      },
+      quota: {
+        title: 'Quotas and limits',
+        desc: 'Five-hour, daily and weekly limits are independent, and the trend is visible before you hit them.',
+        fiveHour: '5 hours',
+        daily: 'Daily',
+        weekly: 'Weekly'
+      },
+      audit: {
+        title: 'Call detail and audit',
+        desc: 'Every request keeps its time, key, model, status and latency for reconciliation and debugging.',
+        time: 'Time',
+        key: 'Key',
+        model: 'Model',
+        status: 'Status',
+        latency: 'Latency'
+      }
+    },
+    integration: {
+      eyebrow: 'QUICK START',
+      title: 'Change one base_url and you are in',
+      description: 'Keep your existing SDK calls and point them at this site. Anthropic and OpenAI request formats are both accepted.',
+      compatible: 'Works with Anthropic / OpenAI SDK request formats',
+      copy: 'Copy',
+      copied: 'Copied',
+      copyFailed: 'Copy failed',
+      point: {
+        baseUrl: 'Point the SDK base_url at this site',
+        key: 'Swap in a key created in the console',
+        done: 'Leave the rest untouched and send the call'
+      }
+    },
+    models: {
+      title: 'Models behind one key',
+      description: 'Supported models keep growing, and the console shows the live availability of each one.'
+    },
+    cta: {
+      title: 'Bring every model call into one console',
+      description: 'Create keys, top up, read usage and check latency in the same place.',
+      primaryGuest: 'Sign up and start',
+      secondary: 'Look up key usage'
+    },
+    footer: {
+      allRightsReserved: 'All rights reserved.',
+      status: 'Service online',
+      keyUsage: 'Key usage lookup',
+      login: 'Sign in'
+    },
+    auth: {
+      secureNote: 'Sessions are held by secure cookies and tokens; captcha, two-factor and login agreement checks stay in place.'
+    },
     console: {
       billedBy: 'Billed live',
       oneKey: 'One key, many models',
       stickySession: 'Stays on one upstream',
       realtimeBilling: 'Billed per token'
     },
-    // User-focused value proposition
-    heroTitleLead: 'One Key,',
-    heroTitleMain: 'All AI Models',
-    heroDescription: 'No need to manage multiple subscriptions. Access Claude, GPT, Gemini and more with a single API key',
-    tags: {
-      subscriptionToApi: 'Subscription to API',
-      stickySession: 'Session Persistence',
-      realtimeBilling: 'Pay As You Go'
-    },
-    // Pain points section
-    painPoints: {
-      title: 'Sound Familiar?',
-      items: {
-        expensive: {
-          title: 'High Subscription Costs',
-          desc: 'Paying for multiple AI subscriptions that add up every month'
-        },
-        complex: {
-          title: 'Account Chaos',
-          desc: 'Managing scattered accounts and API keys across different platforms'
-        },
-        unstable: {
-          title: 'Service Interruptions',
-          desc: 'Single accounts hitting rate limits and disrupting your workflow'
-        },
-        noControl: {
-          title: 'No Usage Control',
-          desc: "Can't track where your money goes or limit team member usage"
-        }
-      }
-    },
-    // Solutions section
-    solutions: {
-      title: 'We Solve These Problems',
-      subtitle: 'Three simple steps to stress-free AI access'
-    },
-    features: {
-      unifiedGateway: 'One-Click Access',
-      unifiedGatewayDesc: 'Get a single API key to call all connected AI models. No separate applications needed.',
-      multiAccount: 'Always Reliable',
-      multiAccountDesc: 'Smart routing across multiple upstream accounts with automatic failover. Say goodbye to errors.',
-      balanceQuota: 'Pay What You Use',
-      balanceQuotaDesc: 'Usage-based billing with quota limits. Full visibility into team consumption.'
-    },
-    // Comparison section
-    comparison: {
-      title: 'Why Choose Us?',
-      headers: {
-        feature: 'Comparison',
-        official: 'Official Subscriptions',
-        us: 'Our Platform'
-      },
-      items: {
-        pricing: {
-          feature: 'Pricing',
-          official: 'Fixed monthly fee, pay even if unused',
-          us: 'Pay only for what you use'
-        },
-        models: {
-          feature: 'Model Selection',
-          official: 'Single provider only',
-          us: 'Switch between models freely'
-        },
-        management: {
-          feature: 'Account Management',
-          official: 'Manage each service separately',
-          us: 'Unified key, one dashboard'
-        },
-        stability: {
-          feature: 'Stability',
-          official: 'Single account rate limits',
-          us: 'Multi-account pool, auto-failover'
-        },
-        control: {
-          feature: 'Usage Control',
-          official: 'Not available',
-          us: 'Quotas & detailed analytics'
-        }
-      }
-    },
     providers: {
-      title: 'Supported AI Models',
-      description: 'One API, Multiple Choices',
+      title: 'Supported AI models',
+      description: 'One API, many choices',
       supported: 'Supported',
-      soon: 'Soon',
+      soon: 'Coming soon',
       claude: 'Claude',
       gemini: 'Gemini',
       antigravity: 'Antigravity',
       more: 'More'
-    },
-    // CTA section
-    cta: {
-      title: 'Ready to Get Started?',
-      description: 'Sign up now and get free trial credits to experience seamless AI access',
-      button: 'Sign Up Free'
-    },
-    footer: {
-      allRightsReserved: 'All rights reserved.'
     }
   },
 

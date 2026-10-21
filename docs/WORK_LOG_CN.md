@@ -116,6 +116,41 @@
   - `a9efab94e` feat(port): pin the listen port to 8080 and guard it before startup
   - `7faa370c4` feat(deploy): drop the port prompt and document the pinned 8080
   - `76cd53d18` refactor(config): take the viper port default from RequiredServerPort
+- PR #2 以 merge commit 合入 `main`（`a7d064804`），CI 反馈的 lint 修复在 `ddd740649`。
+
+---
+
+**主题（同日第三次工作）**：单人维护的落地流程定版为「分支 + PR」，并把本地 `main` 与 `origin` 对齐
+
+### 改动
+
+- 排查分叉：本地 `main` 落后 `origin/main` 12、领先 1（那个本地合并提交 `77d7ae586`）。三条核验证明本地没有独有内容，差异只是缺远端更新。
+- 建 `anchor/20261021-align-main` 后把本地 `main` 对齐到 `ce4d32108`；删除 7 条已合并的本地分支（`feature/custom-hard-port-8080`、`feature/custom-port-8080`、`feature/custom-brand-pages`、`feature/custom-ui-tech-mono`、`feature/custom-release-branding`、`feature/custom-work-log`、`docs/custom-work-log-20261021`），保留 `sync/upstream-20261018-b0a02a330` 和锚点分支。
+- 顺带把远端多出的 `ddd740649`（portguard 的 CI lint 修复：单值类型断言改 comma-ok，gosec G702 按仓库既有约定 `//nolint:gosec` 并写明信任边界）带回工作副本。
+- `AGENTS.md` 新增「上传与合并流程（定版）」六步（开分支 / 提交自证 / 推送开 PR / 等 CI 再合 / 收口 / 高风险动作前），并改写 Repository Identity、General Working Rules、User Intent Mapping 的确认门、Fetch and Analyze 第 6 步、Merge After Confirmation 第 1/3/8/9/10 步、Release and Rollback、Work Log 中所有「本地合并后快进 `main`」的表述；补上此前缺失的 `docs/custom-*` 与新增的 `anchor/*` 两类分支约定。
+- `docs/FORK_MAINTENANCE_CN.md` 同步：分支表与流向图改成 PR 驱动、「确认合并」步骤、「推送结果」、新增「日常开发落地」、「失败与恢复」补三条、提交与发布约定。
+
+### 关键决策
+
+- **本地 `main` 降级为只跟随 `origin/main` 的镜像**，不再承载未推送的合并；成果一律走 PR。否决了我先前建议的「文档与小修直推 main」这种例外——单人场景下例外越多，本地与远端越容易再次分叉，今天的 12/1 分叉就是这么来的。
+- 合并固定 merge commit：工作日志和确认门都锚在短 SHA 上，squash / rebase 会改写它们；回滚用 `revert -m 1` 且同样走 PR。
+- 分支只能从 `origin/main` 切。混入其它主题的分支用 cherry-pick 重建，不用 `git rebase --onto` 或 `git branch -f`——今天实测这类重写动作会被权限层拦，且历史更难自证。
+- stacked PR 只作例外，合并前必须先 `gh pr edit <n> --repo Xeubad/codeapi --base main`；PR #3 就是 base 指错才多开了一次收口 PR。
+- `git reset --hard`、对齐 `main`、动已发布迁移之前先打 `anchor/*`，事后保留。对齐前必须先跑三条核验证明本地无独有内容。
+- 半成品也要 `wip(...)` 提交并推送，工作区不留未提交改动过夜。
+- `cla.yml` 的 CLA 检查记为已知噪音，是否移除 workflow 留给用户决定，Agent 不自行删改。
+
+### 验证
+
+- `git diff --diff-filter=A --name-only origin/main main` 为空；`git log --oneline origin/main..main` 只剩 `77d7ae586`；`git diff --stat a8a4bae0e 77d7ae586 -- backend deploy AGENTS.md docs` 为空 → 后端与文档完全一致，那个本地合并的独有差异只在首页旧状态。
+- 已删除分支的 tip 全部记录在册（`5435d612f`、`ddd740649`、`af4087b4f`、`2ddc8a1eb`、`f85eb4a5f`、`db482b146`、`7f5eabc21`），其中六个已在 `origin/main` 的历史里。
+- 对齐后 `git status --short --branch` 干净，`main == origin/main (ce4d32108)`，`anchor/20261021-align-main` 仍指向 `77d7ae586`。
+- `go test ./internal/portguard/ ./internal/config/ ./internal/setup/ -count=1` 三个包全 ok。
+- 未运行：完整 `go test ./...` 与 `make build`——本轮只动文档，代码与 `origin/main` 完全一致，没有可验证的新行为。
+
+### 产出
+
+- `docs/custom-solo-pr-flow`（从 `origin/main` 切出）：`docs(fork): freeze the branch-plus-PR landing flow` + 本条工作日志。PR 编号与合并后的 SHA 由下一次日志补记——流程文档的落地记录无法自含自己的合并号，这是这套按天日志的已知限制。
 
 ## 2026年10月20日
 

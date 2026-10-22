@@ -158,11 +158,7 @@ func RunCLI() error {
 	fmt.Println()
 	fmt.Println("── Admin Account ──")
 
-	// 默认值使用随机邮箱，避免直接回车得到可被猜中的固定管理员用户名（issue #7850）。
-	defaultAdminEmail, err := generateAdminEmail()
-	if err != nil {
-		return err
-	}
+	// 默认值使用 fork 的固定管理员邮箱（defaultAdminEmail），与 prepareAdminCredentials 保持一致。
 	for {
 		cfg.Admin.Email = promptString(reader, "Admin Email (login username)", defaultAdminEmail)
 		if validateEmail(cfg.Admin.Email) {

@@ -41,11 +41,7 @@ nano .env
 ./apple-container.sh status
 ```
 
-Open `http://localhost:8080`. If `ADMIN_EMAIL` / `ADMIN_PASSWORD` are empty, retrieve the generated admin email (login username) and password with:
-
-```bash
-./apple-container.sh logs app
-```
+Open `http://localhost:8080`. The default admin account is `admin@admin.local` / `admin123`; change the password after first login. If you set `ADMIN_EMAIL` / `ADMIN_PASSWORD` to custom values, use those instead.
 
 The env file uses literal `KEY=value` syntax. Do not use Compose expressions such as `${VALUE:-default}`, and do not quote values unless the quote characters are part of the intended value. `BIND_HOST` must be an IPv4 address, and `SERVER_PORT` must be between 1025 and 65535.
 

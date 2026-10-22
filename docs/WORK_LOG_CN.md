@@ -36,6 +36,71 @@
 
 ---
 
+## 2026年10月22日
+
+**主题**：修复首页版心丢失与真实延迟面板被移除
+
+### 改动
+
+- `HomeView.vue`：给顶栏、Hero、接入、模型、CTA、页脚恢复 `mx-auto max-w-7xl`，修复后续一版改动把页面改成通栏导致的「无主题」观感。
+- 重新接入真实延迟实测：恢复探针脚本（5 秒一次、Range 1 KB、隐藏页暂停）、Hero 实时往返状态与完整延迟面板；同时保留后续一版的真实端点 / 真实价目面板，并把实时往返条并入 Hero 面板。
+- 延迟面板恢复当前 / 平均 / P95 / 抖动 / 样本数、SVG 折线、TTFB、连接复用、传输量、协议和最近样本。
+- zh/en `landing.ts` 恢复 `home.nav.latency`、`home.hero.probeValue/probePending` 与完整 `home.latency` 文案；保留 `home.panel` / `home.plaza` 键。
+- 移动端顶栏隐藏「Key 用量查询」按钮，避免品牌名被截断（该入口仍保留在 Hero 与页脚）。
+
+### 关键决策
+
+- 不回滚后续一版「真实端点 + 真实价目」的方向：只恢复版心与真实延迟，不重新引入带示例数字的控制台预览。
+- 延迟仍按当前设备 → 本站静态资源的真实往返计算，价目取不到时保持「价目未开放」，不补假数据。
+- 折线继续从 0 起算、最小量程 50 ms，避免几毫秒波动被画成陡峭趋势。
+
+### 验证
+
+- `npx pnpm@9 run typecheck` rc=0；`npx pnpm@9 run check:i18n` 3 tests 通过。
+- `npx pnpm@9 run test:run` 371 文件 / 2868 用例全部通过；`npx pnpm@9 run build` 通过。
+- 重新 `go build -tags=embed` 并重启 8080（PID 66960），`/health` 返回 ok，入口资源与 `backend/internal/web/dist` 一致（`assets/index-svF_cZ-k.js`）。
+- CDP 实测：1440 宽 `scrollWidth=1440`，390 宽 `scrollWidth=390`；`#latency` 存在，延迟面板采样 3 次、折线已绘制；顶栏在 390 宽显示完整 `CodeAPI`。
+- 未运行后端测试：本次只改前端视图与文案。
+
+### 产出
+
+- 未提交（工作区改动待确认）：`HomeView.vue`、`landing.ts`×2（README 的既有改动未触碰）
+
+
+**主题（同日第二次工作）**：首页收敛为 Gateway Ledger v2，模型信息改为登录后模型广场可见
+
+### 改动
+
+- 重写默认宣传首页 `HomeView.vue`：删除模型覆盖/价目/路由行，公开页只保留协议、端点、真实延迟与登录入口。
+- Hero 右侧 Gateway 面板改为「实时延迟 / 协议 / 计费」三指标 + 端点列表 + 「模型与价格 → 登录查看」+ 真实迷你折线。
+- 所有 CTA 改为登录/控制台语义；移除「注册」「开放注册」「注册并开始」与充值文案。
+- 公开文案去掉厂商枚举：`home.hero.description`、`home.facts.models.value`、CTA 说明统一改为“多平台 / 模型广场查看”。
+- 接入示例中的 `model` 从真实模型名改为 `your-model`，公开页不泄露模型信息。
+- 默认首页不再渲染 `/model-plaza` 链接；更新 `HomeView.compact.spec.ts` 对应断言。
+- 登录页复用同一组 i18n，左栏说明与事实条同步收敛，无厂商名。
+- 页脚删除版本号与右侧链接组，只保留版权行。
+- 首页移除语言切换控件，默认中文；主题按钮移动到登录按钮右侧。
+- 登录页顶栏同步移除语言切换控件，保留主题切换与「返回首页」。
+
+### 关键决策
+
+- 模型信息（模型名/厂商/价格/倍率）只允许登录后在模型广场访问；公开首页零模型信息，不请求 `/api/v1/model-plaza`。
+- 注册保持关闭，首页只出现“登录”；游客主 CTA 固定 `/login`，已登录走对应控制台。
+- 真实延迟保留为公开页的差异化展示；没有 uptime 监控就不写 uptime。
+- 玻璃只保留顶栏、Gateway 面板与事实条；其余用实心面板和细线，避免“整页玻璃”。
+
+### 验证
+
+- `npx pnpm@9 run typecheck` rc=0；`npx pnpm@9 run check:i18n` 3 tests 通过。
+- `npx pnpm@9 run test:run` 371 文件 / 2868 用例全部通过；`npx pnpm@9 run build` 通过。
+- 重新 `go build -tags=embed` 并重启 8080（PID 71457），`/health` 返回 ok，入口资源 `assets/index-DikISsyc.js` 与 dist 一致。
+- CDP 实测 8080：DOM 中 `Claude/GPT/Gemini/Antigravity` 命中为 false，`/model-plaza` 链接不存在；页面链接仅 `#integration`、`#latency`、`/key-usage`、`/login`；顶栏无语言切换，右侧顺序为「Key 用量 → 登录 → 主题」；页脚仅版权行、无版本号与链接；延迟采样 3 次；1440/390 无横向溢出。
+- 未运行后端测试：本次只改前端视图与文案。
+
+### 产出
+
+- 未提交（工作区改动待确认）：`HomeView.vue`、`landing.ts`×2、`HomeView.compact.spec.ts`
+
 ## 2026年10月21日
 
 **主题**：首页与登录页二次重构 —— 苹果式毛玻璃、宣传型版面、真实访问延迟实测

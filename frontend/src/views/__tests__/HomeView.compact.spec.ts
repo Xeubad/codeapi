@@ -163,13 +163,13 @@ describe('HomeView compact mode', () => {
     expect(modelPlazaDestination(wrapper)).toBe('/model-plaza')
   })
 
-  it('shows the model plaza link in the default home header', () => {
+  it('keeps model information out of the default home header', () => {
     const wrapper = mountHome({
       model_plaza_enabled: true,
       model_plaza_require_auth: false,
     })
 
-    expect(modelPlazaDestination(wrapper)).toBe('/model-plaza')
+    expect(modelPlazaDestination(wrapper)).toBeUndefined()
   })
 
   it('hides the model plaza link when the feature is disabled', () => {

@@ -15,10 +15,13 @@ export default {
     goToDashboard: '进入控制台',
     backHome: '返回首页',
     nav: {
-      capabilities: '能力',
       latency: '实测延迟',
-      integration: '快速接入',
-      models: '模型'
+      integration: '快速接入'
+    },
+    facts: {
+      models: { title: '统一入口', value: '多平台 · 单密钥' },
+      sticky: { title: '粘性会话', value: '同一会话固定上游' },
+      billing: { title: '实时计费', value: '按 token 逐次结算' }
     },
     hero: {
       statusLabel: '服务在线',
@@ -26,30 +29,28 @@ export default {
       probePending: '正在测量本机延迟',
       titleLead: '一个密钥，',
       titleAccent: '接管全部模型调用',
-      description: 'Claude、GPT、Gemini 走同一个入口。账号池调度、粘性会话、按 token 结算，全部收在同一个控制台里。',
-      primaryCta: '开始使用',
+      description: '多家主流模型平台通过同一套接口接入；按 token 计费，登录后可在模型广场查看可用模型与价格。',
+      loginCta: '登录',
+      secondaryCta: 'Key 用量查询',
       primaryCtaAuthed: '进入控制台',
-      secondaryCta: '查看本机实测延迟',
-      note: '登录后在控制台创建 API Key 即可调用，每一次用量和费用都能查到。'
+      note: '登录后创建 API Key 即可调用；模型与价格在模型广场查看。'
     },
-    facts: {
-      models: { title: '统一入口', value: 'Claude · GPT · Gemini' },
-      sticky: { title: '粘性会话', value: '同一会话固定上游' },
-      billing: { title: '实时计费', value: '按 token 逐次结算' }
-    },
-    preview: {
-      console: 'console / overview',
-      badge: '界面预览',
-      overview: '今日概览',
-      balance: '余额',
-      todayRequests: '今日请求',
-      todayCost: '今日成本',
-      rpm: 'RPM',
-      recentCalls: '最近调用',
-      fiveHour: '5 小时',
-      daily: '每日',
-      replay: '会话保持',
-      replayNote: '同一会话命中同一上游'
+    gateway: {
+      live: 'GATEWAY / LIVE',
+      online: '在线',
+      degraded: '连接异常',
+      latency: '实时往返',
+      protocol: '协议',
+      protocolValue: 'OpenAI/Anthropic',
+      billing: '计费',
+      billingValue: '按 token',
+      endpoints: '接入端点',
+      modelInfo: '模型与价格',
+      modelInfoNote: '登录后在模型广场查看',
+      modelInfoAction: '登录查看',
+      modelInfoActionAuthed: '进入控制台',
+      samples: '样本 {count}',
+      viewLatency: '查看实测延迟'
     },
     latency: {
       eyebrow: 'LIVE / 实测',
@@ -78,42 +79,6 @@ export default {
       source: '数据来源：当前设备 → 本站静态资源，真实往返时延。',
       noData: '暂无数据'
     },
-    capabilities: {
-      eyebrow: 'CONTROL ROOM',
-      title: '控制台里已经有的能力',
-      subtitle: '不是概念图。下面每一块都能在登录后的控制台里找到对应页面。',
-      mockNote: '示意图 · 数据为示例',
-      routing: {
-        title: '账号池调度',
-        desc: '多个上游账号轮流承接请求，失败自动切换，不需要手动改配置。',
-        sticky: '会话保持',
-        pool: '上游池'
-      },
-      billing: {
-        title: '按 token 实时计费',
-        desc: '每次调用结束立刻结算，输入、输出、缓存分开记账。',
-        input: '输入',
-        output: '输出',
-        cache: '缓存',
-        cost: '本次费用'
-      },
-      quota: {
-        title: '配额与限额',
-        desc: '5 小时、每日、每周限额各自独立，用超之前就能看到趋势。',
-        fiveHour: '5 小时',
-        daily: '每日',
-        weekly: '每周'
-      },
-      audit: {
-        title: '调用明细与审计',
-        desc: '每一条请求都有时间、密钥、模型、状态和延迟，便于对账与排错。',
-        time: '时间',
-        key: '密钥',
-        model: '模型',
-        status: '状态',
-        latency: '延迟'
-      }
-    },
     integration: {
       eyebrow: 'QUICK START',
       title: '改一行 base_url，就能接上',
@@ -128,14 +93,9 @@ export default {
         done: '其余参数不变，直接发起调用'
       }
     },
-    models: {
-      title: '一个密钥覆盖的模型',
-      description: '已接入的模型会持续补充，控制台里能看到每个模型的实际可用状态。'
-    },
     cta: {
       title: '把模型调用收拢到一个控制台',
-      description: '创建密钥、充值、看用量、查延迟，都在同一个地方完成。',
-      primaryGuest: '注册并开始',
+      description: '创建密钥、看用量、查延迟，都在同一个地方完成；模型与价格在模型广场查看。',
       secondary: '查询 Key 用量'
     },
     footer: {
@@ -153,16 +113,6 @@ export default {
       stickySession: '命中同一上游账号',
       realtimeBilling: '按 token 实时结算'
     },
-    providers: {
-      title: '已支持的 AI 模型',
-      description: '一个 API，多种选择',
-      supported: '已支持',
-      soon: '即将推出',
-      claude: 'Claude',
-      gemini: 'Gemini',
-      antigravity: 'Antigravity',
-      more: '更多'
-    }
   },
 
   // Key Usage Query Page

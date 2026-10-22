@@ -17,7 +17,6 @@
         </router-link>
 
         <div class="ml-auto flex shrink-0 items-center gap-1">
-          <LocaleSwitcher />
           <button
             class="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-900/5 hover:text-gray-900 dark:text-dark-400 dark:hover:bg-white/5 dark:hover:text-white"
             :title="isDark ? t('home.switchToLight') : t('home.switchToDark')"
@@ -104,7 +103,6 @@ import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores'
 import { sanitizeUrl } from '@/utils/url'
 import Icon from '@/components/icons/Icon.vue'
-import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 
 const { t } = useI18n()
 const appStore = useAppStore()

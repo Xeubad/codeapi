@@ -15,10 +15,13 @@ export default {
     goToDashboard: 'Go to Dashboard',
     backHome: 'Back to home',
     nav: {
-      capabilities: 'Capabilities',
       latency: 'Live latency',
-      integration: 'Quick start',
-      models: 'Models'
+      integration: 'Quick start'
+    },
+    facts: {
+      models: { title: 'One endpoint', value: 'Multi-platform · one key' },
+      sticky: { title: 'Sticky sessions', value: 'Same session, same upstream' },
+      billing: { title: 'Live billing', value: 'Settled per token' }
     },
     hero: {
       statusLabel: 'Service online',
@@ -26,30 +29,28 @@ export default {
       probePending: 'Measuring this device',
       titleLead: 'One key.',
       titleAccent: 'Runs every model call you make',
-      description: 'Claude, GPT and Gemini behind one endpoint. Account pooling, sticky sessions and per-token billing all live in the same console.',
-      primaryCta: 'Get started',
+      description: 'Multiple mainstream model platforms behind one endpoint. Pay per token; sign in to view available models and pricing in the model plaza.',
+      loginCta: 'Sign in',
+      secondaryCta: 'Check key usage',
       primaryCtaAuthed: 'Open console',
-      secondaryCta: 'See live latency',
-      note: 'Create an API key in the console after signing in. Every call and every cost stays visible.'
+      note: 'Create an API key after signing in. Models and pricing live in the model plaza.'
     },
-    facts: {
-      models: { title: 'One endpoint', value: 'Claude · GPT · Gemini' },
-      sticky: { title: 'Sticky sessions', value: 'Same session, same upstream' },
-      billing: { title: 'Live billing', value: 'Settled per token' }
-    },
-    preview: {
-      console: 'console / overview',
-      badge: 'UI preview',
-      overview: 'Today',
-      balance: 'Balance',
-      todayRequests: 'Requests today',
-      todayCost: 'Cost today',
-      rpm: 'RPM',
-      recentCalls: 'Recent calls',
-      fiveHour: '5 hours',
-      daily: 'Daily',
-      replay: 'Sticky session',
-      replayNote: 'Same session hits one upstream'
+    gateway: {
+      live: 'GATEWAY / LIVE',
+      online: 'Online',
+      degraded: 'Connection issue',
+      latency: 'Round trip',
+      protocol: 'Protocol',
+      protocolValue: 'OpenAI/Anthropic',
+      billing: 'Billing',
+      billingValue: 'Per token',
+      endpoints: 'Endpoints',
+      modelInfo: 'Models & pricing',
+      modelInfoNote: 'Sign in, then open the model plaza',
+      modelInfoAction: 'Sign in to view',
+      modelInfoActionAuthed: 'Open console',
+      samples: 'Samples {count}',
+      viewLatency: 'View live latency'
     },
     latency: {
       eyebrow: 'LIVE / MEASURED',
@@ -78,42 +79,6 @@ export default {
       source: 'Source: this device → this site\'s static asset, real round-trip time.',
       noData: 'No data yet'
     },
-    capabilities: {
-      eyebrow: 'CONTROL ROOM',
-      title: 'What already lives in the console',
-      subtitle: 'Not a concept sketch. Every block below maps to a page you can open after signing in.',
-      mockNote: 'Illustration · sample data',
-      routing: {
-        title: 'Account pool routing',
-        desc: 'Several upstream accounts take requests in turn, failover is automatic, and nothing needs manual rewiring.',
-        sticky: 'Sticky',
-        pool: 'Upstream pool'
-      },
-      billing: {
-        title: 'Per-token billing',
-        desc: 'Each call settles immediately, with input, output and cache accounted separately.',
-        input: 'Input',
-        output: 'Output',
-        cache: 'Cache',
-        cost: 'This call'
-      },
-      quota: {
-        title: 'Quotas and limits',
-        desc: 'Five-hour, daily and weekly limits are independent, and the trend is visible before you hit them.',
-        fiveHour: '5 hours',
-        daily: 'Daily',
-        weekly: 'Weekly'
-      },
-      audit: {
-        title: 'Call detail and audit',
-        desc: 'Every request keeps its time, key, model, status and latency for reconciliation and debugging.',
-        time: 'Time',
-        key: 'Key',
-        model: 'Model',
-        status: 'Status',
-        latency: 'Latency'
-      }
-    },
     integration: {
       eyebrow: 'QUICK START',
       title: 'Change one base_url and you are in',
@@ -128,14 +93,9 @@ export default {
         done: 'Leave the rest untouched and send the call'
       }
     },
-    models: {
-      title: 'Models behind one key',
-      description: 'Supported models keep growing, and the console shows the live availability of each one.'
-    },
     cta: {
       title: 'Bring every model call into one console',
-      description: 'Create keys, top up, read usage and check latency in the same place.',
-      primaryGuest: 'Sign up and start',
+      description: 'Create keys, check usage and latency in one place; models and pricing live in the model plaza.',
       secondary: 'Look up key usage'
     },
     footer: {
@@ -153,16 +113,6 @@ export default {
       stickySession: 'Stays on one upstream',
       realtimeBilling: 'Billed per token'
     },
-    providers: {
-      title: 'Supported AI models',
-      description: 'One API, many choices',
-      supported: 'Supported',
-      soon: 'Coming soon',
-      claude: 'Claude',
-      gemini: 'Gemini',
-      antigravity: 'Antigravity',
-      more: 'More'
-    }
   },
 
   // Key Usage Query Page

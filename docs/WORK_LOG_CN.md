@@ -36,6 +36,71 @@
 
 ---
 
+## 2026年10月22日
+
+**主题**：修复首页版心丢失与真实延迟面板被移除
+
+### 改动
+
+- `HomeView.vue`：给顶栏、Hero、接入、模型、CTA、页脚恢复 `mx-auto max-w-7xl`，修复后续一版改动把页面改成通栏导致的「无主题」观感。
+- 重新接入真实延迟实测：恢复探针脚本（5 秒一次、Range 1 KB、隐藏页暂停）、Hero 实时往返状态与完整延迟面板；同时保留后续一版的真实端点 / 真实价目面板，并把实时往返条并入 Hero 面板。
+- 延迟面板恢复当前 / 平均 / P95 / 抖动 / 样本数、SVG 折线、TTFB、连接复用、传输量、协议和最近样本。
+- zh/en `landing.ts` 恢复 `home.nav.latency`、`home.hero.probeValue/probePending` 与完整 `home.latency` 文案；保留 `home.panel` / `home.plaza` 键。
+- 移动端顶栏隐藏「Key 用量查询」按钮，避免品牌名被截断（该入口仍保留在 Hero 与页脚）。
+
+### 关键决策
+
+- 不回滚后续一版「真实端点 + 真实价目」的方向：只恢复版心与真实延迟，不重新引入带示例数字的控制台预览。
+- 延迟仍按当前设备 → 本站静态资源的真实往返计算，价目取不到时保持「价目未开放」，不补假数据。
+- 折线继续从 0 起算、最小量程 50 ms，避免几毫秒波动被画成陡峭趋势。
+
+### 验证
+
+- `npx pnpm@9 run typecheck` rc=0；`npx pnpm@9 run check:i18n` 3 tests 通过。
+- `npx pnpm@9 run test:run` 371 文件 / 2868 用例全部通过；`npx pnpm@9 run build` 通过。
+- 重新 `go build -tags=embed` 并重启 8080（PID 66960），`/health` 返回 ok，入口资源与 `backend/internal/web/dist` 一致（`assets/index-svF_cZ-k.js`）。
+- CDP 实测：1440 宽 `scrollWidth=1440`，390 宽 `scrollWidth=390`；`#latency` 存在，延迟面板采样 3 次、折线已绘制；顶栏在 390 宽显示完整 `CodeAPI`。
+- 未运行后端测试：本次只改前端视图与文案。
+
+### 产出
+
+- 未提交（工作区改动待确认）：`HomeView.vue`、`landing.ts`×2（README 的既有改动未触碰）
+
+
+**主题（同日第二次工作）**：首页收敛为 Gateway Ledger v2，模型信息改为登录后模型广场可见
+
+### 改动
+
+- 重写默认宣传首页 `HomeView.vue`：删除模型覆盖/价目/路由行，公开页只保留协议、端点、真实延迟与登录入口。
+- Hero 右侧 Gateway 面板改为「实时延迟 / 协议 / 计费」三指标 + 端点列表 + 「模型与价格 → 登录查看」+ 真实迷你折线。
+- 所有 CTA 改为登录/控制台语义；移除「注册」「开放注册」「注册并开始」与充值文案。
+- 公开文案去掉厂商枚举：`home.hero.description`、`home.facts.models.value`、CTA 说明统一改为“多平台 / 模型广场查看”。
+- 接入示例中的 `model` 从真实模型名改为 `your-model`，公开页不泄露模型信息。
+- 默认首页不再渲染 `/model-plaza` 链接；更新 `HomeView.compact.spec.ts` 对应断言。
+- 登录页复用同一组 i18n，左栏说明与事实条同步收敛，无厂商名。
+- 页脚删除版本号与右侧链接组，只保留版权行。
+- 首页移除语言切换控件，默认中文；主题按钮移动到登录按钮右侧。
+- 登录页顶栏同步移除语言切换控件，保留主题切换与「返回首页」。
+
+### 关键决策
+
+- 模型信息（模型名/厂商/价格/倍率）只允许登录后在模型广场访问；公开首页零模型信息，不请求 `/api/v1/model-plaza`。
+- 注册保持关闭，首页只出现“登录”；游客主 CTA 固定 `/login`，已登录走对应控制台。
+- 真实延迟保留为公开页的差异化展示；没有 uptime 监控就不写 uptime。
+- 玻璃只保留顶栏、Gateway 面板与事实条；其余用实心面板和细线，避免“整页玻璃”。
+
+### 验证
+
+- `npx pnpm@9 run typecheck` rc=0；`npx pnpm@9 run check:i18n` 3 tests 通过。
+- `npx pnpm@9 run test:run` 371 文件 / 2868 用例全部通过；`npx pnpm@9 run build` 通过。
+- 重新 `go build -tags=embed` 并重启 8080（PID 71457），`/health` 返回 ok，入口资源 `assets/index-DikISsyc.js` 与 dist 一致。
+- CDP 实测 8080：DOM 中 `Claude/GPT/Gemini/Antigravity` 命中为 false，`/model-plaza` 链接不存在；页面链接仅 `#integration`、`#latency`、`/key-usage`、`/login`；顶栏无语言切换，右侧顺序为「Key 用量 → 登录 → 主题」；页脚仅版权行、无版本号与链接；延迟采样 3 次；1440/390 无横向溢出。
+- 未运行后端测试：本次只改前端视图与文案。
+
+### 产出
+
+- 未提交（工作区改动待确认）：`HomeView.vue`、`landing.ts`×2、`HomeView.compact.spec.ts`
+
 ## 2026年10月21日
 
 **主题**：首页与登录页二次重构 —— 苹果式毛玻璃、宣传型版面、真实访问延迟实测
@@ -150,7 +215,40 @@
 
 ### 产出
 
-- `docs/custom-solo-pr-flow`（从 `origin/main` 切出）：`docs(fork): freeze the branch-plus-PR landing flow` + 本条工作日志。PR 编号与合并后的 SHA 由下一次日志补记——流程文档的落地记录无法自含自己的合并号，这是这套按天日志的已知限制。
+- `docs/custom-solo-pr-flow`（从 `origin/main` 切出）：`docs(fork): freeze the branch-plus-PR landing flow` + 本条工作日志。**经 PR #5 合入，merge commit `8d32780d8`**（补记于同日第四次工作；流程文档的落地记录无法自含自己的合并号，这类补记统一并进下一条日志）。
+
+---
+
+**主题（同日第四次工作）**：README 中文化并改成 fork 视角，删除非中文版本
+
+### 改动
+
+- 三份 README 合并为一份：`git rm README.md README_JA.md` + `git mv README_CN.md README.md`，git 识别为 rename，历史可追溯。
+- fork 化：品牌 `Sub2API` → `CodeAPI`（15 处；小写的 `sub2api` 服务名、`/opt/sub2api` 安装目录刻意不动，那是 fork 保留的二进制名与路径）；仓库地址 `Wei-Shaw/sub2api` → `Xeubad/codeapi`（`git clone` ×3、`install.sh` ×2、`docker-deploy.sh` ×1）；logo 从 `assets/logo.svg` 换成 `frontend/public/logo.png`。
+- 头部：删掉指向上游的 Trendshift 徽章与三语切换链接，补一行 fork 出处说明（`Sub2API` 与上游仓库链接保留在出处里，出处不品牌化）。
+- 结尾：Star History 图表（展示的是上游 star）换成「上游项目」致谢段。
+- `docs/FORK_MAINTENANCE_CN.md`：「刻意保留指向上游的位置」第一条翻案，写明理由与遗留项。
+- 补记上一条产出：PR #5 / merge `8d32780d8`。
+
+### 关键决策
+
+- **翻案**：原方案把 README 的 curl 安装命令刻意指向上游以压缩冲突面。今天改指 fork——README 是用户照抄命令的地方，上游 `install.sh` 会把官方二进制装进 `/opt/sub2api` 覆盖二开改动，正是 AGENTS.md 明令禁止的路径。冲突收益抵不过这个风险。
+- README 只留中文一份：GitHub 首页只自动渲染 `README.md`，保留 `README_CN.md` 会丢首页；日文版没有维护者，删除。
+- 品牌替换用大小写精确匹配的 `Sub2API`，不碰小写 `sub2api`（服务名、安装目录、systemd 单元）与社区项目名 `Sub2ApiPay`，避免误伤。
+- GPL 许可证、Copyright（Wesley Liddick）与服务条款风险提醒原样保留——那是上游的法律声明，fork 不改。
+- `deploy/README.md` 与 `deploy/APPLE_CONTAINER.md` 还有 3+ 条指向 `Wei-Shaw/sub2api` 的安装命令（同一隐患），本次按「只处理三份 README」的既定范围不动，留待决定。
+- 日志条目与本次文档改动同 PR 提交：本 PR 本身就是纯文档主题，为一行补记单开 PR 违背「PR 成本花在真实功能上」；此解释只针对文档类 PR，功能 PR 仍不夹日志。
+
+### 验证
+
+- `grep` 核验：`README.md` 内 `Wei-Shaw` 仅剩 2 处（头部出处行 + 上游致谢行），`Sub2API` 仅剩 1 处（出处行），`CodeAPI` 15 处、`Xeubad` 7 处；`assets/logo`、`trendshift`、`star-history`、`README_CN`/`README_JA` 引用清零。
+- 端口说法复核：只剩「端口固定为 8080（本二开版本不可修改）」，无自定义端口残留。
+- 全仓引用 `README_CN`/`README_JA` 的位置仅剩 `docs/FORK_MAINTENANCE_CN.md` 一处，已一并改掉。
+- 未运行：`make test` / `make build`（纯 markdown 改动，不涉及代码与构建）。
+
+### 产出
+
+- `docs/custom-readme-cn`（从 `origin/main` 切出）：README 重写 + 删除两份非中文版 + 维护手册翻案说明 + 本条日志（含 PR #5 补记）。PR 编号与合并 SHA 同样并进下一条日志。
 
 ## 2026年10月20日
 

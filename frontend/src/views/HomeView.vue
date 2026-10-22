@@ -86,7 +86,6 @@
     data-testid="promo-home"
     class="relative flex min-h-screen flex-col overflow-x-clip bg-gray-50 text-gray-900 dark:bg-dark-950 dark:text-gray-100"
   >
-    <!-- 苹果式毛玻璃背景：低饱和色场 + 柔光团 + 颗粒 -->
     <div class="brand-backdrop" aria-hidden="true">
       <div class="brand-orb -left-24 -top-32 h-[30rem] w-[30rem] bg-[rgba(111,158,18,0.20)]"></div>
       <div class="brand-orb -right-32 top-16 h-[26rem] w-[26rem] bg-[rgba(56,132,160,0.16)]"></div>
@@ -94,7 +93,6 @@
       <div class="brand-grain"></div>
     </div>
 
-    <!-- 顶栏：悬浮毛玻璃 -->
     <header class="sticky top-0 z-40 px-3 pt-3 sm:px-5 sm:pt-4">
       <nav class="brand-glass-strong mx-auto flex h-14 max-w-7xl items-center gap-2 px-3 sm:px-4">
         <router-link to="/" class="flex min-w-0 items-center gap-2.5">
@@ -115,14 +113,19 @@
 
         <div class="ml-auto flex shrink-0 items-center gap-1">
           <router-link
-            v-if="showModelPlazaEntry"
-            to="/model-plaza"
-            class="hidden h-9 items-center gap-1.5 rounded-lg px-2.5 text-[13px] font-medium text-gray-600 transition-colors hover:bg-gray-900/5 hover:text-gray-900 sm:flex dark:text-dark-300 dark:hover:bg-white/5 dark:hover:text-white"
+            to="/key-usage"
+            class="hidden h-9 items-center gap-1.5 rounded-lg border border-gray-900/10 bg-white/45 px-2.5 text-[13px] font-medium text-gray-700 backdrop-blur-md transition-colors hover:bg-white/75 dark:border-white/10 dark:bg-dark-900/45 dark:text-gray-200 dark:hover:bg-dark-800/70 sm:inline-flex"
           >
-            <Icon name="grid" size="sm" />
-            {{ t('nav.modelPlaza') }}
+            <Icon name="chartBar" size="sm" />
+            {{ t('home.footer.keyUsage') }}
           </router-link>
-          <LocaleSwitcher />
+          <router-link
+            :to="primaryCta.to"
+            class="ml-1 inline-flex h-9 items-center gap-1.5 rounded-lg bg-gray-900 px-3.5 text-[13px] font-medium text-white transition-colors hover:bg-gray-800 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white"
+          >
+            {{ primaryCta.label }}
+            <Icon name="arrowRight" size="xs" />
+          </router-link>
           <button
             class="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-900/5 hover:text-gray-900 dark:text-dark-400 dark:hover:bg-white/5 dark:hover:text-white"
             :title="isDark ? t('home.switchToLight') : t('home.switchToDark')"
@@ -131,33 +134,29 @@
             <Icon v-if="isDark" name="sun" size="sm" />
             <Icon v-else name="moon" size="sm" />
           </button>
-          <router-link
-            :to="isAuthenticated ? dashboardPath : '/login'"
-            class="ml-1 inline-flex h-9 items-center gap-1.5 rounded-lg bg-gray-900 px-3.5 text-[13px] font-medium text-white transition-colors hover:bg-gray-800 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white"
-          >
-            {{ isAuthenticated ? t('home.dashboard') : t('home.login') }}
-            <Icon name="arrowRight" size="xs" />
-          </router-link>
         </div>
       </nav>
     </header>
 
     <main class="relative z-10 flex-1">
-      <!-- Hero -->
-      <section class="mx-auto max-w-7xl px-4 pb-8 pt-10 sm:px-6 lg:pt-16">
-        <div class="grid min-w-0 grid-cols-1 items-center gap-12 lg:grid-cols-[minmax(0,1.02fr)_minmax(0,0.98fr)] lg:gap-14">
+      <section class="mx-auto max-w-7xl px-4 pb-6 pt-8 sm:px-6 lg:pt-12">
+        <div class="grid min-w-0 grid-cols-1 items-center gap-10 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-12">
           <div class="min-w-0">
             <p
-              class="inline-flex items-center gap-2 rounded-full border border-gray-900/10 bg-white/50 px-3 py-1.5 backdrop-blur-md dark:border-white/10 dark:bg-white/5"
+              class="inline-flex flex-wrap items-center gap-2 rounded-full border border-gray-900/10 bg-white/50 px-3 py-1.5 backdrop-blur-md dark:border-white/10 dark:bg-white/5"
             >
               <span class="relative flex h-1.5 w-1.5">
                 <span
-                  class="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary-500 opacity-60 motion-reduce:hidden"
+                  class="absolute inline-flex h-full w-full animate-ping rounded-full opacity-60 motion-reduce:hidden"
+                  :class="probeStatus === 'error' ? 'bg-amber-500' : 'bg-primary-500'"
                 ></span>
-                <span class="relative inline-flex h-1.5 w-1.5 rounded-full bg-primary-500"></span>
+                <span
+                  class="relative inline-flex h-1.5 w-1.5 rounded-full"
+                  :class="probeStatus === 'error' ? 'bg-amber-500' : 'bg-primary-500'"
+                ></span>
               </span>
               <span class="font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-gray-600 dark:text-dark-300">
-                {{ t('home.hero.statusLabel') }}
+                {{ heroStatusLabel }}
               </span>
               <span class="h-3 w-px bg-gray-900/10 dark:bg-white/10"></span>
               <span class="font-mono text-[10px] tabular-nums text-gray-900 dark:text-gray-100">
@@ -178,19 +177,19 @@
 
             <div class="mt-8 flex flex-wrap items-center gap-3">
               <router-link
-                :to="isAuthenticated ? dashboardPath : '/login'"
+                :to="primaryCta.to"
                 class="inline-flex h-11 items-center gap-2 rounded-xl bg-gray-900 px-5 text-sm font-medium text-white transition-colors hover:bg-gray-800 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white"
               >
-                {{ isAuthenticated ? t('home.hero.primaryCtaAuthed') : t('home.hero.primaryCta') }}
+                {{ primaryCta.label }}
                 <Icon name="arrowRight" size="sm" />
               </router-link>
-              <a
-                href="#latency"
+              <router-link
+                to="/key-usage"
                 class="inline-flex h-11 items-center gap-2 rounded-xl border border-white/80 bg-white/55 px-4 text-sm font-medium text-gray-800 backdrop-blur-md transition-colors hover:bg-white/80 dark:border-white/10 dark:bg-dark-900/50 dark:text-gray-200 dark:hover:bg-dark-800/80"
               >
-                <Icon name="arrowDown" size="sm" />
+                <Icon name="chartBar" size="sm" />
                 {{ t('home.hero.secondaryCta') }}
-              </a>
+              </router-link>
             </div>
 
             <p class="mt-4 max-w-lg text-[12.5px] leading-relaxed text-gray-500 dark:text-dark-400">
@@ -198,7 +197,7 @@
             </p>
           </div>
 
-          <!-- 控制台预览 -->
+          <!-- Gateway 面板：公开页只展示协议、端点与真实状态 -->
           <div class="relative min-w-0 lg:pl-2">
             <div
               class="pointer-events-none absolute -inset-5 rounded-[2rem] bg-[radial-gradient(70%_70%_at_30%_20%,rgba(111,158,18,0.18),transparent_70%)] blur-2xl"
@@ -210,116 +209,170 @@
                 <span class="h-2 w-2 rounded-full bg-white/15"></span>
                 <span class="h-2 w-2 rounded-full bg-white/15"></span>
                 <span class="ml-2 truncate font-mono text-[10px] uppercase tracking-[0.18em] text-gray-500">
-                  {{ t('home.preview.console') }}
+                  {{ t('home.gateway.live') }}
                 </span>
                 <span
-                  class="ml-auto shrink-0 rounded-md border border-white/10 bg-white/5 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.12em] text-gray-400"
+                  class="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 font-mono text-[9px]"
+                  :class="probeStatus === 'error'
+                    ? 'bg-amber-500/10 text-amber-300'
+                    : 'bg-emerald-500/10 text-emerald-300'"
                 >
-                  {{ t('home.preview.badge') }}
-                </span>
-                <span
-                  class="shrink-0 rounded-md bg-primary-500/15 px-1.5 py-0.5 font-mono text-[9px] tabular-nums text-primary-300"
-                >
-                  {{ heroProbeText }}
+                  <span class="h-1 w-1 rounded-full" :class="probeStatus === 'error' ? 'bg-amber-400' : 'bg-emerald-400'"></span>
+                  {{ gatewayOnlineLabel }}
                 </span>
               </div>
 
-              <div class="grid grid-cols-[46px_minmax(0,1fr)]">
-                <aside class="border-r border-white/5 py-3">
-                  <div class="flex flex-col items-center gap-2">
-                    <span
-                      v-for="(tab, index) in previewTabs"
-                      :key="tab"
-                      class="flex h-7 w-7 items-center justify-center rounded-lg"
-                      :class="index === 0 ? 'bg-primary-500/20 text-primary-300' : 'text-gray-600'"
-                    >
-                      <Icon :name="tab" size="xs" />
-                    </span>
-                  </div>
-                </aside>
-
-                <div class="min-w-0 p-3 sm:p-4">
-                  <div class="flex items-center justify-between gap-3">
-                    <div>
-                      <p class="text-[13px] font-semibold text-white">{{ t('home.preview.overview') }}</p>
-                      <p class="mt-0.5 font-mono text-[9px] uppercase tracking-[0.16em] text-gray-500">
-                        {{ previewDate }}
-                      </p>
-                    </div>
-                    <span
-                      class="shrink-0 rounded-md border border-white/10 bg-white/5 px-2 py-1 font-mono text-[9px] text-gray-400"
-                    >
-                      sk-•••• 7f2a
-                    </span>
-                  </div>
-
-                  <div class="mt-3 grid grid-cols-2 gap-2">
-                    <div
-                      v-for="stat in previewStats"
-                      :key="stat.label"
-                      class="rounded-xl border border-white/[0.06] bg-white/[0.03] px-3 py-2"
-                    >
-                      <p class="text-[9px] uppercase tracking-[0.14em] text-gray-500">{{ stat.label }}</p>
-                      <p class="mt-1 text-[17px] font-semibold leading-none tabular-nums" :class="stat.accent ? 'text-primary-300' : 'text-gray-100'">
-                        {{ stat.value }}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div class="mt-3 overflow-hidden rounded-xl border border-white/[0.06]">
-                    <div class="flex items-center justify-between border-b border-white/[0.06] bg-white/[0.03] px-3 py-1.5">
-                      <span class="text-[10px] font-medium text-gray-400">{{ t('home.preview.recentCalls') }}</span>
-                      <span class="font-mono text-[9px] text-gray-600">200 OK</span>
-                    </div>
-                    <div
-                      v-for="row in previewRows"
-                      :key="row.time + row.model"
-                      class="grid grid-cols-[34px_minmax(0,1fr)_auto_42px_6px] items-center gap-2 px-3 py-1.5 text-[10px] odd:bg-white/[0.015]"
-                    >
-                      <span class="font-mono text-gray-600">{{ row.time }}</span>
-                      <span class="truncate font-mono text-gray-300">{{ row.model }}</span>
-                      <span class="font-mono text-gray-500">{{ row.tokens }}</span>
-                      <span class="text-right font-mono text-primary-300">{{ row.latency }}</span>
-                      <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-                    </div>
-                  </div>
-
-                  <div class="mt-3 space-y-1.5">
-                    <div v-for="quota in previewQuotas" :key="quota.label" class="flex items-center gap-2">
-                      <span class="w-12 shrink-0 text-[9px] text-gray-500">{{ quota.label }}</span>
-                      <span class="h-1 flex-1 overflow-hidden rounded-full bg-white/[0.06]">
-                        <span class="block h-full rounded-full bg-primary-500/70" :style="{ width: quota.value }"></span>
-                      </span>
-                      <span class="w-7 shrink-0 text-right font-mono text-[9px] text-gray-500">{{ quota.value }}</span>
-                    </div>
-                  </div>
+              <div class="grid grid-cols-3 divide-x divide-white/[0.07] border-b border-white/10">
+                <div v-for="metric in gatewayMetrics" :key="metric.label" class="min-w-0 px-3 py-3">
+                  <p class="truncate text-[9px] uppercase tracking-[0.14em] text-gray-500">{{ metric.label }}</p>
+                  <p
+                    class="mt-1 truncate font-mono font-semibold tabular-nums"
+                    :class="[metric.accent ? 'text-primary-300' : 'text-gray-100', metric.compact ? 'text-[9px] sm:text-[10px]' : 'text-[17px]']"
+                  >
+                    {{ metric.value }}<span v-if="metric.unit" class="ml-0.5 text-[9px] font-normal text-gray-500">{{ metric.unit }}</span>
+                  </p>
                 </div>
               </div>
-            </div>
 
+              <div class="px-4 py-3">
+                <div class="flex items-center justify-between gap-3">
+                  <p class="brand-eyebrow">{{ t('home.gateway.endpoints') }}</p>
+                  <span class="truncate font-mono text-[9px] text-gray-500">{{ t('home.gateway.protocolValue') }}</span>
+                </div>
+
+                <ul class="mt-2 space-y-1.5">
+                  <li
+                    v-for="endpoint in endpoints"
+                    :key="endpoint"
+                    class="flex items-center gap-2 rounded-lg border border-white/[0.06] bg-white/[0.03] px-2.5 py-2"
+                  >
+                    <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-primary-500/70"></span>
+                    <span class="min-w-0 flex-1 truncate font-mono text-[10.5px] text-gray-300">{{ endpoint }}</span>
+                  </li>
+                </ul>
+
+                <div class="mt-3 flex items-center justify-between gap-3 rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-2.5">
+                  <div class="min-w-0">
+                    <p class="text-[9px] uppercase tracking-[0.12em] text-gray-500">{{ t('home.gateway.modelInfo') }}</p>
+                    <p class="mt-0.5 truncate text-[10.5px] text-gray-400">{{ t('home.gateway.modelInfoNote') }}</p>
+                  </div>
+                  <router-link
+                    :to="modelInfoCta.to"
+                    class="inline-flex shrink-0 items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-medium text-primary-300 transition-colors hover:bg-white/10"
+                  >
+                    {{ modelInfoCta.label }}
+                    <Icon name="arrowRight" size="xs" />
+                  </router-link>
+                </div>
+              </div>
+
+              <div class="border-t border-white/10 px-4 py-3">
+                <div class="flex items-end gap-3">
+                  <svg
+                    v-if="spark"
+                    viewBox="0 0 640 150"
+                    preserveAspectRatio="none"
+                    class="h-8 min-w-0 flex-1"
+                    aria-hidden="true"
+                  >
+                    <path :d="spark.line" fill="none" stroke="#6f9e12" stroke-width="2" vector-effect="non-scaling-stroke" />
+                  </svg>
+                  <span v-else class="min-w-0 flex-1 font-mono text-[9px] text-gray-600">{{ t('home.latency.waiting') }}</span>
+                  <span class="shrink-0 font-mono text-[9px] tabular-nums text-gray-500">
+                    {{ t('home.gateway.samples', { count: probeSamples.length }) }}
+                  </span>
+                </div>
+                <a href="#latency" class="mt-2 inline-flex items-center gap-1 font-mono text-[9px] text-gray-500 hover:text-gray-300">
+                  {{ t('home.gateway.viewLatency') }}
+                  <Icon name="arrowRight" size="xs" />
+                </a>
+              </div>
+            </div>
           </div>
         </div>
+      </section>
 
-        <!-- 事实条 -->
-        <dl class="brand-glass mt-12 grid overflow-hidden sm:grid-cols-3">
+      <section class="mx-auto max-w-7xl px-4 pb-2 sm:px-6">
+        <dl class="brand-glass grid overflow-hidden sm:grid-cols-3">
           <div
             v-for="(fact, index) in facts"
             :key="fact.title"
-            class="flex items-start gap-3 border-b border-gray-900/5 px-5 py-4 last:border-b-0 sm:border-b-0 sm:border-r sm:last:border-r-0 dark:border-white/5"
+            class="relative px-5 py-4 sm:px-6"
+            :class="index > 0 ? 'border-t border-gray-900/10 dark:border-white/10 sm:border-l sm:border-t-0' : ''"
           >
-            <span class="mt-0.5 font-mono text-[10px] text-primary-600 dark:text-primary-400">
-              {{ String(index + 1).padStart(2, '0') }}
-            </span>
-            <div class="min-w-0">
-              <dt class="text-[13px] font-semibold text-gray-900 dark:text-gray-100">{{ fact.title }}</dt>
-              <dd class="mt-0.5 truncate text-[11.5px] text-gray-500 dark:text-dark-400">{{ fact.value }}</dd>
-            </div>
+            <dt class="flex items-center gap-2 text-[13px] font-medium text-gray-900 dark:text-gray-100">
+              <span class="font-mono text-[9px] font-normal tracking-[0.12em] text-primary-700 dark:text-primary-400">
+                {{ fact.index }}
+              </span>
+              {{ fact.title }}
+            </dt>
+            <dd class="mt-1 text-[12px] text-gray-500 dark:text-dark-400">{{ fact.value }}</dd>
           </div>
         </dl>
       </section>
 
-      <!-- 真实访问延迟 -->
-      <section id="latency" class="mx-auto max-w-7xl scroll-mt-24 px-4 py-8 sm:px-6">
+      <section id="integration" class="mx-auto max-w-7xl scroll-mt-24 px-4 py-10 sm:px-6">
+        <div class="mb-5">
+          <p class="brand-eyebrow">{{ t('home.integration.eyebrow') }}</p>
+          <h2 class="mt-3 text-2xl font-semibold tracking-[-0.02em] sm:text-[1.9rem]">
+            {{ t('home.integration.title') }}
+          </h2>
+          <p class="mt-2 max-w-2xl text-sm leading-relaxed text-gray-600 dark:text-dark-300">
+            {{ t('home.integration.description') }}
+          </p>
+        </div>
+
+        <div class="brand-glass overflow-hidden">
+          <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
+            <div class="min-w-0 p-5 sm:p-7">
+              <ul class="space-y-3">
+                <li v-for="(point, index) in integrationPoints" :key="point" class="flex items-start gap-2.5">
+                  <span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-gray-900/10 bg-white/60 font-mono text-[9px] text-gray-500 dark:border-white/10 dark:bg-white/[0.04] dark:text-dark-300">
+                    {{ String(index + 1).padStart(2, '0') }}
+                  </span>
+                  <span class="text-[13px] leading-relaxed text-gray-700 dark:text-gray-300">{{ point }}</span>
+                </li>
+              </ul>
+
+              <div class="mt-6 flex flex-wrap items-center gap-2">
+                <span
+                  v-for="endpoint in endpoints"
+                  :key="endpoint"
+                  class="rounded-lg border border-gray-900/10 bg-white/45 px-2.5 py-1 font-mono text-[10.5px] text-gray-700 dark:border-white/10 dark:bg-dark-950/35 dark:text-gray-300"
+                >
+                  {{ endpoint }}
+                </span>
+              </div>
+            </div>
+
+            <div class="min-w-0 border-t border-gray-900/10 p-5 dark:border-white/10 sm:p-7 lg:border-l lg:border-t-0">
+              <div class="overflow-hidden rounded-xl bg-gray-900 ring-1 ring-black/40 dark:bg-dark-900">
+                <div class="flex items-center justify-between border-b border-white/10 px-3 py-2">
+                  <span class="font-mono text-[10px] uppercase tracking-[0.14em] text-gray-500">curl</span>
+                  <button
+                    type="button"
+                    class="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 font-mono text-[10px] text-gray-300 transition-colors hover:bg-white/10"
+                    @click="copySnippet"
+                  >
+                    <Icon :name="codeCopied ? 'check' : 'copy'" size="xs" />
+                    {{
+                      codeCopied
+                        ? t('home.integration.copied')
+                        : codeCopyFailed
+                          ? t('home.integration.copyFailed')
+                          : t('home.integration.copy')
+                    }}
+                  </button>
+                </div>
+                <pre class="overflow-x-auto px-3 py-3 font-mono text-[11px] leading-relaxed text-gray-300"><code>{{ snippet }}</code></pre>
+              </div>
+              <p class="mt-3 text-[11px] text-gray-500 dark:text-dark-400">{{ t('home.integration.compatible') }}</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="latency" class="mx-auto max-w-7xl scroll-mt-24 px-4 py-10 sm:px-6">
         <div class="flex flex-wrap items-end justify-between gap-4">
           <div class="min-w-0">
             <p class="brand-eyebrow flex items-center gap-2">
@@ -467,228 +520,7 @@
         </div>
       </section>
 
-      <!-- 控制台能力 -->
-      <section id="capabilities" class="mx-auto max-w-7xl scroll-mt-24 px-4 py-8 sm:px-6">
-        <div class="flex flex-wrap items-end justify-between gap-4">
-          <div class="min-w-0">
-            <p class="brand-eyebrow">{{ t('home.capabilities.eyebrow') }}</p>
-            <h2 class="mt-3 text-2xl font-semibold tracking-[-0.02em] sm:text-[1.9rem]">
-              {{ t('home.capabilities.title') }}
-            </h2>
-            <p class="mt-2 max-w-2xl text-sm leading-relaxed text-gray-600 dark:text-dark-300">
-              {{ t('home.capabilities.subtitle') }}
-            </p>
-          </div>
-          <p class="brand-eyebrow shrink-0">{{ t('home.capabilities.mockNote') }}</p>
-        </div>
-
-        <div class="mt-6 grid gap-4 lg:grid-cols-12">
-          <!-- 账号池 -->
-          <article class="brand-glass p-5 sm:p-6 lg:col-span-7">
-            <div class="flex items-start justify-between gap-4">
-              <div>
-                <h3 class="text-[15px] font-semibold text-gray-900 dark:text-gray-100">{{ t('home.capabilities.routing.title') }}</h3>
-                <p class="mt-1.5 max-w-md text-[13px] leading-relaxed text-gray-600 dark:text-dark-300">
-                  {{ t('home.capabilities.routing.desc') }}
-                </p>
-              </div>
-              <span class="shrink-0 rounded-full bg-primary-500/10 px-2 py-0.5 font-mono text-[10px] text-primary-700 dark:bg-primary-500/15 dark:text-primary-300">
-                {{ t('home.capabilities.routing.sticky') }}
-              </span>
-            </div>
-
-            <div class="mt-5 overflow-hidden rounded-xl border border-gray-900/[0.07] bg-white/45 dark:border-white/[0.07] dark:bg-dark-950/35">
-              <div class="flex items-center justify-between border-b border-gray-900/[0.06] px-3 py-2 dark:border-white/[0.06]">
-                <span class="font-mono text-[10px] uppercase tracking-[0.14em] text-gray-500 dark:text-dark-400">{{ t('home.capabilities.routing.pool') }}</span>
-                <span class="font-mono text-[10px] text-emerald-600 dark:text-emerald-400">3 / 3</span>
-              </div>
-              <div
-                v-for="(account, index) in routingAccounts"
-                :key="account.name"
-                class="grid grid-cols-[8px_minmax(0,1fr)_auto_auto] items-center gap-2.5 border-b border-gray-900/[0.04] px-3 py-2.5 last:border-b-0 dark:border-white/[0.04]"
-                :class="index === 0 ? 'bg-primary-500/[0.06]' : ''"
-              >
-                <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-                <span class="truncate font-mono text-[11px] text-gray-800 dark:text-gray-200">{{ account.name }}</span>
-                <span class="hidden font-mono text-[10px] text-gray-500 sm:inline dark:text-dark-400">{{ account.model }}</span>
-                <span class="flex items-center gap-2">
-                  <span class="h-1 w-16 overflow-hidden rounded-full bg-gray-900/[0.07] dark:bg-white/[0.08]">
-                    <span class="block h-full rounded-full bg-primary-500/70" :style="{ width: account.load }"></span>
-                  </span>
-                  <span class="w-10 text-right font-mono text-[10px] text-gray-500 dark:text-dark-400">{{ account.latency }}</span>
-                </span>
-              </div>
-            </div>
-          </article>
-
-          <!-- 计费 -->
-          <article class="brand-glass p-5 sm:p-6 lg:col-span-5">
-            <h3 class="text-[15px] font-semibold text-gray-900 dark:text-gray-100">{{ t('home.capabilities.billing.title') }}</h3>
-            <p class="mt-1.5 text-[13px] leading-relaxed text-gray-600 dark:text-dark-300">{{ t('home.capabilities.billing.desc') }}</p>
-
-            <div class="mt-5 rounded-xl border border-gray-900/[0.07] bg-white/45 p-3 dark:border-white/[0.07] dark:bg-dark-950/35">
-              <div v-for="row in billingRows" :key="row.label" class="flex items-center gap-2.5 py-1.5">
-                <span class="w-9 shrink-0 text-[10px] text-gray-500 dark:text-dark-400">{{ row.label }}</span>
-                <span class="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-900/[0.06] dark:bg-white/[0.07]">
-                  <span class="block h-full rounded-full bg-gray-900/70 dark:bg-gray-200/70" :style="{ width: row.width }"></span>
-                </span>
-                <span class="w-12 shrink-0 text-right font-mono text-[10px] tabular-nums text-gray-700 dark:text-gray-300">{{ row.value }}</span>
-              </div>
-              <div class="mt-2 flex items-center justify-between border-t border-gray-900/[0.06] pt-2 dark:border-white/[0.06]">
-                <span class="text-[10px] text-gray-500 dark:text-dark-400">{{ t('home.capabilities.billing.cost') }}</span>
-                <span class="font-mono text-[13px] font-medium text-gray-900 dark:text-gray-100">$0.0043</span>
-              </div>
-            </div>
-          </article>
-
-          <!-- 配额 -->
-          <article class="brand-glass p-5 sm:p-6 lg:col-span-5">
-            <h3 class="text-[15px] font-semibold text-gray-900 dark:text-gray-100">{{ t('home.capabilities.quota.title') }}</h3>
-            <p class="mt-1.5 text-[13px] leading-relaxed text-gray-600 dark:text-dark-300">{{ t('home.capabilities.quota.desc') }}</p>
-
-            <div class="mt-5 space-y-3 rounded-xl border border-gray-900/[0.07] bg-white/45 p-3 dark:border-white/[0.07] dark:bg-dark-950/35">
-              <div v-for="bar in quotaBars" :key="bar.label">
-                <div class="flex items-center justify-between text-[10px]">
-                  <span class="text-gray-500 dark:text-dark-400">{{ bar.label }}</span>
-                  <span class="font-mono tabular-nums text-gray-700 dark:text-gray-300">{{ bar.value }}%</span>
-                </div>
-                <div class="mt-1 h-1.5 overflow-hidden rounded-full bg-gray-900/[0.06] dark:bg-white/[0.07]">
-                  <span
-                    class="block h-full rounded-full"
-                    :class="bar.value > 80 ? 'bg-amber-500/80' : 'bg-primary-500/70'"
-                    :style="{ width: bar.value + '%' }"
-                  ></span>
-                </div>
-              </div>
-            </div>
-          </article>
-
-          <!-- 审计 -->
-          <article class="brand-glass p-5 sm:p-6 lg:col-span-7">
-            <h3 class="text-[15px] font-semibold text-gray-900 dark:text-gray-100">{{ t('home.capabilities.audit.title') }}</h3>
-            <p class="mt-1.5 max-w-xl text-[13px] leading-relaxed text-gray-600 dark:text-dark-300">{{ t('home.capabilities.audit.desc') }}</p>
-
-            <div class="mt-5 overflow-hidden rounded-xl border border-gray-900/[0.07] bg-white/45 dark:border-white/[0.07] dark:bg-dark-950/35">
-              <div class="grid grid-cols-[46px_minmax(0,1fr)_minmax(0,1fr)_46px_52px] gap-2 border-b border-gray-900/[0.06] px-3 py-2 font-mono text-[9px] uppercase tracking-[0.1em] text-gray-500 dark:border-white/[0.06] dark:text-dark-400">
-                <span>{{ t('home.capabilities.audit.time') }}</span>
-                <span>{{ t('home.capabilities.audit.key') }}</span>
-                <span>{{ t('home.capabilities.audit.model') }}</span>
-                <span class="text-right">{{ t('home.capabilities.audit.status') }}</span>
-                <span class="text-right">{{ t('home.capabilities.audit.latency') }}</span>
-              </div>
-              <div
-                v-for="log in auditRows"
-                :key="log.time"
-                class="grid grid-cols-[46px_minmax(0,1fr)_minmax(0,1fr)_46px_52px] items-center gap-2 border-b border-gray-900/[0.04] px-3 py-2 font-mono text-[10px] last:border-b-0 dark:border-white/[0.04]"
-              >
-                <span class="text-gray-500 dark:text-dark-400">{{ log.time }}</span>
-                <span class="truncate text-gray-700 dark:text-gray-300">{{ log.key }}</span>
-                <span class="truncate text-gray-700 dark:text-gray-300">{{ log.model }}</span>
-                <span class="text-right text-emerald-600 dark:text-emerald-400">{{ log.status }}</span>
-                <span class="text-right text-gray-500 dark:text-dark-400">{{ log.latency }}</span>
-              </div>
-            </div>
-          </article>
-        </div>
-      </section>
-
-      <!-- 快速接入 -->
-      <section id="integration" class="mx-auto max-w-7xl scroll-mt-24 px-4 py-8 sm:px-6">
-        <div class="brand-glass overflow-hidden">
-          <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
-            <div class="min-w-0 p-5 sm:p-7">
-              <p class="brand-eyebrow">{{ t('home.integration.eyebrow') }}</p>
-              <h2 class="mt-3 text-2xl font-semibold tracking-[-0.02em] sm:text-[1.9rem]">
-                {{ t('home.integration.title') }}
-              </h2>
-              <p class="mt-2 max-w-lg text-sm leading-relaxed text-gray-600 dark:text-dark-300">
-                {{ t('home.integration.description') }}
-              </p>
-
-              <ul class="mt-6 space-y-3">
-                <li v-for="point in integrationPoints" :key="point" class="flex items-start gap-2.5">
-                  <Icon name="check" size="xs" class="mt-1 shrink-0 text-primary-600 dark:text-primary-400" />
-                  <span class="text-[13px] leading-relaxed text-gray-700 dark:text-gray-300">{{ point }}</span>
-                </li>
-              </ul>
-
-              <div class="mt-6 flex flex-wrap items-center gap-2">
-                <span
-                  v-for="endpoint in endpoints"
-                  :key="endpoint"
-                  class="rounded-lg border border-gray-900/10 bg-white/45 px-2.5 py-1 font-mono text-[10.5px] text-gray-700 dark:border-white/10 dark:bg-dark-950/35 dark:text-gray-300"
-                >
-                  {{ endpoint }}
-                </span>
-              </div>
-            </div>
-
-            <div class="min-w-0 border-t border-gray-900/10 p-5 dark:border-white/10 sm:p-7 lg:border-l lg:border-t-0">
-              <div class="overflow-hidden rounded-xl bg-gray-900 ring-1 ring-black/40 dark:bg-dark-900">
-                <div class="flex items-center justify-between border-b border-white/10 px-3 py-2">
-                  <span class="font-mono text-[10px] uppercase tracking-[0.14em] text-gray-500">curl</span>
-                  <button
-                    type="button"
-                    class="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 font-mono text-[10px] text-gray-300 transition-colors hover:bg-white/10"
-                    @click="copySnippet"
-                  >
-                    <Icon :name="codeCopied ? 'check' : 'copy'" size="xs" />
-                    {{
-                      codeCopied
-                        ? t('home.integration.copied')
-                        : codeCopyFailed
-                          ? t('home.integration.copyFailed')
-                          : t('home.integration.copy')
-                    }}
-                  </button>
-                </div>
-                <pre class="overflow-x-auto px-3 py-3 font-mono text-[11px] leading-relaxed text-gray-300"><code>{{ snippet }}</code></pre>
-              </div>
-              <p class="mt-3 text-[11px] text-gray-500 dark:text-dark-400">{{ t('home.integration.compatible') }}</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- 模型 -->
-      <section id="models" class="mx-auto max-w-7xl scroll-mt-24 px-4 py-8 sm:px-6">
-        <div class="flex flex-wrap items-end justify-between gap-4">
-          <div class="min-w-0">
-            <h2 class="text-2xl font-semibold tracking-[-0.02em] sm:text-[1.9rem]">{{ t('home.models.title') }}</h2>
-            <p class="mt-2 max-w-2xl text-sm leading-relaxed text-gray-600 dark:text-dark-300">{{ t('home.models.description') }}</p>
-          </div>
-          <router-link
-            v-if="showModelPlazaEntry"
-            to="/model-plaza"
-            class="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-gray-900/10 bg-white/45 px-3 text-[12.5px] font-medium text-gray-700 backdrop-blur-md transition-colors hover:bg-white/75 dark:border-white/10 dark:bg-dark-900/45 dark:text-gray-200 dark:hover:bg-dark-800/70"
-          >
-            {{ t('nav.modelPlaza') }}
-            <Icon name="arrowRight" size="xs" />
-          </router-link>
-        </div>
-
-        <ul class="mt-5 flex flex-wrap gap-2.5">
-          <li
-            v-for="provider in providers"
-            :key="provider.name"
-            class="inline-flex items-center gap-2.5 rounded-xl border border-gray-900/10 bg-white/45 px-3.5 py-2.5 backdrop-blur-md dark:border-white/10 dark:bg-dark-900/40"
-          >
-            <span class="font-mono text-[10px] font-medium text-primary-700 dark:text-primary-400">{{ provider.mark }}</span>
-            <span class="text-[13px] font-medium text-gray-800 dark:text-gray-200">{{ provider.name }}</span>
-            <span
-              class="rounded-md px-1.5 py-0.5 text-[10px]"
-              :class="provider.available
-                ? 'bg-primary-500/10 text-primary-700 dark:bg-primary-500/15 dark:text-primary-300'
-                : 'bg-gray-900/[0.06] text-gray-500 dark:bg-white/[0.06] dark:text-dark-400'"
-            >
-              {{ provider.available ? t('home.providers.supported') : t('home.providers.soon') }}
-            </span>
-          </li>
-        </ul>
-      </section>
-
-      <!-- CTA -->
-      <section class="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+      <section class="mx-auto max-w-7xl px-4 py-10 sm:px-6">
         <div class="brand-glass relative overflow-hidden px-6 py-8 sm:px-9 sm:py-10">
           <div
             class="pointer-events-none absolute inset-0 bg-[radial-gradient(110%_140%_at_100%_0%,rgba(111,158,18,0.16),transparent_58%)]"
@@ -700,10 +532,10 @@
             </div>
             <div class="flex shrink-0 flex-wrap items-center gap-2.5">
               <router-link
-                :to="isAuthenticated ? dashboardPath : '/login'"
+                :to="primaryCta.to"
                 class="inline-flex h-11 items-center gap-2 rounded-xl bg-gray-900 px-5 text-sm font-medium text-white transition-colors hover:bg-gray-800 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white"
               >
-                {{ isAuthenticated ? t('home.hero.primaryCtaAuthed') : t('home.cta.primaryGuest') }}
+                {{ primaryCta.label }}
                 <Icon name="arrowRight" size="sm" />
               </router-link>
               <router-link
@@ -718,39 +550,15 @@
       </section>
     </main>
 
-    <!-- Footer -->
     <footer class="relative z-10 border-t border-gray-900/10 dark:border-white/10">
       <div class="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-6 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <div class="flex min-w-0 items-center gap-2.5">
           <img :src="siteLogo || '/logo.png'" alt="Logo" class="h-6 w-6 shrink-0 object-contain" />
           <p class="min-w-0 truncate text-[12px] text-gray-500 dark:text-dark-400">
             &copy; {{ currentYear }} {{ siteName }}. {{ t('home.footer.allRightsReserved') }}
-            <span v-if="siteVersion" class="ml-1 font-mono text-[10px] text-gray-400 dark:text-dark-500">v{{ siteVersion }}</span>
           </p>
         </div>
 
-        <div class="flex flex-wrap items-center gap-4 text-[12px]">
-          <router-link to="/key-usage" class="text-gray-500 transition-colors hover:text-gray-900 dark:text-dark-400 dark:hover:text-white">
-            {{ t('home.footer.keyUsage') }}
-          </router-link>
-          <router-link
-            v-if="showModelPlazaEntry"
-            to="/model-plaza"
-            class="text-gray-500 transition-colors hover:text-gray-900 dark:text-dark-400 dark:hover:text-white"
-          >
-            {{ t('nav.modelPlaza') }}
-          </router-link>
-          <router-link
-            :to="isAuthenticated ? dashboardPath : '/login'"
-            class="text-gray-500 transition-colors hover:text-gray-900 dark:text-dark-400 dark:hover:text-white"
-          >
-            {{ isAuthenticated ? t('home.dashboard') : t('home.footer.login') }}
-          </router-link>
-          <span class="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-gray-500 dark:text-dark-400">
-            <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-            {{ t('home.footer.status') }}
-          </span>
-        </div>
       </div>
     </footer>
   </div>
@@ -760,8 +568,8 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore, useAppStore } from '@/stores'
-import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import Icon from '@/components/icons/Icon.vue'
+import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import { sanitizeUrl } from '@/utils/url'
 import { FeatureFlags, isFeatureFlagEnabled } from '@/utils/featureFlags'
 
@@ -774,77 +582,47 @@ const appStore = useAppStore()
 const siteName = computed(() => appStore.cachedPublicSettings?.site_name || appStore.siteName || 'CodeAPI')
 const siteLogo = computed(() => sanitizeUrl(appStore.cachedPublicSettings?.site_logo || appStore.siteLogo || '', { allowRelative: true, allowDataUrl: true }))
 const siteSubtitle = computed(() => appStore.cachedPublicSettings?.site_subtitle || 'AI API Gateway Platform')
-const siteVersion = computed(() => appStore.siteVersion || '')
 const homeContent = computed(() => appStore.cachedPublicSettings?.home_content || '')
 const hasHomeContent = computed(() => homeContent.value.trim().length > 0)
 const compactHomeEnabled = computed(() => appStore.cachedPublicSettings?.compact_home_enabled === true)
 const modelPlazaEnabled = computed(() => isFeatureFlagEnabled(FeatureFlags.modelPlaza))
 
-// Check if homeContent is a URL (for iframe display)
 const isHomeContentUrl = computed(() => {
   const content = homeContent.value.trim()
   return content.startsWith('http://') || content.startsWith('https://')
 })
 
-// Theme
 const isDark = ref(document.documentElement.classList.contains('dark'))
-
-// Auth state
 const isAuthenticated = computed(() => authStore.isAuthenticated)
-const modelPlazaRequiresAuth = computed(
-  () => appStore.cachedPublicSettings?.model_plaza_require_auth === true,
-)
-const showModelPlazaEntry = computed(
-  () => modelPlazaEnabled.value && (isAuthenticated.value || !modelPlazaRequiresAuth.value),
-)
 const isAdmin = computed(() => authStore.isAdmin)
 const dashboardPath = computed(() => isAdmin.value ? '/admin/dashboard' : '/dashboard')
-
+const showModelPlazaEntry = computed(
+  () => modelPlazaEnabled.value && (isAuthenticated.value || appStore.cachedPublicSettings?.model_plaza_require_auth !== true),
+)
 const currentYear = computed(() => new Date().getFullYear())
 
 const navItems = computed(() => [
-  { href: '#capabilities', label: t('home.nav.capabilities') },
-  { href: '#latency', label: t('home.nav.latency') },
   { href: '#integration', label: t('home.nav.integration') },
-  { href: '#models', label: t('home.nav.models') }
+  { href: '#latency', label: t('home.nav.latency') }
 ])
 
 const facts = computed(() => [
-  { title: t('home.facts.models.title'), value: t('home.facts.models.value') },
-  { title: t('home.facts.sticky.title'), value: t('home.facts.sticky.value') },
-  { title: t('home.facts.billing.title'), value: t('home.facts.billing.value') }
+  { index: '01', title: t('home.facts.models.title'), value: t('home.facts.models.value') },
+  { index: '02', title: t('home.facts.sticky.title'), value: t('home.facts.sticky.value') },
+  { index: '03', title: t('home.facts.billing.title'), value: t('home.facts.billing.value') }
 ])
 
-// ==================== Console preview (illustrative only) ====================
+const primaryCta = computed(() =>
+  isAuthenticated.value
+    ? { to: dashboardPath.value, label: t('home.hero.primaryCtaAuthed') }
+    : { to: '/login', label: t('home.hero.loginCta') }
+)
 
-const previewTabs = ['grid', 'chart', 'key', 'chartBar', 'user'] as const
-
-const previewDate = new Intl.DateTimeFormat(undefined, {
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit',
-  hour12: false
-}).format(new Date())
-
-const previewStats = computed(() => [
-  { label: t('home.preview.balance'), value: '$12.40', accent: false },
-  { label: t('home.preview.todayRequests'), value: '1,284', accent: false },
-  { label: t('home.preview.todayCost'), value: '$3.86', accent: false },
-  { label: t('home.preview.rpm'), value: '42', accent: true }
-])
-
-const previewRows = [
-  { time: '14:02', model: 'claude-sonnet', tokens: '1.2k / 380', latency: '412 ms' },
-  { time: '14:01', model: 'gpt', tokens: '860 / 210', latency: '268 ms' },
-  { time: '14:01', model: 'claude-opus', tokens: '2.4k / 720', latency: '588 ms' },
-  { time: '13:58', model: 'gemini', tokens: '640 / 180', latency: '231 ms' }
-]
-
-const previewQuotas = computed(() => [
-  { label: t('home.preview.fiveHour'), value: '42%' },
-  { label: t('home.preview.daily'), value: '18%' }
-])
+const modelInfoCta = computed(() =>
+  isAuthenticated.value
+    ? { to: dashboardPath.value, label: t('home.gateway.modelInfoActionAuthed') }
+    : { to: '/login', label: t('home.gateway.modelInfoAction') }
+)
 
 // ==================== Live latency probe ====================
 // 真实测量：浏览器向本站静态资源发请求，记录往返时延与性能条目，不做任何模拟。
@@ -922,7 +700,6 @@ function pushSample(sample: ProbeSample): void {
 
 function startProbe(): void {
   void runProbe()
-  // 首个样本后补一次，让折线不用等满一个采样周期才出现
   warmupTimer = window.setTimeout(() => void runProbe(), 900)
   probeTimer = window.setInterval(() => {
     void runProbe()
@@ -936,13 +713,44 @@ function handleVisibilityChange(): void {
 const okSamples = computed(() => probeSamples.value.filter((sample) => sample.ok))
 const latestSample = computed(() => okSamples.value[okSamples.value.length - 1] || null)
 const windowSamples = computed(() => okSamples.value.slice(-12))
-
 const currentMsText = computed(() => (latestSample.value ? formatMs(latestSample.value.ms) : '--'))
 
 const heroProbeText = computed(() => {
   if (latestSample.value) return t('home.hero.probeValue', { ms: formatMs(latestSample.value.ms) })
   return t('home.hero.probePending')
 })
+
+const heroStatusLabel = computed(() =>
+  probeStatus.value === 'error' ? t('home.gateway.degraded') : t('home.hero.statusLabel')
+)
+
+const gatewayOnlineLabel = computed(() =>
+  probeStatus.value === 'error' ? t('home.gateway.degraded') : t('home.gateway.online')
+)
+
+const gatewayMetrics = computed(() => [
+  {
+    label: t('home.gateway.latency'),
+    value: currentMsText.value,
+    unit: 'ms',
+    accent: true,
+    compact: false
+  },
+  {
+    label: t('home.gateway.protocol'),
+    value: t('home.gateway.protocolValue'),
+    unit: '',
+    accent: false,
+    compact: true
+  },
+  {
+    label: t('home.gateway.billing'),
+    value: t('home.gateway.billingValue'),
+    unit: '',
+    accent: false,
+    compact: true
+  }
+])
 
 const latencyMetrics = computed(() => {
   const values = windowSamples.value.map((sample) => sample.ms)
@@ -1039,7 +847,6 @@ const spark = computed(() => {
   const values = points.map((point) => point.ms)
   const min = Math.min(...values)
   const max = Math.max(...values)
-  // 从 0 起算，避免样本少时把几毫秒的波动放大成陡峭趋势
   const domainMax = Math.max(50, Math.ceil(max / 25) * 25)
   const step = width / (points.length - 1)
 
@@ -1091,7 +898,7 @@ const snippet = computed(() => [
   '  -H "x-api-key: $CODEAPI_KEY" \\',
   '  -H "anthropic-version: 2023-06-01" \\',
   `  -d '{`,
-  '    "model": "claude-sonnet",',
+  '    "model": "your-model",',
   '    "max_tokens": 512,',
   '    "messages": [{"role": "user", "content": "hello"}]',
   `  }'`
@@ -1148,41 +955,6 @@ async function copySnippet(): Promise<void> {
   }, 1600)
 }
 
-// ==================== Capability illustrations ====================
-
-const routingAccounts = [
-  { name: 'claude-pro-01', model: 'sonnet', load: '38%', latency: '42 ms' },
-  { name: 'claude-pro-02', model: 'opus', load: '61%', latency: '51 ms' },
-  { name: 'openai-pool-01', model: 'gpt', load: '24%', latency: '63 ms' }
-]
-
-const billingRows = computed(() => [
-  { label: t('home.capabilities.billing.input'), value: '1,204', width: '82%' },
-  { label: t('home.capabilities.billing.output'), value: '380', width: '30%' },
-  { label: t('home.capabilities.billing.cache'), value: '896', width: '58%' }
-])
-
-const quotaBars = computed(() => [
-  { label: t('home.capabilities.quota.fiveHour'), value: 42 },
-  { label: t('home.capabilities.quota.daily'), value: 18 },
-  { label: t('home.capabilities.quota.weekly'), value: 9 }
-])
-
-const auditRows = [
-  { time: '14:02', key: 'key-01', model: 'claude-sonnet', status: '200', latency: '412 ms' },
-  { time: '14:01', key: 'key-01', model: 'gpt', status: '200', latency: '268 ms' },
-  { time: '14:01', key: 'key-02', model: 'claude-opus', status: '200', latency: '588 ms' },
-  { time: '13:58', key: 'key-02', model: 'gemini', status: '200', latency: '231 ms' }
-]
-
-const providers = computed(() => [
-  { name: t('home.providers.claude'), mark: 'CL', available: true },
-  { name: 'GPT', mark: 'GPT', available: true },
-  { name: t('home.providers.gemini'), mark: 'GM', available: true },
-  { name: t('home.providers.antigravity'), mark: 'AG', available: true },
-  { name: t('home.providers.more'), mark: '+', available: false }
-])
-
 // ==================== Theme ====================
 
 function toggleTheme() {
@@ -1202,13 +974,17 @@ function initTheme() {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   initTheme()
 
   authStore.checkAuth()
 
   if (!appStore.publicSettingsLoaded) {
-    appStore.fetchPublicSettings()
+    try {
+      await appStore.fetchPublicSettings()
+    } catch {
+      // 设置加载失败时按关闭态处理：不请求模型信息，不展示注册入口
+    }
   }
 
   if (!hasHomeContent.value && !compactHomeEnabled.value) {

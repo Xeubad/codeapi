@@ -64,6 +64,27 @@
 
 - `1ec75605f` feat(setup): default admin account to admin@admin.local/admin123（PR #7，合并提交 `cb62585c0`）
 
+**主题（同日第二次工作）**：流程从「PR」简化为「直接 push main」
+
+### 改动
+
+- `AGENTS.md`：把「上传与合并流程（定版）」改写为「提交与推送流程（定版）」，移除开分支、PR、CLA、merge commit 等环节；同步更新 Repository Identity、General Working Rules、User Intent Mapping、Merge After Confirmation、Release、Work Log 各节的 PR/分支引用。
+- `docs/FORK_MAINTENANCE_CN.md`：分支表、流向图、确认合并、日常开发落地、推送结果、失败恢复、工作日志、提交约定各节同步去 PR 化。
+
+### 关键决策
+
+- 单人 fork、无预发环境，PR 的 review/merge 与 CLA 机器人是纯 overhead；CI（backend-ci、security-scan）由 push 触发仍生效，故移除 PR 环节，改为直接 commit + push `origin main`。
+- 上游同步仍保留 `sync/upstream-*` 分支做冲突处理与审计，只是合并后直接 push，不再开 PR。
+
+### 验证
+
+- `git diff --check` 通过（纯文档改动，无代码变更）。
+
+### 产出
+
+- `4c89c1de0` docs(worklog): log 2026-10-23 default admin account change
+- `d6ee4bf21` chore(workflow): drop PR flow, commit directly to main
+
 ---
 
 ## 2026年10月22日

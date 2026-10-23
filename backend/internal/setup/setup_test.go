@@ -403,7 +403,7 @@ func TestDatabaseConnectionDoesNotFallbackForTargetAuthenticationError(t *testin
 	}
 }
 
-func TestPrepareAdminCredentialsGeneratesMissingValues(t *testing.T) {
+func TestPrepareAdminCredentialsFillsFixedDefaults(t *testing.T) {
 	t.Parallel()
 
 	admin := AdminConfig{Email: "  ", Password: ""}
@@ -414,26 +414,18 @@ func TestPrepareAdminCredentialsGeneratesMissingValues(t *testing.T) {
 	if !emailGenerated || !passwordGenerated {
 		t.Fatalf("generated flags = (%v, %v), want (true, true)", emailGenerated, passwordGenerated)
 	}
-	if !regexp.MustCompile(`^admin-[0-9a-f]{12}@sub2api\.local$`).MatchString(admin.Email) {
-		t.Fatalf("generated email = %q, want admin-<12 hex>@sub2api.local", admin.Email)
+	if admin.Email != defaultAdminEmail {
+		t.Fatalf("default email = %q, want %q", admin.Email, defaultAdminEmail)
 	}
-	// 生成的邮箱必须能通过登录接口的 binding:"required,email" 校验。
+	// 默认邮箱必须能通过登录接口的 binding:"required,email" 校验。
 	loginReq := struct {
 		Email string `binding:"required,email"`
 	}{Email: admin.Email}
 	if err := binding.Validator.ValidateStruct(&loginReq); err != nil {
-		t.Fatalf("generated email %q rejected by login validator: %v", admin.Email, err)
+		t.Fatalf("default email %q rejected by login validator: %v", admin.Email, err)
 	}
-	if len(admin.Password) != 32 {
-		t.Fatalf("generated password length = %d, want 32", len(admin.Password))
-	}
-
-	other := AdminConfig{}
-	if _, _, err := prepareAdminCredentials(&other); err != nil {
-		t.Fatalf("prepareAdminCredentials() second call error = %v", err)
-	}
-	if other.Email == admin.Email {
-		t.Fatalf("generated emails should be random, got %q twice", admin.Email)
+	if admin.Password != defaultAdminPassword {
+		t.Fatalf("default password = %q, want %q", admin.Password, defaultAdminPassword)
 	}
 }
 
@@ -608,11 +600,11 @@ func TestBootstrapAdminUserCreatesAdminWithGeneratedCredentials(t *testing.T) {
 	if err != nil || !created || reason != adminBootstrapReasonEmptyDatabase {
 		t.Fatalf("bootstrapAdminUser() = (%v, %q, %v), want (true, %q, nil)", created, reason, err, adminBootstrapReasonEmptyDatabase)
 	}
-	if !regexp.MustCompile(`^admin-[0-9a-f]{12}@sub2api\.local$`).MatchString(cfg.Admin.Email) {
-		t.Fatalf("admin email = %q, want generated admin-<12 hex>@sub2api.local", cfg.Admin.Email)
+	if cfg.Admin.Email != defaultAdminEmail {
+		t.Fatalf("admin email = %q, want default %q", cfg.Admin.Email, defaultAdminEmail)
 	}
-	if len(cfg.Admin.Password) != 32 {
-		t.Fatalf("admin password length = %d, want generated 32", len(cfg.Admin.Password))
+	if cfg.Admin.Password != defaultAdminPassword {
+		t.Fatalf("admin password = %q, want default %q", cfg.Admin.Password, defaultAdminPassword)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("database expectations not met: %v", err)

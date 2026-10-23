@@ -35,6 +35,15 @@ const (
 	databasePingTimeout        = 5 * time.Second
 )
 
+// Fork 二开：初始化管理员账号的固定默认值。当用户未通过向导/CLI/环境变量
+// 显式提供邮箱或密码时回退到此处，替代上游的随机账号（见 prepareAdminCredentials）。
+// 注意：这是已知弱凭据，仅适合开发/内网环境；公网部署应在安装后立即改密，
+// 或通过 ADMIN_EMAIL/ADMIN_PASSWORD 环境变量显式覆盖。
+const (
+	defaultAdminEmail    = "admin@admin.local"
+	defaultAdminPassword = "admin123"
+)
+
 func setupDefaultAdminConcurrency() int {
 	if strings.EqualFold(strings.TrimSpace(os.Getenv("RUN_MODE")), config.RunModeSimple) {
 		return simpleModeAdminConcurrency
@@ -439,11 +448,11 @@ func bootstrapAdminUser(ctx context.Context, db *sql.DB, cfg *SetupConfig) (bool
 		return false, "", err
 	}
 	if emailGenerated {
-		fmt.Printf("Generated admin email (login username): %s\n", cfg.Admin.Email)
+		fmt.Printf("Admin email (default): %s\n", cfg.Admin.Email)
 	}
 	if passwordGenerated {
-		fmt.Printf("Generated admin password (one-time): %s\n", cfg.Admin.Password)
-		fmt.Println("IMPORTANT: Save this password! It will not be shown again.")
+		fmt.Printf("Admin password (default): %s\n", cfg.Admin.Password)
+		fmt.Println("IMPORTANT: Change this default password after first login.")
 	}
 
 	admin := &service.User{
@@ -479,45 +488,27 @@ func bootstrapAdminUser(ctx context.Context, db *sql.DB, cfg *SetupConfig) (bool
 	return true, decision.reason, nil
 }
 
-// prepareAdminCredentials fills in missing admin credentials with random values
-// and rejects invalid user-supplied emails and weak passwords. It only runs
-// when an admin is actually about to be created, so existing deployments are
-// never affected. A random email keeps fresh installs off the well-known
-// default username that brute-force scanners target (issue #7850).
+// prepareAdminCredentials fills in missing admin credentials with the fork's
+// fixed defaults (defaultAdminEmail / defaultAdminPassword) and rejects invalid
+// user-supplied emails and weak passwords. It only runs when an admin is
+// actually about to be created, so existing deployments are never affected.
 func prepareAdminCredentials(admin *AdminConfig) (emailGenerated, passwordGenerated bool, err error) {
 	admin.Email = strings.TrimSpace(admin.Email)
 	if admin.Email == "" {
-		email, genErr := generateAdminEmail()
-		if genErr != nil {
-			return false, false, genErr
-		}
-		admin.Email = email
+		admin.Email = defaultAdminEmail
 		emailGenerated = true
 	} else if !validateEmail(admin.Email) {
 		return false, false, fmt.Errorf("invalid admin email: %q is not a valid login email", admin.Email)
 	}
 
 	if strings.TrimSpace(admin.Password) == "" {
-		password, genErr := generateSecret(16)
-		if genErr != nil {
-			return false, false, fmt.Errorf("failed to generate admin password: %w", genErr)
-		}
-		admin.Password = password
+		admin.Password = defaultAdminPassword
 		passwordGenerated = true
 	} else if validateErr := validatePassword(admin.Password); validateErr != nil {
 		return false, false, fmt.Errorf("invalid admin password: %w", validateErr)
 	}
 
 	return emailGenerated, passwordGenerated, nil
-}
-
-// generateAdminEmail returns a random, non-guessable admin login email.
-func generateAdminEmail() (string, error) {
-	suffix, err := generateSecret(6)
-	if err != nil {
-		return "", fmt.Errorf("failed to generate admin email: %w", err)
-	}
-	return fmt.Sprintf("admin-%s@sub2api.local", suffix), nil
 }
 
 func writeConfigFile(cfg *SetupConfig) error {

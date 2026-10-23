@@ -5,7 +5,7 @@
 # This script prepares deployment files for Sub2API:
 #   - Downloads docker-compose.local.yml and .env.example
 #   - Generates secure secrets (JWT_SECRET, TOTP_ENCRYPTION_KEY, POSTGRES_PASSWORD)
-#   - Generates a random admin login email (ADMIN_EMAIL)
+#   - Uses the fork's default admin login (admin@admin.local / admin123)
 #   - Creates necessary data directories
 #
 # After running this script, you can start services with:
@@ -44,14 +44,6 @@ print_error() {
 # Generate random secret
 generate_secret() {
     openssl rand -hex 32
-}
-
-# Generate a random admin login email so new installs never use a guessable default
-generate_admin_email() {
-    local suffix
-    suffix=$(openssl rand -hex 6) || return 1
-    [ -n "$suffix" ] || return 1
-    echo "admin-${suffix}@sub2api.local"
 }
 
 # Check if command exists
@@ -113,7 +105,7 @@ main() {
     JWT_SECRET=$(generate_secret)
     TOTP_ENCRYPTION_KEY=$(generate_secret)
     POSTGRES_PASSWORD=$(generate_secret)
-    ADMIN_EMAIL=$(generate_admin_email)
+    ADMIN_EMAIL="admin@admin.local"
 
     # Create .env from .env.example
     cp .env.example .env

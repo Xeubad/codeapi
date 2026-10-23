@@ -17,12 +17,10 @@
 | `upstream` | 官方仓库 `Wei-Shaw/sub2api` |
 | `origin` | 二开 fork `Xeubad/codeapi` |
 | `upstream/main` | 只读的官方主线 |
-| `main` | 二开唯一长期分支，同时是集成分支和生产分支；**本地 `main` 只跟随 `origin/main`** |
-| `origin/main` | 唯一真相。本地不承载未推送的合并或提交 |
-| `feature/custom-*` | 私有功能开发，从 `origin/main` 切出，PR 合入 `main` 后删除 |
-| `fix/custom-*` | 私有缺陷修复，从 `origin/main` 切出，PR 合入 `main` 后删除 |
-| `docs/custom-*` | 文档与工作日志改动，独立分支独立 PR，不夹在功能 PR 里 |
-| `sync/upstream-*` | 单次上游同步与冲突处理，PR 合入 `main` 后保留作审计 |
+| `main` | 二开唯一长期分支，同时是集成分支和生产分支；常规二开直接在此提交并推送 `origin main` |
+| `origin/main` | 唯一真相。本地改动提交后立即推送，不长期停留本地分叉 |
+| `feature/custom-*` | 确需隔离的临时改动才建，事后删除；常规工作不建分支 |
+| `sync/upstream-*` | 单次上游同步与冲突处理，合并进 `main` 后直接推送；分支保留作审计 |
 | `anchor/<日期>-<用途>` | 高风险动作（reset、对齐 `main`、动已发布迁移）前的锚点，事后保留 |
 
 本 fork 单人维护、没有预发环境，因此不设 `develop`。两条长期分支只会在每次同步时多制造一次「谁提升谁」的人工步骤，收益要等有第二套部署才出现。
@@ -35,17 +33,17 @@ upstream/main
       v  merge --no-ff（在同步分支上完成）
 sync/upstream-YYYYMMDD-SHA
       |
-      v  push 分支 -> PR(base=main) -> CI 全绿 -> merge commit
+      v  merge 进 main -> push origin main -> CI 全绿
      main  ==  origin/main（唯一真相）
       ^
-      |  push 分支 -> PR(base=main) -> CI 全绿 -> merge commit
-feature/custom-* 、 fix/custom-* 、 docs/custom-*
+      |  直接 commit -> push origin main -> CI 全绿
+常规二开改动（功能 / 修复 / 文档）
       |
       v  tag（只打在 origin/main 上已合并且 CI 绿的提交）
   vX.Y.Z-custom.N
 ```
 
-`main` 是共享分支，只能由 PR 合并在 GitHub 上推进。不要对它 rebase 或 force push，也不由 Agent 直接推送。
+`main` 由 Agent 直接提交并推送（单人 fork，无 PR 环节）。不要对它 rebase 或 force push。
 
 ## Agent 指令如何生效
 
@@ -133,36 +131,36 @@ Agent 会基于报告中固定的上游 SHA：
 3. 使用 merge 吸收 `upstream/main`；
 4. 解决确定性冲突；
 5. 运行完整测试和构建；
-6. 推送同步分支并开出 base 为 `main` 的 PR；
-7. 等 CI 全绿，合并动作默认由你在 GitHub 上点；
-8. 汇报 PR 编号、冲突处理、测试结果和残余风险，合并后收口并补工作日志。
+6. 把同步分支合并进 `main` 并推送 `origin main`；
+7. 等 CI 全绿；
+8. 汇报同步分支短 SHA、冲突处理、测试结果和残余风险，收口并补工作日志。
 
 如果上游 SHA、工作区或基线在确认前发生变化，Agent 必须重新分析，旧确认自动失效。
 
 ### 日常开发落地
 
-任何主题（功能、修复、文档）都按同一套动作落地，命令细节以 `AGENTS.md` 的「上传与合并流程（定版）」为准：
+任何主题（功能、修复、文档）都按同一套动作落地，命令细节以 `AGENTS.md` 的「提交与推送流程（定版）」为准：
 
 ```bash
 git fetch --prune origin
-git switch -c feature/custom-<topic> origin/main   # 只从 origin/main 切
-# ...提交并本地验证...
-git push -u origin feature/custom-<topic>
-gh pr create --repo Xeubad/codeapi --base main --title "..." --body "..."
-# CI 绿 -> 在 GitHub 上以 merge commit 合并
-git fetch --prune origin && git switch main && git merge --ff-only origin/main
+git switch main && git merge --ff-only origin/main   # 先对齐基线
+# ...改代码并本地验证...
+git add <files>
+git commit -m "<type>(<scope>): <subject>"
+git push origin main
+# CI 绿 -> 补工作日志
 ```
 
 要点：
 
-- 本地 `main` 不承载未推送的提交，也不再本地合并后直推；成果只经 PR 落到 `origin/main`。
+- 一个主题一个提交，直接落在 `main` 并推送 `origin main`，不建功能分支、不开 PR。
 - 所有 `gh` 命令显式带 `--repo Xeubad/codeapi`，本目录里 `gh` 的默认仓库是上游。
-- 合并固定用 merge commit，不 squash、不 rebase；stacked PR 在合并前要先把 base 改回 `main`。
+- 已推送的提交不 amend；CI 红了用新提交补，不重写历史。
 - 半成品也要提交（`wip(<scope>): …`）并推送，工作区不留未提交改动过夜。
 
 ### 推送结果
 
-同步分支与特性分支的 push 属于交付动作，Agent 执行前会列出目标远端、分支和提交范围。`main` 只能由 PR 在 GitHub 上推进，Agent 不直接推送 `main`。任何情况下默认不允许 force push。
+`git push origin main` 属于交付动作，Agent 执行前会列出目标远端和提交范围。任何情况下默认不允许 force push。
 
 ### 发布二开版本
 
@@ -278,13 +276,13 @@ make build
 
 ## 失败与恢复
 
-- 合并失败：保留 `sync/upstream-*` 分支，不推送、不开 PR。
+- 合并失败：保留 `sync/upstream-*` 分支，不推送。
 - 测试失败：在同步分支修复或等待决策，不把失败结果推进共享分支。
 - CI 失败：在原分支补提交后重推，等 CI 重新全绿；不先合再补。
-- 工作区存在用户改动：不自动 stash，不开始合并；先落成 `wip` 提交并推送分支。
+- 工作区存在用户改动：不自动 stash，不开始合并；先落成 `wip` 提交并推送 `main`。
 - 上游在确认后变化：固定 SHA 不一致时重新分析。
 - 本地 `main` 与 `origin/main` 分叉：先 `git diff --diff-filter=A --name-only origin/main main`、`git log origin/main..main`、`git diff --stat origin/main main` 三条核验；确认无独有内容后打 `anchor/*` 锚点再对齐，有独有内容则停下来报告。
-- PR 合并后发现问题：使用新的 revert/fix 提交并走一条新的 PR，不重写共享历史，不 force push。
+- 推送后发现问题：使用新的 revert/fix 提交并推送 `main`，不重写共享历史，不 force push。
 
 ## 发布产物命名
 
@@ -332,13 +330,13 @@ docker pull ghcr.io/xeubad/codeapi:latest
 
 按天记录二开工作的过程文档在 [WORK_LOG_CN.md](./WORK_LOG_CN.md)。每次工作结束后补记当天一节，格式为 `## 2026年10月20日`，固定包含**改动 / 关键决策 / 验证 / 产出**四块。
 
-日志记的是决策过程，不是 `git log` 的复制：为什么这么做、否决了哪些方案、踩了什么坑、验证到底跑了没跑。产出块写 PR 编号和合并后在 `origin/main` 上可见的短 SHA——cherry-pick 重建分支或按 CI 反馈补提交都会改写 SHA，按最终落地的记，不记本地旧号。
+日志记的是决策过程，不是 `git log` 的复制：为什么这么做、否决了哪些方案、踩了什么坑、验证到底跑了没跑。产出块写 `origin/main` 上可见的短 SHA——cherry-pick 重建分支或按 CI 反馈补提交都会改写 SHA，按最终落地的记，不记本地旧号。
 
-日志本身也是一个主题：走自己的 `docs/custom-*` 分支与 PR，不夹在功能 PR 里。
+日志随当次工作一起提交，或单独一个 `docs` 提交，不夹在功能改动里。
 
 ## 提交和发布约定
 
-建议提交格式（标题英文 conventional commits，正文与 PR 描述中文，scope 用主题名）：
+建议提交格式（标题英文 conventional commits，正文中文，scope 用主题名）：
 
 ```text
 feat(port): pin the listen port to 8080 and guard it before startup
@@ -349,7 +347,7 @@ docs(fork): update maintenance workflow
 
 历史里出现过的 `feat(custom)`、`feat(brand)`、`feat(ui)` 都合规，不要求统一改成主题名；但新提交优先具体 scope，方便 `git log --grep` 定位。
 
-落地只经 PR：一个主题一条从 `origin/main` 切出的分支，CI 全绿后以 merge commit 合入，不 squash、不 rebase、不由 Agent 直接推送 `main`。
+落地直接经 `main`：一个主题一个提交，本地验证后直接推送 `origin main`，CI 全绿为准；不 squash、不 rebase、不 force push。
 
 二开版本使用可辨识标签：
 

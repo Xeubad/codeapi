@@ -36,6 +36,36 @@
 
 ---
 
+## 2026年10月23日
+
+**主题**：初始化管理员账号默认值改为 `admin@admin.local` / `admin123`
+
+### 改动
+
+- `backend/internal/setup/setup.go`：新增 `defaultAdminEmail`/`defaultAdminPassword` 常量；`prepareAdminCredentials` 在邮箱/密码为空时回退到固定默认值，替代上游的随机账号；删除 `generateAdminEmail`；bootstrap 打印文案从「随机生成/一次性」改为「默认值 + 请改密」。
+- `backend/internal/setup/cli.go`：CLI 向导默认邮箱提示改用常量。
+- `backend/internal/setup/setup_test.go`：两处「随机邮箱正则」断言改为「固定默认值」断言。
+- 部署配置同步：4 个 `docker-compose*.yml` 的 `ADMIN_EMAIL`/`ADMIN_PASSWORD` 默认值、`.env.example`、`docker-deploy.sh`（去掉随机邮箱生成）、`deploy/README.md`、`APPLE_CONTAINER.md`。
+- 本地开发库（Docker postgres）：把既有 `admin@codeapi.local` 更新为 `admin@admin.local`，`password_hash` 重置为 `admin123` 的 bcrypt 哈希，并同步 `auth_identities` 的 email 身份 `provider_subject`。
+
+### 关键决策
+
+- 弱化上游「随机账号防爆破」设计（issue #7850），换取开发/内网便利。这是 fork 二开的显式选择，经用户确认；默认值属已知弱凭据，公网部署需装后改密或经 `ADMIN_EMAIL`/`ADMIN_PASSWORD` 覆盖，已写进代码注释与 PR 描述。
+- `config.example.yaml` 里的 `default.admin_email`/`admin_password` 仍是上游死配置（无消费方），本次未动，避免与上游 sync 冲突。
+
+### 验证
+
+- `cd backend && go build ./...` 通过。
+- `cd backend && go test ./internal/setup/...` 通过。
+- `bash -n deploy/docker-deploy.sh` 通过；`git diff --check` 通过。
+- 本地库哈希用 `bcrypt.CompareHashAndPassword` 实测 `admin123` 匹配（true）。
+
+### 产出
+
+- `1ec75605f` feat(setup): default admin account to admin@admin.local/admin123（PR #7，合并提交 `cb62585c0`）
+
+---
+
 ## 2026年10月22日
 
 **主题**：修复首页版心丢失与真实延迟面板被移除

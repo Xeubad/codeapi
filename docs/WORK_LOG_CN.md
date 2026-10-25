@@ -38,9 +38,11 @@
 
 ## 2026年10月25日
 
-**主题**：价格目录切换到 models.dev + 模型广场改版（块网格/弹窗/管理端比价）
+**主题**：① 价格目录切换到 models.dev + 模型广场改版（块网格/弹窗/管理端比价）；② 包管理器升级 pnpm 9 → 12（供应链加固 + CVE 修复窗口外移）+ 补两个新披露漏洞的版本钉子
 
 ### 改动
+
+**（上午）价格目录与模型广场**
 
 - **价格目录数据源**：`pricing.remote_url` 默认从 model-price-repo 切换为 `https://models.dev/api.json`；`pricing_service.go` 的 `parsePricingData` 入口探测 models.dev 格式（厂商→模型两层嵌套），新文件 `pricing_modelsdev.go` 拍平为 LiteLLM 扁平结构后复用原解析/计费管线，探测失败回退 LiteLLM 路径。单位换算 USD/百万token → USD/token；一方厂商（anthropic/openai/google/xai/deepseek/moonshotai…）价格优先，无一方收录时按字典序稳定取首个；google/moonshotai/zhipuai 换算回 gemini/moonshot/zhipu 保证管理端按平台同步不受影响。图片输出模型 output 映射 `output_cost_per_image_token`（models.dev 该口径即图片 token 价），长上下文 tier 折算为 `*_above_<N>k_tokens` 字段复用现成折算器。
 - **配置**：models.dev 不发布 .sha256 → `hash_url` 默认置空，刷新走 `update_interval_hours` 文件年龄检查；allowlist `pricing_hosts` 增加 `models.dev`；`config.example.yaml` 同步。
@@ -48,7 +50,15 @@
 - **管理端比价**：转换时保留模型→厂商报价索引（原始口径），新增 `GET /admin/channels/pricing/provider-quotes`；弹窗内管理员专属「其他厂商」区（胜出厂商「计费采用」徽章排首、最低输入价高亮），非管理员不渲染不发请求。
 - 测试：转换器冒烟（真实 api.json 全量）、格式误判防回归、报价索引存活回归、组件测试 21 项。
 
+**（下午）pnpm 12 迁移**
+
+- **pnpm 9 → 12 迁移**：`frontend/pnpm-workspace.yaml` 从占位残留改为正式配置（`allowBuilds` 白名单 esbuild/vue-demi，overrides 从 package.json `pnpm` 字段迁入——pnpm 10 起该字段不再读取）；删除 `frontend/package.json` 失效的 `pnpm` 字段与 pnpm 9 时代残留的 `frontend/.npmrc`（`ignore-scripts=false` 本就是默认值，`legacy-peer-deps` 是 npm 专用键，构建脚本策略由 allowBuilds 接管）；lockfile 用 pnpm 12.4.1 重生成。
+- **CI 与镜像**：`backend-ci.yml`、`release.yml`、`security-scan.yml` 的 `pnpm/action-setup` version 9 → 12；`deploy/Dockerfile` corepack 钉 `pnpm@12.15.0`（当前 12 线最新稳定版）。
+- **顺手补两个新披露漏洞的钉子**：audit 发现 dompurify ≥3.4.17（critical，SAFE_FOR_TEMPLATES bypass）与 follow-redirects ≥1.16.1（high，header 凭证泄露）有补丁版，override 钉子上调 `dompurify@<3.4.17`、新增 `follow-redirects@<1.16.1`，与既有按补丁升钉惯例一致。
+
 ### 关键决策
+
+**（上午）**
 
 - **保留计费链路不动，只换数据层**：转换成 LiteLLM 格式再进原管线，override/fallback 叠加、家族匹配、DeepSeek 策略全部原样生效；回滚只需把 `remote_url` 配回旧值。
 - **全量 diff 后确认三处字段缺口并接受**：models.dev 无 1h 缓存写入价（Claude 按 5m 价计费，少收一半）、无 priority 档价（priority 流量按标准价）、部分图片模型无价（gpt-image-1 cost 为空）。缓解：内置 212 条 fallback 价卡继续按层合并，覆盖上述模型的关键字段；后续可经 override 文件补。
@@ -56,20 +66,37 @@
 - **providerQuotes 曾被 fallback 合并清空**：fallback/override 以 LiteLLM 格式重入 `parsePricingData`，defer 无条件覆盖索引为 nil；改为仅当本次输入确为 models.dev 格式时更新，并加回归测试钉住。
 - **8080 重启**：经用户确认后重启本地服务（旧进程 10-22 启动，无 .installed 锁，需 `DATA_DIR=./data` 环境启动），旧 LiteLLM 目录快照移走后启动时自动从 models.dev 拉取成功。
 
+**（下午）**
+
+- **升 12 的理由按优先级**：① pnpm 9 已在 CVE 修复窗口外（CVE-2026-55698 CVSS 8.8 只修 10.34.2+/11.5.3+；CVE-2026-24056 只修 10.28.2+）——对本 fork 危险在于威胁模型包含上游 merge；② pnpm 10-12 默认供应链防护（脚本拦截、minimumReleaseAge 1d、blockExoticSubdeps、完整性不匹配硬失败、lockfile 策略校验）；③ 与仓库安全姿态一致。
+- **工作区旧状态不保留**：下午会话开始时 lockfile 有 445 行 diff（pnpm 12 隐式 install 摘掉了全部 overrides 钉子）+ 占位 workspace.yaml，属于安全倒退状态，重做而非提交。
+- **本地 npmmirror 无 audit 端点**：仅影响本地直跑 `pnpm audit`，验证时用 `--registry=https://registry.npmjs.org` 绕过；CI 用官方 registry 不受影响。
+- **放弃留在 pnpm 9**：9 无补丁计划，钉版本只能防依赖层防不了包管理器本体。
+
 ### 验证
+
+**（上午）**
 
 - 后端：`go test ./internal/service/`（138s 全绿）、`./internal/handler/...`、`./internal/server/routes/`；`go vet` 通过；`make build`（前端因网络换 pnpm 直跑 `vite build` 成功）。
 - 转换正确性：真实 api.json 全量冒烟（3444→3542 模型、单位/去重/阶梯/图片映射断言）；与上游 model-price-repo 全量 diff 记录 52 处分歧（图片 token 价口径差 + deepseek 两边价不同）与 108 个缺失模型（vertex 变体为主），据此确认 fallback 层必要性。
 - 真实环境端到端：本地服务从 models.dev 拉取成功（日志 `Downloaded 3542 models`，对比旧目录 262）；`provider-quotes?model=gpt-5.5` 返回 20 家厂商。
 - 浏览器实测（暗色主题）：块网格渲染、弹窗开合（Escape 关闭）、长上下文阶梯弹窗（≤100K/>100K 两档）、搜索过滤、管理员比价区（openai 带计费采用徽章）；非管理员无比价区（组件测试覆盖）。
-- golangci-lint 本地不可用（版本不支持 Go 1.27 export data），由 CI 门禁跑；本地 go test/vet 已跑。
-- 未运行：前端 `make test`（vitest 2845 项已单独全绿）；`git diff --check` 通过。
+
+**（下午）**
+
+- 安全钉子核对：lockfile 中 js-cookie@3.0.7、dompurify@3.4.17、postcss@8.5.29、source-map-js@1.2.2、form-data@4.0.6、follow-redirects@1.16.1 全部命中。
+- `pnpm peers check`：仅 @emoji-mart/react 声明滞后一条（react 16-18 vs 实装 19），升级前已存在，非迁移引入。
+- audit 例外工具兼容性：pnpm 12 `audit --json` 输出喂 `tools/check_pnpm_audit_exceptions.py`（python3.12）通过，最终仅剩 xlsx 两条已例外项。
+- 前端 `make test-frontend`：lint + typecheck + 30 文件 574 用例全绿；`make build` 前端构建嵌入 `internal/web/dist` 成功（12.7s）。
+- 后端 `go test ./...` 全绿（pnpm 迁移与 Go 代码无交集）；golangci-lint 本地不可用（本地二进制不支持 Go 1.27 export data），由 CI 门禁跑。
+- 未运行：Docker 构建端到端验证（corepack prepare pnpm@12.15.0 行，由下次 release workflow 或手动 docker build 兜底）。
 
 ### 产出
 
 - `641b4aed` feat(pricing): switch catalog source to models.dev api.json
 - `102a477c` feat(plaza): redesign user model plaza with block grid and price dialog（CI 绿）
 - `f95a86a22` feat(plaza): add admin-only provider comparison to model dialog
+- 待补（pnpm 12 迁移提交落地后回填短 SHA）
 
 ---
 

@@ -96,7 +96,7 @@
 - `641b4aed` feat(pricing): switch catalog source to models.dev api.json
 - `102a477c` feat(plaza): redesign user model plaza with block grid and price dialog（CI 绿）
 - `f95a86a22` feat(plaza): add admin-only provider comparison to model dialog
-- 待补（pnpm 12 迁移提交落地后回填短 SHA）
+- `e15d33ae` build(frontend): upgrade pnpm 9 to 12 with supply-chain hardening
 
 ---
 

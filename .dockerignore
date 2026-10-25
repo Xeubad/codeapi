@@ -55,6 +55,16 @@ coverage/
 # Local config
 config.yaml
 config.local.yaml
+backend/config.yaml
+backend/.installed
+
+# 本地开发运行时数据（backend/ 下裸跑 go run 生成的数据目录内容）
+backend/logs/
+backend/pages/
+backend/plugins/
+backend/model_pricing.json
+backend/model_pricing.sha256
+backend/data/
 
 # Logs
 *.log

@@ -1090,12 +1090,16 @@ plugins:
 # 定价数据源（可选）
 # =============================================================================
 pricing:
-  # URL to fetch model pricing data (default: model-price-repo main branch)
-  # 获取模型定价数据的 URL（默认：model-price-repo main 分支）
-  remote_url: "https://raw.githubusercontent.com/Wei-Shaw/model-price-repo/refs/heads/main//model_prices_and_context_window.json"
-  # Hash verification URL (optional)
-  # 哈希校验 URL（可选）
-  hash_url: "https://raw.githubusercontent.com/Wei-Shaw/model-price-repo/refs/heads/main//model_prices_and_context_window.sha256"
+  # URL to fetch model pricing data (default: models.dev catalog, flattened to
+  # the LiteLLM layout on load; first-party providers win on duplicate model IDs)
+  # 获取模型定价数据的 URL（默认：models.dev 目录，加载时拍平成 LiteLLM 格式；
+  # 同名模型一方厂商价格优先）
+  remote_url: "https://models.dev/api.json"
+  # Hash verification URL (optional; models.dev publishes no .sha256 file, so the
+  # default is empty and refresh follows update_interval_hours file-age checks)
+  # 哈希校验 URL（可选；models.dev 不发布 .sha256 文件，默认留空，
+  # 刷新按 update_interval_hours 的文件年龄检查进行）
+  hash_url: ""
   # Local data directory for caching
   # 本地数据缓存目录
   data_dir: "./data"

@@ -656,6 +656,17 @@ func (s *PricingService) downloadPricingData() error {
 
 // parsePricingData 解析价格数据（处理各种格式）
 func (s *PricingService) parsePricingData(body []byte) (map[string]*LiteLLMModelPricing, error) {
+	// models.dev 目录（厂商→模型两层、USD/百万token）先拍平成 LiteLLM 扁平格式，
+	// 再走下方统一解析。探测失败按 LiteLLM 目录处理。
+	if detectModelsDevFormat(body) {
+		converted, err := convertModelsDevCatalog(body)
+		if err != nil {
+			return nil, fmt.Errorf("convert models.dev catalog: %w", err)
+		}
+		body = converted
+		logger.LegacyPrintf("service.pricing", "%s", "[Pricing] Detected models.dev catalog format; converted to LiteLLM flat layout")
+	}
+
 	// 首先解析为 map[string]json.RawMessage
 	var rawData map[string]json.RawMessage
 	if err := json.Unmarshal(body, &rawData); err != nil {

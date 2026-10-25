@@ -678,7 +678,13 @@ export default {
       baseTier: 'Base',
       timePricingTitle: 'Time-based rate periods',
       effectiveRate: 'effective rate',
-      noOfficial: 'No official reference price in the catalog for this model'
+      noOfficial: 'No official reference price in the catalog for this model',
+      providersTitle: 'Other Providers',
+      provider: 'Provider',
+      adoptedProvider: 'adopted for billing',
+      cheapest: 'lowest',
+      providersHint: 'Data from the models.dev catalog: each provider\u2019s public list price ($ / 1M tokens), for reference only',
+      noProviders: 'No other provider quotes for this model in the models.dev catalog'
     },
     detail: {
       noModels: 'No models configured for this group',

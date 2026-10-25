@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
@@ -75,8 +76,58 @@ type modelsDevProviderEntry struct {
 
 // modelsDevCandidate 记录某模型条目在目录中的来源厂商，供一方优先去重。
 type modelsDevCandidate struct {
-	providerID string
-	entry      modelsDevModelEntry
+	providerID   string
+	providerName string
+	entry        modelsDevModelEntry
+}
+
+// ModelsDevProviderQuote models.dev 单厂商对某模型的报价（USD/百万token，
+// 原始口径，仅管理端比价展示用，不参与计费）。
+type ModelsDevProviderQuote struct {
+	ProviderID   string   `json:"provider_id"`
+	ProviderName string   `json:"provider_name"`
+	InputPrice   *float64 `json:"input_price"`
+	OutputPrice  *float64 `json:"output_price"`
+	CacheRead    *float64 `json:"cache_read_price"`
+	CacheWrite   *float64 `json:"cache_write_price"`
+}
+
+// ModelsDevModelQuotes 某模型的全部厂商报价，胜出厂商排最前。
+type ModelsDevModelQuotes struct {
+	Model   string                   `json:"model"`
+	Quotes  []ModelsDevProviderQuote `json:"quotes"`
+}
+
+// ListModelProviderQuotes 返回 models.dev 目录中某模型的全部厂商报价（管理端
+// 比价展示用）。目录不是 models.dev 格式、或模型不在索引中时返回空切片。
+// 查找带大小写不敏感回退，覆盖目录里大小写不同的条目（如 MiniMax-M2）。
+func (s *PricingService) ListModelProviderQuotes(model string) []ModelsDevProviderQuote {
+	if s == nil || model == "" {
+		return nil
+	}
+	key := strings.TrimSpace(model)
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if q, ok := s.providerQuotes[key]; ok {
+		return q.Quotes
+	}
+	lower := strings.ToLower(key)
+	for name, q := range s.providerQuotes {
+		if strings.ToLower(name) == lower {
+			return q.Quotes
+		}
+	}
+	return nil
+}
+
+// hasProviderQuotes 报告 providerQuotes 索引是否非空（测试辅助）。
+func (s *PricingService) hasProviderQuotes() bool {
+	if s == nil {
+		return false
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return len(s.providerQuotes) > 0
 }
 
 // detectModelsDevFormat 判断 body 是否为 models.dev 目录格式。
@@ -106,13 +157,14 @@ func detectModelsDevFormat(body []byte) bool {
 
 // convertModelsDevCatalog 把 models.dev 目录转换为 LiteLLM 扁平目录 JSON。
 // 返回值可直接喂给 parsePricingData（与 LiteLLM 目录同一套有效性过滤、
-// override 叠加与 above_XXXk 折算逻辑）。
+// override 叠加与 above_XXXk 折算逻辑）。second 返回值为模型 → 厂商报价
+// 索引，供管理端比价展示（不参与计费）。
 //
 // 单位换算：models.dev 全部价格字段为 USD/百万token，除以 1e6 得 USD/token。
-func convertModelsDevCatalog(body []byte) ([]byte, error) {
+func convertModelsDevCatalog(body []byte) ([]byte, map[string]ModelsDevModelQuotes, error) {
 	var top map[string]modelsDevProviderEntry
 	if err := json.Unmarshal(body, &top); err != nil {
-		return nil, fmt.Errorf("parse models.dev catalog: %w", err)
+		return nil, nil, fmt.Errorf("parse models.dev catalog: %w", err)
 	}
 
 	models := make(map[string][]modelsDevCandidate)
@@ -121,23 +173,76 @@ func convertModelsDevCatalog(body []byte) ([]byte, error) {
 			if strings.TrimSpace(modelID) == "" {
 				continue
 			}
-			models[modelID] = append(models[modelID], modelsDevCandidate{providerID: providerID, entry: entry})
+			models[modelID] = append(models[modelID], modelsDevCandidate{
+				providerID:   providerID,
+				providerName: prov.Name,
+				entry:        entry,
+			})
 		}
 	}
 
 	out := make(map[string]map[string]any, len(models))
+	quotes := make(map[string]ModelsDevModelQuotes, len(models))
 	for modelID, candidates := range models {
 		chosen := pickModelsDevCandidate(candidates)
 		entry := buildLiteLLMEntryFromModelsDev(chosen.providerID, chosen.entry)
 		if entry != nil {
 			out[modelID] = entry
 		}
+		quotes[modelID] = ModelsDevModelQuotes{Model: modelID, Quotes: buildProviderQuotes(candidates)}
 	}
 
 	if len(out) == 0 {
-		return nil, fmt.Errorf("models.dev catalog produced no usable entries")
+		return nil, nil, fmt.Errorf("models.dev catalog produced no usable entries")
 	}
-	return json.Marshal(out)
+	converted, err := json.Marshal(out)
+	if err != nil {
+		return nil, nil, err
+	}
+	return converted, quotes, nil
+}
+
+// buildProviderQuotes 生成模型的全厂商报价：胜出厂商排最前，其余按厂商 id
+// 字典序；只保留至少带一个价格的厂商。
+func buildProviderQuotes(candidates []modelsDevCandidate) []ModelsDevProviderQuote {
+	chosen := pickModelsDevCandidate(candidates)
+	quotes := make([]ModelsDevProviderQuote, 0, len(candidates))
+	seen := make(map[string]struct{}, len(candidates))
+	if q := quoteFromCandidate(chosen); q != nil {
+		quotes = append(quotes, *q)
+		seen[chosen.providerID] = struct{}{}
+	}
+	rest := make([]modelsDevCandidate, 0, len(candidates))
+	for _, c := range candidates {
+		if _, ok := seen[c.providerID]; !ok {
+			rest = append(rest, c)
+		}
+	}
+	sort.Slice(rest, func(i, j int) bool { return rest[i].providerID < rest[j].providerID })
+	for _, c := range rest {
+		if q := quoteFromCandidate(c); q != nil {
+			quotes = append(quotes, *q)
+		}
+	}
+	return quotes
+}
+
+func quoteFromCandidate(c modelsDevCandidate) *ModelsDevProviderQuote {
+	if c.entry.Cost == nil {
+		return nil
+	}
+	q := &ModelsDevProviderQuote{
+		ProviderID:   c.providerID,
+		ProviderName:  c.providerName,
+		InputPrice:    c.entry.Cost.Input,
+		OutputPrice:   c.entry.Cost.Output,
+		CacheRead:     c.entry.Cost.CacheRead,
+		CacheWrite:    c.entry.Cost.CacheWrite,
+	}
+	if q.InputPrice == nil && q.OutputPrice == nil && q.CacheRead == nil && q.CacheWrite == nil {
+		return nil
+	}
+	return q
 }
 
 // pickModelsDevCandidate 按一方优先规则选出模型条目的胜出厂商。

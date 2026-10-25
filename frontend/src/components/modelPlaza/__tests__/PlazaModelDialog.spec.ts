@@ -3,6 +3,23 @@ import { mount } from '@vue/test-utils'
 import PlazaModelDialog from '../PlazaModelDialog.vue'
 import type { PlazaModel } from '@/api/modelPlaza'
 
+const adminState = { isAdmin: true }
+vi.mock('@/stores/auth', () => ({
+  useAuthStore: () => adminState
+}))
+
+const quoteMock = vi.fn(async () => ({
+  model: 'claude-opus-5-5',
+  quotes: [
+    { provider_id: 'anthropic', provider_name: 'Anthropic', input_price: 4, output_price: 20, cache_read_price: 0.2, cache_write_price: 5 },
+    { provider_id: '302ai', provider_name: '302.AI', input_price: 4, output_price: 22, cache_read_price: null, cache_write_price: null },
+    { provider_id: 'azure', provider_name: 'Azure', input_price: 3, output_price: 18, cache_read_price: 0.2, cache_write_price: 5 }
+  ]
+}))
+vi.mock('@/api/admin/channels', () => ({
+  getModelProviderQuotes: (...args: unknown[]) => quoteMock(...(args as []))
+}))
+
 vi.mock('vue-i18n', async () => {
   const actual = await vi.importActual<typeof import('vue-i18n')>('vue-i18n')
   return {
@@ -119,5 +136,33 @@ describe('PlazaModelDialog', () => {
     const text = wrapper.text()
     expect(text).toContain('00:30–08:30')
     expect(text).toContain('×0.75') // 1.5 × 0.5
+  })
+
+  it('管理员登录时展示厂商比价区,胜出厂商排最前', async () => {
+    const wrapper = mountDialog(tokenModel)
+    await vi.waitFor(() => {
+      expect(wrapper.text()).toContain('modelPlaza.dialog.providersTitle')
+    })
+    const text = wrapper.text()
+    expect(quoteMock).toHaveBeenCalledWith('claude-opus-5-5')
+    expect(text).toContain('Anthropic')
+    expect(text).toContain('modelPlaza.dialog.adoptedProvider')
+    // 最低输入价厂商(azure 3)标最低价徽章
+    expect(text).toContain('Azure')
+    expect(text).toContain('modelPlaza.dialog.cheapest')
+  })
+
+  it('非管理员不展示厂商比价区', async () => {
+    adminState.isAdmin = false
+    quoteMock.mockClear()
+    try {
+      const wrapper = mountDialog(tokenModel)
+      await vi.waitFor(() => {
+        expect(wrapper.text()).not.toContain('modelPlaza.dialog.providersTitle')
+      })
+      expect(quoteMock).not.toHaveBeenCalled()
+    } finally {
+      adminState.isAdmin = true
+    }
   })
 })

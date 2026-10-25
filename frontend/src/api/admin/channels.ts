@@ -204,5 +204,31 @@ export async function syncPricingModels(platform: string): Promise<SyncPricingMo
   return data
 }
 
-const channelsAPI = { list, getById, create, update, remove, getModelDefaultPricing, syncPricingModels }
+/** models.dev 单厂商报价（USD/百万token 原始口径，仅比价展示）。 */
+export interface ProviderPricingQuote {
+  provider_id: string
+  provider_name: string
+  input_price: number | null
+  output_price: number | null
+  cache_read_price: number | null
+  cache_write_price: number | null
+}
+
+export interface ModelProviderQuotesResult {
+  model: string
+  quotes: ProviderPricingQuote[]
+}
+
+/**
+ * Fetch per-provider quotes for one model from the models.dev catalog (admin only).
+ * First quote is the provider whose price the billing catalog adopted.
+ */
+export async function getModelProviderQuotes(model: string): Promise<ModelProviderQuotesResult> {
+  const { data } = await apiClient.get<ModelProviderQuotesResult>('/admin/channels/pricing/provider-quotes', {
+    params: { model }
+  })
+  return data
+}
+
+const channelsAPI = { list, getById, create, update, remove, getModelDefaultPricing, syncPricingModels, getModelProviderQuotes }
 export default channelsAPI

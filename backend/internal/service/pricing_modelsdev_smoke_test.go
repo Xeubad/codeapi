@@ -86,6 +86,35 @@ func TestModelsDevCatalogSmoke(t *testing.T) {
 	}
 }
 
+// TestProviderQuotesSurviveFallbackMerge 验证 models.dev 索引在 fallback/override
+// 合并层（LiteLLM 格式重入 parsePricingData）后不被清空。
+func TestProviderQuotesSurviveFallbackMerge(t *testing.T) {
+	s := &PricingService{}
+	modelsDevBody := []byte(`{
+		"openai": {"models": {"gpt-5.5": {"modalities": {"output": ["text"]}, "cost": {"input": 5, "output": 30}}}}
+	}`)
+	if !s.hasProviderQuotes() {
+		if _, err := s.parsePricingData(modelsDevBody); err != nil {
+			t.Fatalf("parse models.dev body: %v", err)
+		}
+	}
+	if !s.hasProviderQuotes() {
+		t.Fatalf("provider quotes index must be populated after models.dev parse")
+	}
+	// fallback 文件是 LiteLLM 扁平格式,重入 parsePricingData 不得清空索引
+	litellmBody := []byte(`{"claude-opus-5-5": {"input_cost_per_token": 4e-06, "output_cost_per_token": 2e-05, "litellm_provider": "anthropic"}}`)
+	if _, err := s.parsePricingData(litellmBody); err != nil {
+		t.Fatalf("parse litellm body: %v", err)
+	}
+	if !s.hasProviderQuotes() {
+		t.Fatalf("provider quotes index must survive litellm-format re-parse (fallback merge)")
+	}
+	quotes := s.ListModelProviderQuotes("gpt-5.5")
+	if len(quotes) != 1 || quotes[0].ProviderID != "openai" {
+		t.Fatalf("gpt-5.5 quotes: got %+v", quotes)
+	}
+}
+
 // TestLiteLLMCatalogNotDetectedAsModelsDev 验证旧 LiteLLM 目录（扁平结构）
 // 不会被误判为 models.dev 格式而走转换路径。
 func TestLiteLLMCatalogNotDetectedAsModelsDev(t *testing.T) {
@@ -121,9 +150,15 @@ func TestModelsDevConversionIsDeterministic(t *testing.T) {
 		"zeta-aggregator": {"models": {"shared-model": {"modalities": {"output": ["text"]}, "cost": {"input": 2, "output": 6}}}},
 		"alpha-aggregator": {"models": {"shared-model": {"modalities": {"output": ["text"]}, "cost": {"input": 1, "output": 3}}}}
 	}`)
-	out, err := convertModelsDevCatalog(body)
+	out, quotes, err := convertModelsDevCatalog(body)
 	if err != nil {
 		t.Fatalf("convertModelsDevCatalog: %v", err)
+	}
+	if q, ok := quotes["shared-model"]; !ok || len(q.Quotes) != 2 {
+		t.Fatalf("shared-model should have 2 provider quotes, got %+v", q)
+	}
+	if q := quotes["shared-model"]; q.Quotes[0].ProviderID != "alpha-aggregator" || len(q.Quotes) != 2 {
+		t.Fatalf("winner must be first in quotes: %+v", q.Quotes)
 	}
 	var flat map[string]json.RawMessage
 	if err := json.Unmarshal(out, &flat); err != nil {

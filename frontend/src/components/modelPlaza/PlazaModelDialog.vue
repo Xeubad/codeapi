@@ -174,17 +174,82 @@
         </div>
         <p v-else class="text-sm text-gray-400 dark:text-dark-500">{{ t('modelPlaza.dialog.noOfficial') }}</p>
       </section>
+
+      <!-- 其他厂商比价(仅管理员可见;models.dev 目录原始口径) -->
+      <section v-if="isAdmin">
+        <h4 class="mb-2 flex items-center gap-1.5 text-sm font-semibold text-gray-900 dark:text-white">
+          {{ t('modelPlaza.dialog.providersTitle') }}
+          <span class="font-normal text-gray-400 dark:text-dark-500">{{ t('modelPlaza.table.unitPerMillion') }}</span>
+        </h4>
+        <div v-if="providerQuotesLoading" class="flex items-center justify-center py-4">
+          <div class="h-5 w-5 animate-spin rounded-full border-2 border-primary-600/25 border-t-primary-600 dark:border-primary-400/25 dark:border-t-primary-400"></div>
+        </div>
+        <div
+          v-else-if="providerQuotes.length"
+          class="overflow-x-auto rounded-xl border border-gray-200 dark:border-dark-700/60"
+        >
+          <table class="w-full text-sm tabular-nums">
+            <thead>
+              <tr class="bg-gray-50 text-left text-xs font-medium uppercase tracking-wide text-gray-500 dark:bg-dark-800/70 dark:text-dark-400">
+                <th class="px-3 py-2">{{ t('modelPlaza.dialog.provider') }}</th>
+                <th class="px-3 py-2">{{ t('modelPlaza.table.input') }}</th>
+                <th class="px-3 py-2">{{ t('modelPlaza.table.output') }}</th>
+                <th class="px-3 py-2">{{ t('modelPlaza.table.cacheWrite') }}</th>
+                <th class="px-3 py-2">{{ t('modelPlaza.table.cacheRead') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="(q, idx) in providerQuotes"
+                :key="q.provider_id"
+                class="border-t border-gray-100 font-mono dark:border-dark-700/60"
+                :class="isCheapestInput(q) ? 'bg-emerald-50/60 dark:bg-emerald-500/5' : ''"
+              >
+                <td class="px-3 py-2">
+                  <div class="flex flex-wrap items-center gap-1.5 font-sans text-xs">
+                    <span class="text-gray-700 dark:text-dark-200">{{ q.provider_name || q.provider_id }}</span>
+                    <span
+                      v-if="idx === 0"
+                      class="rounded-md bg-primary-50 px-1.5 py-0.5 text-[10px] font-medium text-primary-600 dark:bg-primary-500/10 dark:text-primary-300"
+                    >
+                      {{ t('modelPlaza.dialog.adoptedProvider') }}
+                    </span>
+                    <span
+                      v-if="isCheapestInput(q)"
+                      class="rounded-md bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"
+                    >
+                      {{ t('modelPlaza.dialog.cheapest') }}
+                    </span>
+                  </div>
+                </td>
+                <td class="px-3 py-2 text-gray-700 dark:text-dark-200">{{ quotePrice(q.input_price) }}</td>
+                <td class="px-3 py-2 text-gray-700 dark:text-dark-200">{{ quotePrice(q.output_price) }}</td>
+                <td class="px-3 py-2 text-gray-600 dark:text-dark-300">{{ quotePrice(q.cache_write_price) }}</td>
+                <td class="px-3 py-2 text-gray-600 dark:text-dark-300">{{ quotePrice(q.cache_read_price) }}</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="border-t border-gray-100 px-3 py-2 text-[11px] text-gray-400 dark:border-dark-700/60 dark:text-dark-500">
+            {{ t('modelPlaza.dialog.providersHint') }}
+          </p>
+        </div>
+        <p v-else class="text-sm text-gray-400 dark:text-dark-500">{{ t('modelPlaza.dialog.noProviders') }}</p>
+      </section>
     </div>
   </BaseDialog>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import { platformBadgeLightClass, platformLabel } from '@/utils/platformColors'
+import { formatScaled } from '@/utils/pricing'
 import { BILLING_MODE_TOKEN, BILLING_MODE_IMAGE, BILLING_MODE_VIDEO } from '@/constants/channel'
 import type { PlazaModel, PlazaTimePricingPeriod } from '@/api/modelPlaza'
+import type { ProviderPricingQuote } from '@/api/admin/channels'
+import { getModelProviderQuotes } from '@/api/admin/channels'
+import { useAuthStore } from '@/stores/auth'
 import {
   usePlazaPricing,
   plazaBillingMode,
@@ -212,6 +277,53 @@ const props = defineProps<{
 const emit = defineEmits<{ (e: 'close'): void }>()
 
 const { t } = useI18n()
+const authStore = useAuthStore()
+const isAdmin = computed(() => authStore.isAdmin)
+
+// 管理端厂商比价:弹窗打开且管理员登录时懒加载,切换模型自动重新拉取。
+const providerQuotes = ref<ProviderPricingQuote[]>([])
+const providerQuotesLoading = ref(false)
+
+watch(
+  () => [props.show, props.model?.name] as const,
+  async ([show, modelName]) => {
+    if (!show || !isAdmin.value || !modelName) {
+      providerQuotes.value = []
+      return
+    }
+    providerQuotesLoading.value = true
+    try {
+      const result = await getModelProviderQuotes(modelName)
+      // 弹窗已切换到其他模型时丢弃过期响应
+      if (props.model?.name === modelName) {
+        providerQuotes.value = result.quotes ?? []
+      }
+    } catch {
+      if (props.model?.name === modelName) {
+        providerQuotes.value = []
+      }
+    } finally {
+      if (props.model?.name === modelName) {
+        providerQuotesLoading.value = false
+      }
+    }
+  },
+  { immediate: true }
+)
+
+/** 比价表价格已是 USD/百万token,直接展示。 */
+function quotePrice(value: number | null | undefined): string {
+  if (value == null) return '-'
+  return formatScaled(value, 1, 2)
+}
+
+/** 最低输入价的厂商高亮(仅在有输入价的厂商间比较)。 */
+function isCheapestInput(q: ProviderPricingQuote): boolean {
+  const priced = providerQuotes.value.filter((x) => x.input_price != null)
+  if (priced.length < 2 || q.input_price == null) return false
+  const min = Math.min(...priced.map((x) => x.input_price as number))
+  return q.input_price === min
+}
 const {
   effectiveRate,
   billingMode,

@@ -663,3 +663,17 @@ func (h *ChannelHandler) SyncPricingModels(c *gin.Context) {
 	models := h.pricingService.ListModelNamesByProvider(provider)
 	response.Success(c, gin.H{"models": models})
 }
+
+// ListModelProviderQuotes 返回 models.dev 目录中某模型的全部厂商报价（管理端比价）。
+// 价格为 USD/百万token 原始口径；第一条为目录计费采用的胜出厂商。
+// GET /api/v1/admin/channels/pricing/provider-quotes?model=gpt-5.5
+func (h *ChannelHandler) ListModelProviderQuotes(c *gin.Context) {
+	model := strings.TrimSpace(c.Query("model"))
+	if model == "" {
+		response.ErrorFrom(c, infraerrors.BadRequest("MISSING_PARAMETER", "model parameter is required").
+			WithMetadata(map[string]string{"param": "model"}))
+		return
+	}
+	quotes := h.pricingService.ListModelProviderQuotes(model)
+	response.Success(c, gin.H{"model": model, "quotes": quotes})
+}

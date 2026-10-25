@@ -278,8 +278,11 @@ type PricingService struct {
 	remoteClient PricingRemoteClient
 	mu           sync.RWMutex
 	pricingData  map[string]*LiteLLMModelPricing
-	lastUpdated  time.Time
-	localHash    string
+	// providerQuotes models.dev 的模型 → 厂商报价索引（USD/百万token 原始口径），
+	// 仅管理端比价展示用，不参与计费；目录为 LiteLLM 格式时为空。
+	providerQuotes map[string]ModelsDevModelQuotes
+	lastUpdated    time.Time
+	localHash      string
 	// fallback/override 文件在最近一次成功重建时的内容指纹，定时器据此判断是否
 	// 需要从本地目录缓存重建叠加层。
 	customFilesHash string
@@ -658,14 +661,27 @@ func (s *PricingService) downloadPricingData() error {
 func (s *PricingService) parsePricingData(body []byte) (map[string]*LiteLLMModelPricing, error) {
 	// models.dev 目录（厂商→模型两层、USD/百万token）先拍平成 LiteLLM 扁平格式，
 	// 再走下方统一解析。探测失败按 LiteLLM 目录处理。
+	// providerQuotes（管理端比价索引）只在本次输入确为 models.dev 格式时更新——
+	// fallback/override 合并层会以 LiteLLM 格式重入本函数，不能把已建立的索引清空。
+	quotesUpdated := false
+	var providerQuotes map[string]ModelsDevModelQuotes
 	if detectModelsDevFormat(body) {
-		converted, err := convertModelsDevCatalog(body)
+		converted, quotes, err := convertModelsDevCatalog(body)
 		if err != nil {
 			return nil, fmt.Errorf("convert models.dev catalog: %w", err)
 		}
 		body = converted
+		providerQuotes = quotes
+		quotesUpdated = true
 		logger.LegacyPrintf("service.pricing", "%s", "[Pricing] Detected models.dev catalog format; converted to LiteLLM flat layout")
 	}
+	defer func() {
+		if quotesUpdated {
+			s.mu.Lock()
+			s.providerQuotes = providerQuotes
+			s.mu.Unlock()
+		}
+	}()
 
 	// 首先解析为 map[string]json.RawMessage
 	var rawData map[string]json.RawMessage

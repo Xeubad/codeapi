@@ -683,7 +683,13 @@ export default {
       baseTier: '基础',
       timePricingTitle: '分时倍率时段',
       effectiveRate: '生效倍率',
-      noOfficial: '目录暂无该模型的官方参考价'
+      noOfficial: '目录暂无该模型的官方参考价',
+      providersTitle: '其他厂商',
+      provider: '厂商',
+      adoptedProvider: '计费采用',
+      cheapest: '最低价',
+      providersHint: '数据来自 models.dev 目录，为各厂商公开标价（USD / 1M token），仅供参考',
+      noProviders: 'models.dev 目录暂无该模型的其他厂商报价'
     },
     detail: {
       noModels: '该分组暂未配置模型',

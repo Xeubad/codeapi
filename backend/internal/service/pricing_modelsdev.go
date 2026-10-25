@@ -94,8 +94,8 @@ type ModelsDevProviderQuote struct {
 
 // ModelsDevModelQuotes 某模型的全部厂商报价，胜出厂商排最前。
 type ModelsDevModelQuotes struct {
-	Model   string                   `json:"model"`
-	Quotes  []ModelsDevProviderQuote `json:"quotes"`
+	Model  string                   `json:"model"`
+	Quotes []ModelsDevProviderQuote `json:"quotes"`
 }
 
 // ListModelProviderQuotes 返回 models.dev 目录中某模型的全部厂商报价（管理端
@@ -233,11 +233,11 @@ func quoteFromCandidate(c modelsDevCandidate) *ModelsDevProviderQuote {
 	}
 	q := &ModelsDevProviderQuote{
 		ProviderID:   c.providerID,
-		ProviderName:  c.providerName,
-		InputPrice:    c.entry.Cost.Input,
-		OutputPrice:   c.entry.Cost.Output,
-		CacheRead:     c.entry.Cost.CacheRead,
-		CacheWrite:    c.entry.Cost.CacheWrite,
+		ProviderName: c.providerName,
+		InputPrice:   c.entry.Cost.Input,
+		OutputPrice:  c.entry.Cost.Output,
+		CacheRead:    c.entry.Cost.CacheRead,
+		CacheWrite:   c.entry.Cost.CacheWrite,
 	}
 	if q.InputPrice == nil && q.OutputPrice == nil && q.CacheRead == nil && q.CacheWrite == nil {
 		return nil

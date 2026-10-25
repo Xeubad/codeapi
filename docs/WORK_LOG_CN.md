@@ -92,6 +92,9 @@
 - 未运行：Docker 构建端到端验证（corepack prepare pnpm@12.15.0 行，由下次 release workflow 或手动 docker build 兜底）。
 - 意外发现与处置：① 上午 `f95a86a22` 的 CI 实为红（golangci-lint gofmt），`e88cc317` 修复；② security-scan workflow 此前从未在 push 上触发过，本次首跑即暴露 go1.27.2 标准库漏洞，`21c0a2cf` 升 1.27.3 后绿。
 - Docker 构建端到端（原「未运行」项补跑）：corepack 拉 pnpm 12.15.0 成功，但实测暴露两处 Dockerfile 问题——COPY 漏 `pnpm-workspace.yaml`（frozen 安装报 ERR_PNPM_LOCKFILE_CONFIG_MISMATCH）与 1536MB 堆 OOM；`1ee7db428` 修复后三阶段构建全通过，容器启动冒烟正常（v0.2.17、前端嵌入、go1.27.3）。
+- **本地数据目录回归上游形态**：`backend/data/` 整体上移一级到 `backend/`（config.yaml/model_pricing.json+sha256/logs/pages/plugins），裸跑 `go run`/`./bin/server` 不再需要 `DATA_DIR`，严格贴合上游「config 与启动目录同层」与 Docker `/app/data` 两种形态；`ad842f9b6` 补 gitignore（backend/logs|pages|plugins|model_pricing*）与 dockerignore（backend/config.yaml、.installed、运行时数据）确保 dev 配置进不了 git 与镜像上下文（探针镜像实测 `COPY backend/ ./` 上下文无 config）。dev config.yaml 补 `log.output.file_path: ./logs/sub2api.log` 消除上游对非容器环境硬编码 `/app/data` 日志路径的写失败降级警告（属 dev 配置，不动代码）。
+- dev 配置进不了发布产物的三条结构性确认：本地 docker build 靠 .dockerignore（实测）；CI release 镜像走 goreleaser 净上下文（归档裸二进制 + LICENSE/README/deploy 白名单，结构性排除）；二进制 `go:embed` 只嵌 VERSION 与前端 dist，config.yaml 运行时读取。
+- 8080 服务重启至新布局：旧实例（10-22 启动）kill 后以 `./bin/server` 重启，/health 200、日志落 `backend/logs/sub2api.log`、价格缓存读 `backend/model_pricing.json`；确认后删除旧 `backend/data/` 目录。
 
 ### 产出
 

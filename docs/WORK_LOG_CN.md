@@ -91,6 +91,7 @@
 - 后端 `go test ./...` 全绿（pnpm 迁移与 Go 代码无交集）；golangci-lint 本地不可用（本地二进制不支持 Go 1.27 export data），由 CI 门禁跑。
 - 未运行：Docker 构建端到端验证（corepack prepare pnpm@12.15.0 行，由下次 release workflow 或手动 docker build 兜底）。
 - 意外发现与处置：① 上午 `f95a86a22` 的 CI 实为红（golangci-lint gofmt），`e88cc317` 修复；② security-scan workflow 此前从未在 push 上触发过，本次首跑即暴露 go1.27.2 标准库漏洞，`21c0a2cf` 升 1.27.3 后绿。
+- Docker 构建端到端（原「未运行」项补跑）：corepack 拉 pnpm 12.15.0 成功，但实测暴露两处 Dockerfile 问题——COPY 漏 `pnpm-workspace.yaml`（frozen 安装报 ERR_PNPM_LOCKFILE_CONFIG_MISMATCH）与 1536MB 堆 OOM；`1ee7db428` 修复后三阶段构建全通过，容器启动冒烟正常（v0.2.17、前端嵌入、go1.27.3）。
 
 ### 产出
 
@@ -100,7 +101,8 @@
 - `e15d33ae` build(frontend): upgrade pnpm 9 to 12 with supply-chain hardening
 - `e88cc317` style(service): fix gofmt alignment in pricing_modelsdev.go（上午 models.dev 提交漏跑 gofmt，CI golangci-lint 门禁红，补齐两处 struct tag 对齐后 CI 绿）
 - `21c0a2cf` chore(deps): bump go 1.27.2 to 1.27.3 for crypto/x509 security fix（security-scan 首次在本仓库触发 govulncheck 门禁即报标准库漏洞，passkey 登录路径可达；go.mod + 4 处镜像/CI 版本钉同步升级；最终 CI 与 Security Scan 双绿）
-- 下午收尾后 `origin/main` tip：`21c0a2cf`，CI（backend-ci）与 security-scan 全绿
+- `1ee7db42` fix(docker): copy pnpm-workspace.yaml and raise node heap for frontend build
+- 下午收尾后 `origin/main` tip：`1ee7db42`，CI（backend-ci）与 security-scan 全绿，Docker 三阶段构建实测通过
 
 ---
 

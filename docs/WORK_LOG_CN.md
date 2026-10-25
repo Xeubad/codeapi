@@ -36,6 +36,43 @@
 
 ---
 
+## 2026年10月25日
+
+**主题**：价格目录切换到 models.dev + 模型广场改版（块网格/弹窗/管理端比价）
+
+### 改动
+
+- **价格目录数据源**：`pricing.remote_url` 默认从 model-price-repo 切换为 `https://models.dev/api.json`；`pricing_service.go` 的 `parsePricingData` 入口探测 models.dev 格式（厂商→模型两层嵌套），新文件 `pricing_modelsdev.go` 拍平为 LiteLLM 扁平结构后复用原解析/计费管线，探测失败回退 LiteLLM 路径。单位换算 USD/百万token → USD/token；一方厂商（anthropic/openai/google/xai/deepseek/moonshotai…）价格优先，无一方收录时按字典序稳定取首个；google/moonshotai/zhipuai 换算回 gemini/moonshot/zhipu 保证管理端按平台同步不受影响。图片输出模型 output 映射 `output_cost_per_image_token`（models.dev 该口径即图片 token 价），长上下文 tier 折算为 `*_above_<N>k_tokens` 字段复用现成折算器。
+- **配置**：models.dev 不发布 .sha256 → `hash_url` 默认置空，刷新走 `update_interval_hours` 文件年龄检查；allowlist `pricing_hosts` 增加 `models.dev`；`config.example.yaml` 同步。
+- **用户广场改版**：删除 8 列大表格组件，改为 `PlazaModelGrid`（模型块：名称/本站简价/倍率/能力徽章）+ `PlazaModelDialog`（弹窗：本站价格 × 倍率 + 官方参考价两区，含阶梯、1h 缓存、分时、思考倍率）；计价逻辑抽到 `plazaPricing.ts` 共用。
+- **管理端比价**：转换时保留模型→厂商报价索引（原始口径），新增 `GET /admin/channels/pricing/provider-quotes`；弹窗内管理员专属「其他厂商」区（胜出厂商「计费采用」徽章排首、最低输入价高亮），非管理员不渲染不发请求。
+- 测试：转换器冒烟（真实 api.json 全量）、格式误判防回归、报价索引存活回归、组件测试 21 项。
+
+### 关键决策
+
+- **保留计费链路不动，只换数据层**：转换成 LiteLLM 格式再进原管线，override/fallback 叠加、家族匹配、DeepSeek 策略全部原样生效；回滚只需把 `remote_url` 配回旧值。
+- **全量 diff 后确认三处字段缺口并接受**：models.dev 无 1h 缓存写入价（Claude 按 5m 价计费，少收一半）、无 priority 档价（priority 流量按标准价）、部分图片模型无价（gpt-image-1 cost 为空）。缓解：内置 212 条 fallback 价卡继续按层合并，覆盖上述模型的关键字段；后续可经 override 文件补。
+- **非整千 tier 跳过**：真实数据存在 size=200001 的 tier，LiteLLM 字段名只支持千粒度，打日志跳过（6 处）。
+- **providerQuotes 曾被 fallback 合并清空**：fallback/override 以 LiteLLM 格式重入 `parsePricingData`，defer 无条件覆盖索引为 nil；改为仅当本次输入确为 models.dev 格式时更新，并加回归测试钉住。
+- **8080 重启**：经用户确认后重启本地服务（旧进程 10-22 启动，无 .installed 锁，需 `DATA_DIR=./data` 环境启动），旧 LiteLLM 目录快照移走后启动时自动从 models.dev 拉取成功。
+
+### 验证
+
+- 后端：`go test ./internal/service/`（138s 全绿）、`./internal/handler/...`、`./internal/server/routes/`；`go vet` 通过；`make build`（前端因网络换 pnpm 直跑 `vite build` 成功）。
+- 转换正确性：真实 api.json 全量冒烟（3444→3542 模型、单位/去重/阶梯/图片映射断言）；与上游 model-price-repo 全量 diff 记录 52 处分歧（图片 token 价口径差 + deepseek 两边价不同）与 108 个缺失模型（vertex 变体为主），据此确认 fallback 层必要性。
+- 真实环境端到端：本地服务从 models.dev 拉取成功（日志 `Downloaded 3542 models`，对比旧目录 262）；`provider-quotes?model=gpt-5.5` 返回 20 家厂商。
+- 浏览器实测（暗色主题）：块网格渲染、弹窗开合（Escape 关闭）、长上下文阶梯弹窗（≤100K/>100K 两档）、搜索过滤、管理员比价区（openai 带计费采用徽章）；非管理员无比价区（组件测试覆盖）。
+- golangci-lint 本地不可用（版本不支持 Go 1.27 export data），由 CI 门禁跑；本地 go test/vet 已跑。
+- 未运行：前端 `make test`（vitest 2845 项已单独全绿）；`git diff --check` 通过。
+
+### 产出
+
+- `641b4aed` feat(pricing): switch catalog source to models.dev api.json
+- `102a477c` feat(plaza): redesign user model plaza with block grid and price dialog（CI 绿）
+- `f95a86a22` feat(plaza): add admin-only provider comparison to model dialog
+
+---
+
 ## 2026年10月23日
 
 **主题**：初始化管理员账号默认值改为 `admin@admin.local` / `admin123`

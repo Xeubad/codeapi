@@ -667,7 +667,18 @@ export default {
     },
     badges: {
       exclusive: 'Exclusive',
-      subscription: 'Subscription'
+      subscription: 'Subscription',
+      longContext: 'Long-context tiers',
+      timePricing: 'Time-based rate'
+    },
+    dialog: {
+      paidTitle: 'Our Price',
+      officialTitle: 'Official Reference Price',
+      tier: 'Tier',
+      baseTier: 'Base',
+      timePricingTitle: 'Time-based rate periods',
+      effectiveRate: 'effective rate',
+      noOfficial: 'No official reference price in the catalog for this model'
     },
     detail: {
       noModels: 'No models configured for this group',

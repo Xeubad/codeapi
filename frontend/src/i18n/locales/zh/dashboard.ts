@@ -672,7 +672,18 @@ export default {
     },
     badges: {
       exclusive: '专属分组',
-      subscription: '订阅'
+      subscription: '订阅',
+      longContext: '长上下文阶梯',
+      timePricing: '分时倍率'
+    },
+    dialog: {
+      paidTitle: '本站价格',
+      officialTitle: '官方参考价',
+      tier: '档位',
+      baseTier: '基础',
+      timePricingTitle: '分时倍率时段',
+      effectiveRate: '生效倍率',
+      noOfficial: '目录暂无该模型的官方参考价'
     },
     detail: {
       noModels: '该分组暂未配置模型',

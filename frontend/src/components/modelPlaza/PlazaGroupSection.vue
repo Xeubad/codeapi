@@ -51,9 +51,9 @@
       </p>
     </header>
 
-    <!-- 模型价格表:整行(含 hover 底色/分区底色)顶到卡片边缘,左右留白由表格首列/末列的 padding 提供 -->
+    <!-- 模型块网格;点击块弹出价格明细 -->
     <div>
-      <PlazaModelPricingTable
+      <PlazaModelGrid
         v-if="group.models.length > 0"
         :models="group.models"
         :platform="group.platform"
@@ -63,23 +63,37 @@
         :image-rate-multiplier="group.image_rate_multiplier"
         :video-rate-independent="group.video_rate_independent"
         :video-rate-multiplier="group.video_rate_multiplier"
-        :peak-window="peakWindow"
-        :peak-rate-multiplier="group.peak_rate_multiplier"
+        @select="selectedModel = $event"
       />
       <p v-else class="px-5 py-4 text-center text-sm text-gray-400 dark:text-dark-500">
         {{ t('modelPlaza.detail.noModels') }}
       </p>
     </div>
+
+    <PlazaModelDialog
+      :show="selectedModel != null"
+      :model="selectedModel"
+      :rate-multiplier="group.rate_multiplier"
+      :user-rate-multiplier="group.user_rate_multiplier ?? null"
+      :image-rate-independent="group.image_rate_independent"
+      :image-rate-multiplier="group.image_rate_multiplier"
+      :video-rate-independent="group.video_rate_independent"
+      :video-rate-multiplier="group.video_rate_multiplier"
+      :peak-window="peakWindow"
+      :peak-rate-multiplier="group.peak_rate_multiplier"
+      @close="selectedModel = null"
+    />
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'
 import GroupBadge from '@/components/common/GroupBadge.vue'
-import PlazaModelPricingTable from './PlazaModelPricingTable.vue'
-import type { ModelPlazaGroup } from '@/api/modelPlaza'
+import PlazaModelGrid from './PlazaModelGrid.vue'
+import PlazaModelDialog from './PlazaModelDialog.vue'
+import type { ModelPlazaGroup, PlazaModel } from '@/api/modelPlaza'
 import type { GroupPlatform, SubscriptionType } from '@/types'
 import { platformBorderStrongClass } from '@/utils/platformColors'
 import { hasPeakRate, formatPeakRateWindow, serverTimezoneLabel } from '@/utils/peak-rate'
@@ -91,6 +105,7 @@ const props = defineProps<{
 
 const { t } = useI18n()
 const appStore = useAppStore()
+const selectedModel = ref<PlazaModel | null>(null)
 
 /** 高峰窗口描述(含倍率与服务器时区标注);分组未启用高峰为空串。 */
 const peakWindow = computed(() => {

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import PlazaGroupSection from '../PlazaGroupSection.vue'
-import PlazaModelPricingTable from '../PlazaModelPricingTable.vue'
+import PlazaModelGrid from '../PlazaModelGrid.vue'
 import type { ModelPlazaGroup, PlazaModel } from '@/api/modelPlaza'
 
 vi.mock('vue-i18n', async () => {
@@ -83,7 +83,8 @@ function mountSection(g: ModelPlazaGroup) {
       stubs: {
         GroupBadge: true,
         Icon: true,
-        PlazaModelPricingTable: true
+        PlazaModelGrid: true,
+        PlazaModelDialog: true
       }
     }
   })
@@ -92,9 +93,9 @@ function mountSection(g: ModelPlazaGroup) {
 const NOTE = 'modelPlaza.detail.longContextDisabledNote'
 
 describe('PlazaGroupSection 长上下文说明', () => {
-  it('passes video-specific rates to the pricing table', () => {
+  it('passes video-specific rates to the model grid', () => {
     const wrapper = mountSection(group({ video_rate_independent: true, video_rate_multiplier: 0 }))
-    expect(wrapper.findComponent(PlazaModelPricingTable).props()).toMatchObject({
+    expect(wrapper.findComponent(PlazaModelGrid).props()).toMatchObject({
       videoRateIndependent: true,
       videoRateMultiplier: 0
     })
@@ -126,7 +127,7 @@ describe('PlazaGroupSection 长上下文说明', () => {
 })
 
 describe('PlazaGroupSection 高峰配置传递', () => {
-  it('分组启用高峰时把窗口描述与倍率传给价格表', () => {
+  it('分组启用高峰时把窗口描述与倍率传给价格弹窗', () => {
     const wrapper = mountSection(
       group({
         subscription_type: 'subscription',
@@ -136,14 +137,15 @@ describe('PlazaGroupSection 高峰配置传递', () => {
         peak_rate_multiplier: 1.5
       })
     )
-    const table = wrapper.findComponent(PlazaModelPricingTable)
+    const dialog = wrapper.findComponent({ name: 'PlazaModelDialog' })
     // appStore mock 无 server_utc_offset,窗口描述不带时区标注
-    expect(table.props('peakWindow')).toBe('14:00-18:00 ×1.5')
-    expect(table.props('peakRateMultiplier')).toBe(1.5)
+    expect(dialog.props('peakWindow')).toBe('14:00-18:00 ×1.5')
+    expect(dialog.props('peakRateMultiplier')).toBe(1.5)
   })
 
   it('分组未启用高峰时窗口描述为空串', () => {
     const wrapper = mountSection(group())
-    expect(wrapper.findComponent(PlazaModelPricingTable).props('peakWindow')).toBe('')
+    const dialog = wrapper.findComponent({ name: 'PlazaModelDialog' })
+    expect(dialog.props('peakWindow')).toBe('')
   })
 })

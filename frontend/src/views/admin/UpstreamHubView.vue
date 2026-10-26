@@ -269,6 +269,16 @@
             </tbody>
           </table>
         </div>
+        <div
+          v-if="addRowsOverBudget"
+          class="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300"
+        >
+          {{ t('admin.upstreamHub.overBudgetBlockedInline', {
+            used: effectiveAllocated,
+            total: detail?.vendor.concurrency_budget || '∞',
+            over: effectiveAllocated - (detail?.vendor.concurrency_budget || 0)
+          }) }}
+        </div>
         <div class="flex flex-wrap items-center justify-between gap-2">
           <button class="btn btn-secondary btn-sm" @click="addEntryRow">{{ t('admin.upstreamHub.addRow') }}</button>
           <p class="text-xs" :class="addRowsOverBudget ? 'text-red-600 dark:text-red-400' : 'text-gray-500'">
@@ -279,7 +289,9 @@
       </div>
       <template #footer>
         <button class="btn btn-secondary" @click="closeEntriesDialog">{{ t('admin.upstreamHub.cancel') }}</button>
-        <button class="btn btn-primary" :disabled="saving" @click="saveEntryRows">{{ t('admin.upstreamHub.save') }}</button>
+        <button class="btn btn-primary" :disabled="saving || addRowsOverBudget" @click="saveEntryRows">
+          {{ t('admin.upstreamHub.save') }}
+        </button>
       </template>
     </BaseDialog>
 
@@ -381,15 +393,9 @@ const deleteMessage = computed(() =>
   deleteTarget.value ? t('admin.upstreamHub.deleteVendorConfirm', { name: deleteTarget.value.name }) : ''
 )
 
-const effectiveAllocated = computed(() => {
-  const allocated = detail.value?.vendor.allocated_concurrency ?? 0
-  const drafts = entryRows.value.reduce(
-    (sum, row) => sum + (row.accountId ? 0 : Number(row.concurrency) || 0),
-    0
-  )
-  const removed = pendingDeletes.value.reduce((sum, item) => sum + item.concurrency, 0)
-  return Math.max(0, allocated + drafts - removed)
-})
+const effectiveAllocated = computed(() =>
+  entryRows.value.reduce((sum, row) => sum + (Number(row.concurrency) || 0), 0)
+)
 const addRowsOverBudget = computed(() => {
   const budget = detail.value?.vendor.concurrency_budget ?? 0
   return budget > 0 && effectiveAllocated.value > budget

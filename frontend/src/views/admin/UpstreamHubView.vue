@@ -218,107 +218,106 @@
     <!-- Entries dialog: add / edit / copy in one layout -->
     <BaseDialog :show="showEntryDialog" :title="t('admin.upstreamHub.addOrEdit')" width="full" @close="closeEntriesDialog">
       <div v-if="anyRowDropdownOpen" class="fixed inset-0 z-30" @click="closeAllDropdowns"></div>
-      <div class="space-y-4">
-        <div
-          v-for="(row, index) in entryRows"
-          :key="index"
-          class="rounded-xl border border-gray-200 p-4 dark:border-dark-600"
-        >
-          <div class="mb-3 flex items-center justify-between">
-            <span class="text-sm font-semibold text-gray-700 dark:text-gray-300">#{{ index + 1 }}</span>
-            <div class="flex gap-2">
-              <button class="btn btn-sm btn-secondary" @click="copyRow(row)">
-                {{ t('admin.upstreamHub.duplicate') }}
-              </button>
-              <button class="btn btn-sm btn-ghost text-red-600" @click="removeRow(row, index)">
-                {{ t('admin.upstreamHub.delete') }}
-              </button>
-            </div>
-          </div>
-          <div class="space-y-3">
-            <div>
-              <label class="input-label">{{ t('admin.upstreamHub.entryName') }}</label>
-              <input v-model="row.name" class="input" type="text" :placeholder="t('admin.upstreamHub.entryNamePlaceholder')" />
-            </div>
-            <div>
-              <label class="input-label">{{ t('admin.upstreamHub.platform') }}</label>
-              <Select v-model="row.platform" :options="platformOptions" :disabled="!!row.accountId" />
-            </div>
-            <div>
-              <label class="input-label">Base URL</label>
-              <input v-model="row.base_url" class="input" type="text" placeholder="https://..." />
-            </div>
-            <div>
-              <label class="input-label">{{ t('admin.upstreamHub.apiKey') }}</label>
-              <input
-                v-model="row.api_key"
-                class="input"
-                type="password"
-                :placeholder="row.accountId ? t('admin.upstreamHub.apiKeyKeepPlaceholder') : 'sk-...'"
-              />
-            </div>
-            <div>
-              <label class="input-label">{{ t('admin.upstreamHub.concurrency') }}</label>
-              <input v-model.number="row.concurrency" class="input" type="number" min="1" />
-            </div>
-            <div>
-              <label class="input-label">{{ t('admin.upstreamHub.priority') }}</label>
-              <input v-model.number="row.priority" class="input" type="number" />
-            </div>
-            <div>
-              <label class="input-label">{{ t('admin.upstreamHub.groups') }}</label>
-              <button
-                type="button"
-                class="input flex w-full items-center justify-between text-left"
-                @click="toggleRowDropdown(row, $event)"
-              >
-                <span :class="row.groupIds.length ? '' : 'text-gray-400 dark:text-dark-400'">
-                  {{
-                    row.groupIds.length
-                      ? t('admin.upstreamHub.selectedGroups', { count: row.groupIds.length })
-                      : t('admin.upstreamHub.ungrouped')
-                  }}
-                </span>
-                <svg class="h-4 w-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6" />
-                </svg>
-              </button>
-              <div
-                v-if="row.expanded"
-                class="dropdown fixed z-40 w-80"
-                :style="{ top: row.dropdownTop + 'px', right: row.dropdownRight + 'px' }"
-              >
-                <div class="max-h-72 overflow-y-auto py-1">
-                  <div
-                    v-for="group in groupsForRow(row)"
-                    :key="group.id"
-                    class="dropdown-item w-full justify-between"
-                  >
-                    <label class="flex min-w-0 items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        class="h-4 w-4"
-                        :checked="row.groupIds.includes(group.id)"
-                        @change="toggleRowGroup(row, group.id)"
-                      />
-                      <span class="truncate">{{ group.name }}</span>
-                      <span class="badge badge-primary">{{ group.platform }}</span>
-                    </label>
-                    <Toggle
-                      v-if="row.groupIds.includes(group.id)"
-                      :model-value="row.groupEnabled[group.id] !== false"
-                      @update:model-value="(v) => (row.groupEnabled[group.id] = v)"
+      <div class="space-y-3">
+        <div class="table-container">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>{{ t('admin.upstreamHub.entryName') }}</th>
+                <th>{{ t('admin.upstreamHub.platform') }}</th>
+                <th>Base URL</th>
+                <th>{{ t('admin.upstreamHub.apiKey') }}</th>
+                <th>{{ t('admin.upstreamHub.concurrency') }}</th>
+                <th>{{ t('admin.upstreamHub.priority') }}</th>
+                <th class="min-w-[10rem]">{{ t('admin.upstreamHub.groups') }}</th>
+                <th class="text-right">{{ t('common.actions') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template v-for="(row, index) in entryRows" :key="index">
+                <tr>
+                  <td class="min-w-[10rem]">
+                    <input v-model="row.name" class="input" type="text" :placeholder="t('admin.upstreamHub.entryNamePlaceholder')" />
+                  </td>
+                  <td class="min-w-[9rem]">
+                    <Select v-model="row.platform" :options="platformOptions" :disabled="!!row.accountId" />
+                  </td>
+                  <td class="min-w-[14rem]">
+                    <input v-model="row.base_url" class="input" type="text" placeholder="https://..." />
+                  </td>
+                  <td class="min-w-[12rem]">
+                    <input
+                      v-model="row.api_key"
+                      class="input"
+                      type="password"
+                      :placeholder="row.accountId ? t('admin.upstreamHub.apiKeyKeepPlaceholder') : 'sk-...'"
                     />
-                  </div>
-                  <div v-if="groupsForRow(row).length === 0" class="px-4 py-2 text-xs text-gray-500">
-                    {{ t('admin.upstreamHub.noGroupsForPlatform') }}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+                  </td>
+                  <td class="w-24"><input v-model.number="row.concurrency" class="input" type="number" min="1" /></td>
+                  <td class="w-24"><input v-model.number="row.priority" class="input" type="number" /></td>
+                  <td class="relative">
+                    <button
+                      type="button"
+                      class="flex w-full items-center justify-between rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-left text-sm dark:border-dark-600 dark:bg-dark-800"
+                      @click="toggleRowDropdown(row, $event)"
+                    >
+                      <span :class="row.groupIds.length ? '' : 'text-gray-400 dark:text-dark-400'">
+                        {{
+                          row.groupIds.length
+                            ? t('admin.upstreamHub.selectedGroups', { count: row.groupIds.length })
+                            : t('admin.upstreamHub.ungrouped')
+                        }}
+                      </span>
+                      <svg class="h-4 w-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6" />
+                      </svg>
+                    </button>
+                    <div
+                      v-if="row.expanded"
+                      class="dropdown fixed z-40 w-80"
+                      :style="{ top: row.dropdownTop + 'px', right: row.dropdownRight + 'px' }"
+                    >
+                      <div class="max-h-72 overflow-y-auto py-1">
+                        <div
+                          v-for="group in groupsForRow(row)"
+                          :key="group.id"
+                          class="dropdown-item w-full justify-between"
+                        >
+                          <label class="flex min-w-0 items-center gap-2 text-sm">
+                            <input
+                              type="checkbox"
+                              class="h-4 w-4"
+                              :checked="row.groupIds.includes(group.id)"
+                              @change="toggleRowGroup(row, group.id)"
+                            />
+                            <span class="truncate">{{ group.name }}</span>
+                            <span class="badge badge-primary">{{ group.platform }}</span>
+                          </label>
+                          <Toggle
+                            v-if="row.groupIds.includes(group.id)"
+                            :model-value="row.groupEnabled[group.id] !== false"
+                            @update:model-value="(v) => (row.groupEnabled[group.id] = v)"
+                          />
+                        </div>
+                        <div v-if="groupsForRow(row).length === 0" class="px-4 py-2 text-xs text-gray-500">
+                          {{ t('admin.upstreamHub.noGroupsForPlatform') }}
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                  <td class="text-right whitespace-nowrap">
+                    <button class="btn btn-sm btn-secondary" @click="copyRow(row)">
+                      {{ t('admin.upstreamHub.duplicate') }}
+                    </button>
+                    <button class="btn btn-sm btn-ghost ml-1 text-red-600" @click="removeRow(row, index)">
+                      {{ t('admin.upstreamHub.delete') }}
+                    </button>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
         </div>
-        <button class="btn btn-secondary btn-sm" @click="addEntryRow">{{ t('admin.upstreamHub.addRow') }}</button>
         <div
           v-if="addRowsOverBudget"
           class="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300"
@@ -336,6 +335,7 @@
             <template v-if="addRowsOverBudget"> — {{ t('admin.upstreamHub.overBudgetHint') }}</template>
           </p>
         </div>
+      </div>
       </div>
       <template #footer>
         <button class="btn btn-secondary" @click="closeEntriesDialog">{{ t('admin.upstreamHub.cancel') }}</button>

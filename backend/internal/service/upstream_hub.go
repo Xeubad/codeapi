@@ -58,7 +58,7 @@ type UpstreamGroupOption struct {
 }
 
 type UpstreamVendorDetail struct {
-	Vendor   UpstreamVendor `json:"vendor"`
+	Vendor   UpstreamVendor  `json:"vendor"`
 	Entries  []UpstreamEntry `json:"entries"`
 	Warnings []string        `json:"warnings"`
 }

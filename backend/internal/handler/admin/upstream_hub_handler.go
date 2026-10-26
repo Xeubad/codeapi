@@ -4,8 +4,8 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
+	"github.com/Wei-Shaw/sub2api/internal/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -26,13 +26,13 @@ type upstreamVendorRequest struct {
 }
 
 type upstreamEntryRequest struct {
-	Name        string  `json:"name"`
-	Platform    string  `json:"platform"`
-	BaseURL     string  `json:"base_url"`
-	APIKey      string  `json:"api_key"`
-	Concurrency *int    `json:"concurrency"`
-	Priority    *int    `json:"priority"`
-	Schedulable *bool   `json:"schedulable"`
+	Name        string `json:"name"`
+	Platform    string `json:"platform"`
+	BaseURL     string `json:"base_url"`
+	APIKey      string `json:"api_key"`
+	Concurrency *int   `json:"concurrency"`
+	Priority    *int   `json:"priority"`
+	Schedulable *bool  `json:"schedulable"`
 }
 
 type upstreamEntryGroupEnabledRequest struct {

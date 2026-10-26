@@ -116,6 +116,13 @@
             </div>
             <div class="flex gap-2">
               <button class="btn btn-secondary btn-sm" @click="detail = null">{{ t('admin.upstreamHub.close') }}</button>
+              <button
+                class="btn btn-secondary btn-sm"
+                :disabled="selectedEntryIDs.length !== 1"
+                @click="openDuplicateDialog"
+              >
+                {{ t('admin.upstreamHub.duplicateSelected') }}
+              </button>
               <button class="btn btn-primary btn-sm" @click="openAddEntries">{{ t('admin.upstreamHub.addEntry') }}</button>
             </div>
           </div>
@@ -138,6 +145,14 @@
               <table class="table">
                 <thead>
                   <tr>
+                    <th class="w-8">
+                      <input
+                        type="checkbox"
+                        class="h-4 w-4"
+                        :checked="selectedEntryIDs.length > 0 && selectedEntryIDs.length === detail.entries.length"
+                        @change="toggleSelectAll"
+                      />
+                    </th>
                     <th>{{ t('admin.upstreamHub.entryName') }}</th>
                     <th>{{ t('admin.upstreamHub.platform') }}</th>
                     <th>Base URL</th>
@@ -151,6 +166,9 @@
                 <tbody>
                   <tr v-for="entry in detail.entries" :key="entry.account_id">
                     <td>
+                      <input v-model="selectedEntryIDs" type="checkbox" class="h-4 w-4" :value="entry.account_id" />
+                    </td>
+                    <td>
                       <div class="font-medium text-gray-900 dark:text-white">{{ entry.name }}</div>
                       <div class="text-xs text-gray-500">{{ entry.status }}</div>
                     </td>
@@ -160,7 +178,7 @@
                     <td>{{ entry.priority }}</td>
                     <td>
                       <button
-                        v-if="entry.groups.length === 0"
+                        v-if="groupRefs(entry).length === 0"
                         class="badge badge-gray"
                         @click="openGroups(entry)"
                       >
@@ -168,7 +186,7 @@
                       </button>
                       <div v-else class="flex flex-wrap gap-1">
                         <button
-                          v-for="group in entry.groups"
+                          v-for="group in groupRefs(entry)"
                           :key="group.group_id"
                           class="badge"
                           :class="group.enabled ? 'badge-success' : 'badge-gray'"
@@ -336,6 +354,38 @@
       </template>
     </BaseDialog>
 
+    <BaseDialog :show="showDuplicateDialog" :title="t('admin.upstreamHub.duplicateDialogTitle')" @close="showDuplicateDialog = false">
+      <div class="space-y-4">
+        <div>
+          <label class="input-label">{{ t('admin.upstreamHub.duplicateSource') }}</label>
+          <input class="input" type="text" :value="duplicateForm.sourceName" disabled />
+        </div>
+        <div>
+          <label class="input-label">{{ t('admin.upstreamHub.entryName') }}</label>
+          <input v-model="duplicateForm.name" class="input" type="text" />
+        </div>
+        <div>
+          <label class="input-label">{{ t('admin.upstreamHub.platform') }}</label>
+          <Select v-model="duplicateForm.platform" :options="platformOptions" />
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="input-label">{{ t('admin.upstreamHub.concurrency') }}</label>
+            <input v-model.number="duplicateForm.concurrency" class="input" type="number" min="1" />
+          </div>
+          <div>
+            <label class="input-label">{{ t('admin.upstreamHub.priority') }}</label>
+            <input v-model.number="duplicateForm.priority" class="input" type="number" />
+          </div>
+        </div>
+        <p class="input-hint">{{ t('admin.upstreamHub.duplicateHint') }}</p>
+      </div>
+      <template #footer>
+        <button class="btn btn-secondary" @click="showDuplicateDialog = false">{{ t('admin.upstreamHub.cancel') }}</button>
+        <button class="btn btn-primary" :disabled="saving" @click="saveDuplicate">{{ t('admin.upstreamHub.save') }}</button>
+      </template>
+    </BaseDialog>
+
     <ConfirmDialog
       :show="showDeleteConfirm"
       :title="t('admin.upstreamHub.delete')"
@@ -406,6 +456,17 @@ const entryForm = reactive({
   priority: 50
 })
 
+const selectedEntryIDs = ref<number[]>([])
+const showDuplicateDialog = ref(false)
+const duplicateForm = reactive({
+  sourceId: 0,
+  sourceName: '',
+  name: '',
+  platform: '',
+  concurrency: 1,
+  priority: 50
+})
+
 const showGroupsDialog = ref(false)
 const groupOptions = ref<UpstreamGroupOption[]>([])
 const selectedGroupIDs = ref<number[]>([])
@@ -426,6 +487,51 @@ const addRowsOverBudget = computed(() => {
   const existing = detail.value?.vendor.allocated_concurrency ?? 0
   return budget > 0 && existing + addRowsTotal.value > budget
 })
+
+function groupRefs(entry: UpstreamEntry): UpstreamEntryGroupRef[] {
+  return entry.groups || []
+}
+
+function toggleSelectAll(event: Event) {
+  const checked = (event.target as HTMLInputElement).checked
+  selectedEntryIDs.value = checked && detail.value ? detail.value.entries.map((entry) => entry.account_id) : []
+}
+
+function openDuplicateDialog() {
+  if (selectedEntryIDs.value.length !== 1 || !detail.value) {
+    appStore.showError(t('admin.upstreamHub.selectOneToDuplicate'))
+    return
+  }
+  const source = detail.value.entries.find((entry) => entry.account_id === selectedEntryIDs.value[0])
+  if (!source) return
+  duplicateForm.sourceId = source.account_id
+  duplicateForm.sourceName = source.name
+  duplicateForm.name = `${source.name}-copy`
+  duplicateForm.platform = source.platform
+  duplicateForm.concurrency = source.concurrency
+  duplicateForm.priority = source.priority
+  showDuplicateDialog.value = true
+}
+
+async function saveDuplicate() {
+  saving.value = true
+  try {
+    await upstreamHubAPI.duplicateEntry(duplicateForm.sourceId, {
+      name: duplicateForm.name,
+      platform: duplicateForm.platform,
+      concurrency: Number(duplicateForm.concurrency) || 1,
+      priority: Number(duplicateForm.priority) || 50
+    })
+    appStore.showSuccess(t('admin.upstreamHub.duplicateSuccess'))
+    showDuplicateDialog.value = false
+    selectedEntryIDs.value = []
+    await reloadDetail()
+  } catch (err) {
+    appStore.showError(errorMessage(err))
+  } finally {
+    saving.value = false
+  }
+}
 
 function errorMessage(err: unknown): string {
   return extractApiErrorMessage(err, t('admin.upstreamHub.saveFailed'))
@@ -592,7 +698,7 @@ async function toggleGroupEnabled(entry: UpstreamEntry, group: UpstreamEntryGrou
 
 async function openGroups(entry: UpstreamEntry) {
   groupsEntry.value = entry
-  selectedGroupIDs.value = entry.groups.map((group) => group.group_id)
+  selectedGroupIDs.value = groupRefs(entry).map((group) => group.group_id)
   try {
     const groups = await upstreamHubAPI.listGroups()
     groupOptions.value = groups.filter((group) => group.platform === entry.platform)
@@ -606,7 +712,7 @@ async function saveGroups() {
   if (!groupsEntry.value) return
   saving.value = true
   try {
-    const previous = groupsEntry.value.groups
+    const previous = groupRefs(groupsEntry.value)
     await upstreamHubAPI.setEntryGroups(groupsEntry.value.account_id, selectedGroupIDs.value)
     for (const group of previous) {
       if (!group.enabled && selectedGroupIDs.value.includes(group.group_id)) {

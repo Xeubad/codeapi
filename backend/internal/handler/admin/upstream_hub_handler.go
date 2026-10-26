@@ -176,6 +176,44 @@ func (h *UpstreamHubHandler) UpdateEntry(c *gin.Context) {
 	response.Success(c, entry)
 }
 
+type upstreamEntryDuplicateRequest struct {
+	Name        string `json:"name"`
+	Platform    string `json:"platform"`
+	Concurrency *int   `json:"concurrency"`
+	Priority    *int   `json:"priority"`
+}
+
+func (h *UpstreamHubHandler) DuplicateEntry(c *gin.Context) {
+	accountID, ok := parseIDParam(c, "id")
+	if !ok {
+		return
+	}
+	var req upstreamEntryDuplicateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	concurrency := 1
+	if req.Concurrency != nil {
+		concurrency = *req.Concurrency
+	}
+	priority := 50
+	if req.Priority != nil {
+		priority = *req.Priority
+	}
+	entry, err := h.svc.DuplicateEntry(c.Request.Context(), accountID, service.DuplicateUpstreamEntryInput{
+		Name:        req.Name,
+		Platform:    req.Platform,
+		Concurrency: concurrency,
+		Priority:    priority,
+	})
+	if err != nil {
+		writeUpstreamHubError(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, entry)
+}
+
 func (h *UpstreamHubHandler) DeleteEntry(c *gin.Context) {
 	accountID, ok := parseIDParam(c, "id")
 	if !ok {

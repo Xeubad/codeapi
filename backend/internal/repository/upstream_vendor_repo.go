@@ -119,6 +119,7 @@ func (r *upstreamVendorRepository) ListEntries(ctx context.Context, vendorID int
 			continue
 		}
 		entry := service.UpstreamEntry{
+			Groups:      []service.UpstreamEntryGroupRef{},
 			AccountID:   row.ID,
 			VendorID:    owner,
 			Name:        row.Name,

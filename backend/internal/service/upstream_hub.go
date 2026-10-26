@@ -144,7 +144,7 @@ func (s *UpstreamHubService) GetVendorDetail(ctx context.Context, id int64) (*Up
 		return nil, err
 	}
 	enrichUpstreamVendor(vendor, entries)
-	detail := &UpstreamVendorDetail{Vendor: *vendor, Entries: entries}
+	detail := &UpstreamVendorDetail{Vendor: *vendor, Entries: entries, Warnings: []string{}}
 	if vendor.ConcurrencyBudget > 0 && vendor.AllocatedConcurrency > vendor.ConcurrencyBudget {
 		detail.Warnings = append(detail.Warnings, fmt.Sprintf(
 			"各条目并发合计 %d 已超过厂家预算 %d，请调低条目并发或上调预算",
@@ -278,6 +278,63 @@ func (s *UpstreamHubService) UpdateEntry(ctx context.Context, accountID int64, i
 		}
 	}
 	return s.getEntry(ctx, accountID)
+}
+
+// DuplicateEntry 以现有条目为模板新建条目（同厂家）：服务端复制凭据，
+// API Key 不出后端；用于同 key 跨类别或同类别多条目场景。
+type DuplicateUpstreamEntryInput struct {
+	Name        string
+	Platform    string
+	Concurrency int
+	Priority    int
+}
+
+func (s *UpstreamHubService) DuplicateEntry(ctx context.Context, accountID int64, input DuplicateUpstreamEntryInput) (*UpstreamEntry, error) {
+	current, err := s.admin.GetAccount(ctx, accountID)
+	if err != nil {
+		return nil, err
+	}
+	vendorID, ok := upstreamVendorIDFromExtra(current.Extra)
+	if !ok {
+		return nil, ErrUpstreamEntryNotFound
+	}
+	name := strings.TrimSpace(input.Name)
+	if name == "" {
+		return nil, fmt.Errorf("entry name is required")
+	}
+	platform := strings.TrimSpace(input.Platform)
+	if platform == "" {
+		platform = current.Platform
+	}
+	if !domain.IsConcretePlatform(platform) {
+		return nil, fmt.Errorf("platform %q is not a concrete platform", platform)
+	}
+	if input.Concurrency < 1 {
+		return nil, fmt.Errorf("concurrency must be >= 1")
+	}
+	apiKey := current.GetCredential("api_key")
+	if apiKey == "" {
+		return nil, fmt.Errorf("source entry has no api key")
+	}
+	account, err := s.admin.CreateAccount(ctx, &CreateAccountInput{
+		Name:     name,
+		Platform: platform,
+		Type:     AccountTypeUpstream,
+		Credentials: map[string]any{
+			"api_key":  apiKey,
+			"base_url": current.GetCredential("base_url"),
+		},
+		Extra: map[string]any{
+			UpstreamVendorIDExtraKey: vendorID,
+		},
+		Concurrency:          input.Concurrency,
+		Priority:             input.Priority,
+		SkipDefaultGroupBind: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return s.getEntry(ctx, account.ID)
 }
 
 func (s *UpstreamHubService) DeleteEntry(ctx context.Context, accountID int64) error {

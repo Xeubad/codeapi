@@ -56,6 +56,13 @@ export default {
     entryUpdated: '条目已更新',
     entryDeleted: '条目已删除',
     loadFailed: '加载失败',
+    duplicate: '复制',
+    duplicateSelected: '复制所选',
+    duplicateDialogTitle: '复制条目',
+    duplicateHint: 'API Key 与 Base URL 由服务端复制，不回显、不暴露；可修改名称与平台，用于同 key 跨类别或同类别多条目。',
+    duplicateSource: '模板条目',
+    duplicateSuccess: '条目已复制',
+    selectOneToDuplicate: '请先勾选一条要复制的条目',
     fillRequiredFields: '请填写名称、Base URL 与 API Key',
     saveFailed: '保存失败',
     close: '关闭'

@@ -97,6 +97,18 @@ export async function updateEntry(accountId: number, payload: UpstreamEntryReque
   return data
 }
 
+export interface UpstreamEntryDuplicateRequest {
+  name: string
+  platform: string
+  concurrency?: number
+  priority?: number
+}
+
+export async function duplicateEntry(accountId: number, payload: UpstreamEntryDuplicateRequest): Promise<UpstreamEntry> {
+  const { data } = await apiClient.post<UpstreamEntry>(`/admin/upstream-entries/${accountId}/duplicate`, payload)
+  return data
+}
+
 export async function deleteEntry(accountId: number): Promise<void> {
   await apiClient.delete(`/admin/upstream-entries/${accountId}`)
 }
@@ -130,6 +142,7 @@ const upstreamHubAPI = {
   deleteVendor,
   createEntry,
   updateEntry,
+  duplicateEntry,
   deleteEntry,
   setEntrySchedulable,
   setEntryGroups,

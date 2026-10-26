@@ -56,6 +56,13 @@ export default {
     entryUpdated: 'Entry updated',
     entryDeleted: 'Entry deleted',
     loadFailed: 'Failed to load',
+    duplicate: 'Duplicate',
+    duplicateSelected: 'Duplicate selected',
+    duplicateDialogTitle: 'Duplicate entry',
+    duplicateHint: 'API key and base URL are copied server-side and never exposed. Change the name or platform to create a cross-category entry with the same key.',
+    duplicateSource: 'Source entry',
+    duplicateSuccess: 'Entry duplicated',
+    selectOneToDuplicate: 'Select exactly one entry to duplicate',
     fillRequiredFields: 'Name, base URL and API key are required',
     saveFailed: 'Failed to save',
     close: 'Close'

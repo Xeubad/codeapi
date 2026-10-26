@@ -66,6 +66,7 @@ export default {
     apiKeyKeepPlaceholder: '留空保持不变',
     platformLockedHint: '平台创建后不可修改',
     addOrEdit: '添加/编辑',
+    overBudgetBlocked: '各 Key 并发合计 {used} 已超过总并发 {total}，请调整后再保存',
     fillRequiredFields: '请填写名称、Base URL 与 API Key',
     saveFailed: '保存失败',
     close: '关闭'

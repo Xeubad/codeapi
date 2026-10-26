@@ -66,6 +66,7 @@ export default {
     apiKeyKeepPlaceholder: 'Leave blank to keep',
     platformLockedHint: 'Platform is immutable after creation',
     addOrEdit: 'Add / edit',
+    overBudgetBlocked: 'Total key concurrency {used} exceeds the budget {total}; adjust before saving',
     fillRequiredFields: 'Name, base URL and API key are required',
     saveFailed: 'Failed to save',
     close: 'Close'

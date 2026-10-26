@@ -563,6 +563,13 @@ function removeRow(row: EntryRow, index: number) {
 
 async function saveEntryRows() {
   if (!detail.value) return
+  const budget = detail.value.vendor.concurrency_budget
+  if (budget > 0 && effectiveAllocated.value > budget) {
+    appStore.showError(
+      t('admin.upstreamHub.overBudgetBlocked', { used: effectiveAllocated.value, total: budget })
+    )
+    return
+  }
   saving.value = true
   try {
     for (const row of entryRows.value) {

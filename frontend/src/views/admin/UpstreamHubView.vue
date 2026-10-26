@@ -101,13 +101,7 @@
       </div>
 
       <!-- Vendor detail: entries -->
-      <Transition
-        enter-active-class="transition duration-200 ease-out"
-        enter-from-class="opacity-0 -translate-y-1"
-        leave-active-class="transition duration-150 ease-in"
-        leave-to-class="opacity-0 -translate-y-1"
-      >
-        <div v-if="detail" class="space-y-6">
+      <div v-if="detail" class="space-y-6">
           <div class="card">
             <div class="card-header flex flex-wrap items-center justify-between gap-2">
               <div>
@@ -199,8 +193,7 @@
               </div>
             </div>
           </div>
-        </div>
-      </Transition>
+      </div>
     </div>
 
     <!-- Vendor dialog -->

@@ -212,7 +212,8 @@
     </BaseDialog>
 
     <!-- Entries dialog: add / edit / copy in one layout -->
-    <BaseDialog :show="showEntryDialog" :title="t('admin.upstreamHub.addOrEdit')" width="extra-wide" @close="closeEntriesDialog">
+    <BaseDialog :show="showEntryDialog" :title="t('admin.upstreamHub.addOrEdit')" width="full" @close="closeEntriesDialog">
+      <div v-if="anyRowDropdownOpen" class="fixed inset-0 z-30" @click="closeAllDropdowns"></div>
       <div class="space-y-3">
         <div class="table-container">
           <table class="table">
@@ -246,54 +247,52 @@
                 </td>
                 <td><input v-model.number="row.concurrency" class="input" type="number" min="1" /></td>
                 <td><input v-model.number="row.priority" class="input" type="number" /></td>
-                <td>
+                <td class="relative">
                   <button
                     class="badge"
                     :class="row.groupIds.length ? 'badge-primary' : 'badge-gray'"
-                    @click="row.expanded = !row.expanded"
+                    @click="toggleRowDropdown(row, $event)"
                   >
                     {{ row.groupIds.length }} {{ t('admin.upstreamHub.groups') }}
                   </button>
+                  <div
+                    v-if="row.expanded"
+                    class="dropdown fixed z-40 w-80"
+                    :style="{ top: row.dropdownTop + 'px', right: row.dropdownRight + 'px' }"
+                  >
+                    <div class="max-h-72 overflow-y-auto py-1">
+                      <div
+                        v-for="group in groupsForRow(row)"
+                        :key="group.id"
+                        class="dropdown-item w-full justify-between"
+                      >
+                        <label class="flex min-w-0 items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            class="h-4 w-4"
+                            :checked="row.groupIds.includes(group.id)"
+                            @change="toggleRowGroup(row, group.id)"
+                          />
+                          <span class="truncate">{{ group.name }}</span>
+                          <span class="badge badge-primary">{{ group.platform }}</span>
+                        </label>
+                        <Toggle
+                          v-if="row.groupIds.includes(group.id)"
+                          :model-value="row.groupEnabled[group.id] !== false"
+                          @update:model-value="(v) => (row.groupEnabled[group.id] = v)"
+                        />
+                      </div>
+                      <div v-if="groupsForRow(row).length === 0" class="px-4 py-2 text-xs text-gray-500">
+                        {{ t('admin.upstreamHub.noGroupsForPlatform') }}
+                      </div>
+                    </div>
+                  </div>
                 </td>
                 <td class="text-right whitespace-nowrap">
                   <button class="btn btn-sm btn-secondary" @click="copyRow(row)">{{ t('admin.upstreamHub.duplicate') }}</button>
                   <button class="btn btn-sm btn-ghost ml-1 text-red-600" @click="removeRow(row, index)">
                     {{ t('admin.upstreamHub.delete') }}
                   </button>
-                </td>
-              </tr>
-              <tr v-if="row.expanded">
-                <td :colspan="8" class="bg-gray-50/70 dark:bg-dark-800/40">
-                  <div class="space-y-2 py-1">
-                    <div
-                      v-for="group in groupsForRow(row)"
-                      :key="group.id"
-                      class="flex items-center justify-between gap-3"
-                    >
-                      <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                        <input
-                          type="checkbox"
-                          class="h-4 w-4"
-                          :checked="row.groupIds.includes(group.id)"
-                          @change="toggleRowGroup(row, group.id)"
-                        />
-                        {{ group.name }}
-                        <span class="badge badge-primary">{{ group.platform }}</span>
-                      </label>
-                      <div v-if="row.groupIds.includes(group.id)" class="flex items-center gap-2">
-                        <span class="text-xs text-gray-500 dark:text-gray-400">
-                          {{ row.groupEnabled[group.id] === false ? t('admin.upstreamHub.groupDisabled') : t('admin.upstreamHub.groupEnabled') }}
-                        </span>
-                        <Toggle
-                          :model-value="row.groupEnabled[group.id] !== false"
-                          @update:model-value="(v) => (row.groupEnabled[group.id] = v)"
-                        />
-                      </div>
-                    </div>
-                    <div v-if="groupsForRow(row).length === 0" class="text-xs text-gray-500">
-                      {{ t('admin.upstreamHub.noGroupsForPlatform') }}
-                    </div>
-                  </div>
                 </td>
               </tr>
               </template>
@@ -387,6 +386,8 @@ interface EntryRow {
   groupIds: number[]
   groupEnabled: Record<number, boolean>
   expanded: boolean
+  dropdownTop: number
+  dropdownRight: number
 }
 const showEntryDialog = ref(false)
 const entryRows = ref<EntryRow[]>([])
@@ -426,7 +427,9 @@ function entryToRow(entry: UpstreamEntry): EntryRow {
     priority: entry.priority,
     groupIds: groupRefs(entry).map((group) => group.group_id),
     groupEnabled,
-    expanded: false
+    expanded: false,
+    dropdownTop: 0,
+    dropdownRight: 0
   }
 }
 
@@ -538,7 +541,9 @@ function blankRow(): EntryRow {
     priority: 50,
     groupIds: [],
     groupEnabled: {},
-    expanded: false
+    expanded: false,
+    dropdownTop: 0,
+    dropdownRight: 0
   }
 }
 
@@ -548,6 +553,23 @@ function addEntryRow() {
 
 function groupsForRow(row: EntryRow): UpstreamGroupOption[] {
   return groupOptions.value.filter((group) => group.platform === row.platform)
+}
+
+const anyRowDropdownOpen = computed(() => entryRows.value.some((row) => row.expanded))
+
+function closeAllDropdowns() {
+  for (const item of entryRows.value) item.expanded = false
+}
+
+function toggleRowDropdown(row: EntryRow, event: Event) {
+  const next = !row.expanded
+  closeAllDropdowns()
+  if (next) {
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+    row.dropdownTop = rect.bottom + 4
+    row.dropdownRight = Math.max(8, window.innerWidth - rect.right)
+  }
+  row.expanded = next
 }
 
 function toggleRowGroup(row: EntryRow, groupId: number) {
@@ -587,6 +609,7 @@ function closeEntriesDialog() {
   showEntryDialog.value = false
   entryRows.value = []
   pendingDeletes.value = []
+  groupOptions.value = []
 }
 
 async function copyRow(row: EntryRow) {
@@ -600,6 +623,8 @@ async function copyRow(row: EntryRow) {
         priority: Number(row.priority) || 50
       })
       const copied = entryToRow(created)
+      copied.dropdownTop = 0
+      copied.dropdownRight = 0
       copied.groupIds = [...row.groupIds]
       copied.groupEnabled = { ...row.groupEnabled }
       entryRows.value.push(copied)
@@ -615,7 +640,9 @@ async function copyRow(row: EntryRow) {
     name: row.name ? `${row.name}-copy` : row.name,
     groupIds: [...row.groupIds],
     groupEnabled: { ...row.groupEnabled },
-    expanded: false
+    expanded: false,
+    dropdownTop: 0,
+    dropdownRight: 0
   })
 }
 

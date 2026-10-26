@@ -161,27 +161,19 @@
                       <td>{{ entry.concurrency }}</td>
                       <td>{{ entry.priority }}</td>
                       <td>
-                        <button
-                          v-if="groupRefs(entry).length === 0"
-                          class="badge badge-gray"
-                          @click="openGroups(entry)"
-                        >
+                        <span v-if="groupRefs(entry).length === 0" class="badge badge-gray">
                           {{ t('admin.upstreamHub.noGroups') }}
-                        </button>
+                        </span>
                         <div v-else class="flex flex-wrap gap-1">
-                          <button
+                          <span
                             v-for="group in groupRefs(entry)"
                             :key="group.group_id"
                             class="badge"
                             :class="group.enabled ? 'badge-success' : 'badge-gray'"
                             :title="group.enabled ? t('admin.upstreamHub.groupEnabled') : t('admin.upstreamHub.groupDisabled')"
-                            @click="toggleGroupEnabled(entry, group)"
                           >
                             {{ group.group_name }}
-                          </button>
-                          <button class="badge badge-primary" @click="openGroups(entry)">
-                            {{ t('admin.upstreamHub.manageGroups') }}
-                          </button>
+                          </span>
                         </div>
                       </td>
                       <td>
@@ -232,11 +224,13 @@
                 <th>{{ t('admin.upstreamHub.apiKey') }}</th>
                 <th>{{ t('admin.upstreamHub.concurrency') }}</th>
                 <th>{{ t('admin.upstreamHub.priority') }}</th>
+                <th>{{ t('admin.upstreamHub.groups') }}</th>
                 <th class="text-right">{{ t('common.actions') }}</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="(row, index) in entryRows" :key="index">
+              <template v-for="(row, index) in entryRows" :key="index">
+              <tr>
                 <td><input v-model="row.name" class="input" type="text" :placeholder="t('admin.upstreamHub.entryNamePlaceholder')" /></td>
                 <td>
                   <Select v-model="row.platform" :options="platformOptions" :disabled="!!row.accountId" />
@@ -252,6 +246,15 @@
                 </td>
                 <td><input v-model.number="row.concurrency" class="input" type="number" min="1" /></td>
                 <td><input v-model.number="row.priority" class="input" type="number" /></td>
+                <td>
+                  <button
+                    class="badge"
+                    :class="row.groupIds.length ? 'badge-primary' : 'badge-gray'"
+                    @click="row.expanded = !row.expanded"
+                  >
+                    {{ row.groupIds.length }} {{ t('admin.upstreamHub.groups') }}
+                  </button>
+                </td>
                 <td class="text-right whitespace-nowrap">
                   <button class="btn btn-sm btn-secondary" @click="copyRow(row)">{{ t('admin.upstreamHub.duplicate') }}</button>
                   <button class="btn btn-sm btn-ghost ml-1 text-red-600" @click="removeRow(row, index)">
@@ -259,6 +262,41 @@
                   </button>
                 </td>
               </tr>
+              <tr v-if="row.expanded">
+                <td :colspan="8" class="bg-gray-50/70 dark:bg-dark-800/40">
+                  <div class="space-y-2 py-1">
+                    <div
+                      v-for="group in groupsForRow(row)"
+                      :key="group.id"
+                      class="flex items-center justify-between gap-3"
+                    >
+                      <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                        <input
+                          type="checkbox"
+                          class="h-4 w-4"
+                          :checked="row.groupIds.includes(group.id)"
+                          @change="toggleRowGroup(row, group.id)"
+                        />
+                        {{ group.name }}
+                        <span class="badge badge-primary">{{ group.platform }}</span>
+                      </label>
+                      <div v-if="row.groupIds.includes(group.id)" class="flex items-center gap-2">
+                        <span class="text-xs text-gray-500 dark:text-gray-400">
+                          {{ row.groupEnabled[group.id] === false ? t('admin.upstreamHub.groupDisabled') : t('admin.upstreamHub.groupEnabled') }}
+                        </span>
+                        <Toggle
+                          :model-value="row.groupEnabled[group.id] !== false"
+                          @update:model-value="(v) => (row.groupEnabled[group.id] = v)"
+                        />
+                      </div>
+                    </div>
+                    <div v-if="groupsForRow(row).length === 0" class="text-xs text-gray-500">
+                      {{ t('admin.upstreamHub.noGroupsForPlatform') }}
+                    </div>
+                  </div>
+                </td>
+              </tr>
+              </template>
             </tbody>
           </table>
         </div>
@@ -288,30 +326,6 @@
       </template>
     </BaseDialog>
 
-    <!-- Groups dialog -->
-    <BaseDialog :show="showGroupsDialog" :title="t('admin.upstreamHub.selectGroups')" @close="showGroupsDialog = false">
-      <p class="mb-3 text-xs text-gray-500 dark:text-gray-400">{{ t('admin.upstreamHub.selectGroupsHint') }}</p>
-      <div v-if="groupOptions.length === 0" class="text-sm text-gray-500">
-        {{ t('admin.upstreamHub.noGroupsForPlatform') }}
-      </div>
-      <div v-else class="space-y-2">
-        <label
-          v-for="group in groupOptions"
-          :key="group.id"
-          class="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2 dark:border-dark-700"
-        >
-          <span class="flex items-center gap-2 text-sm">
-            <input v-model="selectedGroupIDs" type="checkbox" :value="group.id" class="h-4 w-4" />
-            {{ group.name }}
-            <span class="badge badge-primary">{{ group.platform }}</span>
-          </span>
-        </label>
-      </div>
-      <template #footer>
-        <button class="btn btn-secondary" @click="showGroupsDialog = false">{{ t('admin.upstreamHub.cancel') }}</button>
-        <button class="btn btn-primary" :disabled="saving" @click="saveGroups">{{ t('admin.upstreamHub.save') }}</button>
-      </template>
-    </BaseDialog>
 
 
     <ConfirmDialog
@@ -370,15 +384,14 @@ interface EntryRow {
   api_key: string
   concurrency: number
   priority: number
+  groupIds: number[]
+  groupEnabled: Record<number, boolean>
+  expanded: boolean
 }
 const showEntryDialog = ref(false)
 const entryRows = ref<EntryRow[]>([])
 const pendingDeletes = ref<Array<{ accountId: number; concurrency: number }>>([])
-
-const showGroupsDialog = ref(false)
 const groupOptions = ref<UpstreamGroupOption[]>([])
-const selectedGroupIDs = ref<number[]>([])
-const groupsEntry = ref<UpstreamEntry | null>(null)
 
 const showDeleteConfirm = ref(false)
 const deleteTarget = ref<{ type: 'vendor'; id: number; name: string } | null>(null)
@@ -399,6 +412,10 @@ function groupRefs(entry: UpstreamEntry): UpstreamEntryGroupRef[] {
 }
 
 function entryToRow(entry: UpstreamEntry): EntryRow {
+  const groupEnabled: Record<number, boolean> = {}
+  for (const group of groupRefs(entry)) {
+    groupEnabled[group.group_id] = group.enabled
+  }
   return {
     accountId: entry.account_id,
     name: entry.name,
@@ -406,7 +423,10 @@ function entryToRow(entry: UpstreamEntry): EntryRow {
     base_url: entry.base_url,
     api_key: '',
     concurrency: entry.concurrency,
-    priority: entry.priority
+    priority: entry.priority,
+    groupIds: groupRefs(entry).map((group) => group.group_id),
+    groupEnabled,
+    expanded: false
   }
 }
 
@@ -508,22 +528,58 @@ async function confirmDelete() {
 }
 
 // ---------- entries dialog ----------
-function addEntryRow() {
-  entryRows.value.push({
+function blankRow(): EntryRow {
+  return {
     name: '',
     platform: detail.value?.entries[0]?.platform || platformOptions.value[0]?.value || 'openai',
     base_url: '',
     api_key: '',
     concurrency: 1,
-    priority: 50
-  })
+    priority: 50,
+    groupIds: [],
+    groupEnabled: {},
+    expanded: false
+  }
 }
 
-function openEntriesDialog() {
+function addEntryRow() {
+  entryRows.value.push(blankRow())
+}
+
+function groupsForRow(row: EntryRow): UpstreamGroupOption[] {
+  return groupOptions.value.filter((group) => group.platform === row.platform)
+}
+
+function toggleRowGroup(row: EntryRow, groupId: number) {
+  const index = row.groupIds.indexOf(groupId)
+  if (index >= 0) {
+    row.groupIds.splice(index, 1)
+    delete row.groupEnabled[groupId]
+  } else {
+    row.groupIds.push(groupId)
+    row.groupEnabled[groupId] = true
+  }
+}
+
+async function applyRowGroups(accountId: number, row: EntryRow) {
+  await upstreamHubAPI.setEntryGroups(accountId, row.groupIds)
+  for (const groupId of row.groupIds) {
+    if (row.groupEnabled[groupId] === false) {
+      await upstreamHubAPI.setEntryGroupEnabled(accountId, groupId, false)
+    }
+  }
+}
+
+async function openEntriesDialog() {
   if (!detail.value) return
   pendingDeletes.value = []
   entryRows.value = detail.value.entries.map(entryToRow)
   if (entryRows.value.length === 0) addEntryRow()
+  try {
+    groupOptions.value = await upstreamHubAPI.listGroups()
+  } catch (err) {
+    appStore.showError(extractApiErrorMessage(err, t('admin.upstreamHub.loadFailed')))
+  }
   showEntryDialog.value = true
 }
 
@@ -543,14 +599,24 @@ async function copyRow(row: EntryRow) {
         concurrency: Number(row.concurrency) || 1,
         priority: Number(row.priority) || 50
       })
-      entryRows.value.push(entryToRow(created))
+      const copied = entryToRow(created)
+      copied.groupIds = [...row.groupIds]
+      copied.groupEnabled = { ...row.groupEnabled }
+      entryRows.value.push(copied)
       appStore.showSuccess(t('admin.upstreamHub.duplicateSuccess'))
     } catch (err) {
       appStore.showError(errorMessage(err))
     }
     return
   }
-  entryRows.value.push({ ...row, name: row.name ? `${row.name}-copy` : row.name })
+  entryRows.value.push({
+    ...row,
+    accountId: undefined,
+    name: row.name ? `${row.name}-copy` : row.name,
+    groupIds: [...row.groupIds],
+    groupEnabled: { ...row.groupEnabled },
+    expanded: false
+  })
 }
 
 function removeRow(row: EntryRow, index: number) {
@@ -583,11 +649,12 @@ async function saveEntryRows() {
           concurrency: Number(row.concurrency) || 1,
           priority: Number(row.priority) || 50
         })
+        await applyRowGroups(row.accountId, row)
       } else {
         if (!row.api_key.trim()) {
           throw new Error(t('admin.upstreamHub.fillRequiredFields'))
         }
-        await upstreamHubAPI.createEntry(detail.value.vendor.id, {
+        const created = await upstreamHubAPI.createEntry(detail.value.vendor.id, {
           name: row.name,
           platform: row.platform,
           base_url: row.base_url,
@@ -595,6 +662,7 @@ async function saveEntryRows() {
           concurrency: Number(row.concurrency) || 1,
           priority: Number(row.priority) || 50
         })
+        await applyRowGroups(created.account_id, row)
       }
     }
     for (const removed of pendingDeletes.value) {
@@ -621,51 +689,8 @@ async function toggleSchedulable(entry: UpstreamEntry, value: boolean) {
   }
 }
 
-async function toggleGroupEnabled(entry: UpstreamEntry, group: UpstreamEntryGroupRef) {
-  try {
-    await upstreamHubAPI.setEntryGroupEnabled(entry.account_id, group.group_id, !group.enabled)
-    group.enabled = !group.enabled
-  } catch (err) {
-    appStore.showError(errorMessage(err))
-  }
-}
 
-async function openGroups(entry: UpstreamEntry) {
-  groupsEntry.value = entry
-  selectedGroupIDs.value = groupRefs(entry).map((group) => group.group_id)
-  try {
-    const groups = await upstreamHubAPI.listGroups()
-    groupOptions.value = groups.filter((group) => group.platform === entry.platform)
-    showGroupsDialog.value = true
-  } catch (err) {
-    appStore.showError(extractApiErrorMessage(err, t('admin.upstreamHub.loadFailed')))
-  }
-}
 
-async function saveGroups() {
-  if (!groupsEntry.value) return
-  saving.value = true
-  try {
-    const previous = groupRefs(groupsEntry.value)
-    await upstreamHubAPI.setEntryGroups(groupsEntry.value.account_id, selectedGroupIDs.value)
-    for (const group of previous) {
-      if (!group.enabled && selectedGroupIDs.value.includes(group.group_id)) {
-        await upstreamHubAPI.setEntryGroupEnabled(groupsEntry.value.account_id, group.group_id, false)
-      }
-    }
-    appStore.showSuccess(t('admin.upstreamHub.entryUpdated'))
-    showGroupsDialog.value = false
-    await refreshDetailEntries()
-    if (detail.value) {
-      const refreshed = detail.value.entries.find((item) => item.account_id === groupsEntry.value?.account_id)
-      groupsEntry.value = refreshed || null
-    }
-  } catch (err) {
-    appStore.showError(errorMessage(err))
-  } finally {
-    saving.value = false
-  }
-}
 
 onMounted(load)
 </script>

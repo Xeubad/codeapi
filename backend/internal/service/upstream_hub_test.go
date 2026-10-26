@@ -1,0 +1,159 @@
+package service
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
+)
+
+type stubUpstreamVendorRepo struct {
+	vendors []UpstreamVendor
+	entries map[int64][]UpstreamEntry
+	created *UpstreamVendor
+	updated *UpstreamVendor
+	deleted int64
+}
+
+func (s *stubUpstreamVendorRepo) List(context.Context) ([]UpstreamVendor, error) {
+	return s.vendors, nil
+}
+
+func (s *stubUpstreamVendorRepo) GetByID(_ context.Context, id int64) (*UpstreamVendor, error) {
+	for i := range s.vendors {
+		if s.vendors[i].ID == id {
+			vendor := s.vendors[i]
+			return &vendor, nil
+		}
+	}
+	return nil, ErrUpstreamVendorNotFound
+}
+
+func (s *stubUpstreamVendorRepo) Create(_ context.Context, name string, budget int, _ *string) (*UpstreamVendor, error) {
+	s.created = &UpstreamVendor{ID: 7, Name: name, ConcurrencyBudget: budget, CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	return s.created, nil
+}
+
+func (s *stubUpstreamVendorRepo) Update(_ context.Context, id int64, name string, budget int, _ *string) (*UpstreamVendor, error) {
+	s.updated = &UpstreamVendor{ID: id, Name: name, ConcurrencyBudget: budget}
+	return s.updated, nil
+}
+
+func (s *stubUpstreamVendorRepo) SoftDelete(_ context.Context, id int64) error {
+	s.deleted = id
+	return nil
+}
+
+func (s *stubUpstreamVendorRepo) ListEntries(_ context.Context, vendorID int64) ([]UpstreamEntry, error) {
+	return s.entries[vendorID], nil
+}
+
+func (s *stubUpstreamVendorRepo) ListGroups(context.Context) ([]UpstreamGroupOption, error) {
+	return nil, nil
+}
+
+func (s *stubUpstreamVendorRepo) SetEntryGroupEnabled(context.Context, int64, int64, bool) error {
+	return nil
+}
+
+func (s *stubUpstreamVendorRepo) SetEntryGroups(context.Context, int64, []int64) error {
+	return nil
+}
+
+func TestUpstreamVendorIDFromExtra(t *testing.T) {
+	tests := []struct {
+		name  string
+		extra map[string]any
+		want  int64
+		ok    bool
+	}{
+		{name: "float64 from jsonb", extra: map[string]any{UpstreamVendorIDExtraKey: float64(12)}, want: 12, ok: true},
+		{name: "int64", extra: map[string]any{UpstreamVendorIDExtraKey: int64(3)}, want: 3, ok: true},
+		{name: "string", extra: map[string]any{UpstreamVendorIDExtraKey: "9"}, want: 9, ok: true},
+		{name: "missing", extra: map[string]any{}, ok: false},
+		{name: "zero", extra: map[string]any{UpstreamVendorIDExtraKey: float64(0)}, ok: false},
+		{name: "nil map", extra: nil, ok: false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := upstreamVendorIDFromExtra(tc.extra)
+			require.Equal(t, tc.ok, ok)
+			require.Equal(t, tc.want, got)
+		})
+	}
+}
+
+func TestNormalizeUpstreamBaseURL(t *testing.T) {
+	got, err := normalizeUpstreamBaseURL("  https://api.example.com/v1/  ")
+	require.NoError(t, err)
+	require.Equal(t, "https://api.example.com/v1", got)
+
+	for _, invalid := range []string{"", "ftp://example.com", "not a url", "//example.com"} {
+		_, err := normalizeUpstreamBaseURL(invalid)
+		require.Error(t, err, invalid)
+	}
+}
+
+func TestEnrichUpstreamVendor(t *testing.T) {
+	vendor := UpstreamVendor{ConcurrencyBudget: 50}
+	entries := []UpstreamEntry{
+		{Concurrency: 30, Groups: []UpstreamEntryGroupRef{{GroupID: 1}, {GroupID: 2}}},
+		{Concurrency: 30, Groups: []UpstreamEntryGroupRef{{GroupID: 2}}},
+	}
+	enrichUpstreamVendor(&vendor, entries)
+	require.Equal(t, 2, vendor.EntryCount)
+	require.Equal(t, 60, vendor.AllocatedConcurrency)
+	require.Equal(t, 2, vendor.ReferencedGroupCount)
+	require.True(t, vendor.OverBudget)
+}
+
+func TestEnrichUpstreamVendorBudgetZeroDisablesLimit(t *testing.T) {
+	vendor := UpstreamVendor{ConcurrencyBudget: 0}
+	enrichUpstreamVendor(&vendor, []UpstreamEntry{{Concurrency: 100}})
+	require.False(t, vendor.OverBudget)
+}
+
+func TestCreateVendorValidation(t *testing.T) {
+	svc := NewUpstreamHubService(&stubUpstreamVendorRepo{}, nil)
+
+	_, err := svc.CreateVendor(context.Background(), CreateUpstreamVendorInput{Name: "   "})
+	require.Error(t, err)
+
+	_, err = svc.CreateVendor(context.Background(), CreateUpstreamVendorInput{Name: "A", ConcurrencyBudget: -1})
+	require.Error(t, err)
+
+	vendor, err := svc.CreateVendor(context.Background(), CreateUpstreamVendorInput{Name: " 中转商 A ", ConcurrencyBudget: 50})
+	require.NoError(t, err)
+	require.Equal(t, "中转商 A", vendor.Name)
+	require.Equal(t, 50, vendor.ConcurrencyBudget)
+}
+
+func TestDeleteVendorRefusesWithEntries(t *testing.T) {
+	repo := &stubUpstreamVendorRepo{
+		vendors: []UpstreamVendor{{ID: 1, Name: "A"}},
+		entries: map[int64][]UpstreamEntry{1: {{AccountID: 9}}},
+	}
+	svc := NewUpstreamHubService(repo, nil)
+	require.ErrorIs(t, svc.DeleteVendor(context.Background(), 1), ErrUpstreamVendorNotEmpty)
+
+	emptyRepo := &stubUpstreamVendorRepo{
+		vendors: []UpstreamVendor{{ID: 2, Name: "B"}},
+		entries: map[int64][]UpstreamEntry{},
+	}
+	svc = NewUpstreamHubService(emptyRepo, nil)
+	require.NoError(t, svc.DeleteVendor(context.Background(), 2))
+	require.Equal(t, int64(2), emptyRepo.deleted)
+}
+
+func TestGetVendorDetailWarnsOverBudget(t *testing.T) {
+	repo := &stubUpstreamVendorRepo{
+		vendors: []UpstreamVendor{{ID: 3, Name: "C", ConcurrencyBudget: 10}},
+		entries: map[int64][]UpstreamEntry{3: {{AccountID: 1, Concurrency: 8}, {AccountID: 2, Concurrency: 8}}},
+	}
+	svc := NewUpstreamHubService(repo, nil)
+	detail, err := svc.GetVendorDetail(context.Background(), 3)
+	require.NoError(t, err)
+	require.True(t, detail.Vendor.OverBudget)
+	require.Len(t, detail.Warnings, 1)
+}

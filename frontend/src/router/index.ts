@@ -449,6 +449,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/upstream-hub',
+    name: 'AdminUpstreamHub',
+    component: () => import('@/views/admin/UpstreamHubView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Upstream Hub',
+      titleKey: 'admin.upstreamHub.title',
+      descriptionKey: 'admin.upstreamHub.description'
+    }
+  },
+  {
     path: '/admin/channels',
     redirect: '/admin/channels/pricing'
   },

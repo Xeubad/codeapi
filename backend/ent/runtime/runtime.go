@@ -37,6 +37,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/setting"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionplan"
 	"github.com/Wei-Shaw/sub2api/ent/tlsfingerprintprofile"
+	"github.com/Wei-Shaw/sub2api/ent/upstreamvendor"
 	"github.com/Wei-Shaw/sub2api/ent/usagecleanuptask"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
@@ -262,8 +263,12 @@ func init() {
 	accountgroupDescPriority := accountgroupFields[2].Descriptor()
 	// accountgroup.DefaultPriority holds the default value on creation for the priority field.
 	accountgroup.DefaultPriority = accountgroupDescPriority.Default.(int)
+	// accountgroupDescEnabled is the schema descriptor for enabled field.
+	accountgroupDescEnabled := accountgroupFields[3].Descriptor()
+	// accountgroup.DefaultEnabled holds the default value on creation for the enabled field.
+	accountgroup.DefaultEnabled = accountgroupDescEnabled.Default.(bool)
 	// accountgroupDescCreatedAt is the schema descriptor for created_at field.
-	accountgroupDescCreatedAt := accountgroupFields[3].Descriptor()
+	accountgroupDescCreatedAt := accountgroupFields[4].Descriptor()
 	// accountgroup.DefaultCreatedAt holds the default value on creation for the created_at field.
 	accountgroup.DefaultCreatedAt = accountgroupDescCreatedAt.Default.(func() time.Time)
 	announcementFields := schema.Announcement{}.Fields()
@@ -1951,6 +1956,49 @@ func init() {
 	tlsfingerprintprofileDescEnableGrease := tlsfingerprintprofileFields[2].Descriptor()
 	// tlsfingerprintprofile.DefaultEnableGrease holds the default value on creation for the enable_grease field.
 	tlsfingerprintprofile.DefaultEnableGrease = tlsfingerprintprofileDescEnableGrease.Default.(bool)
+	upstreamvendorMixin := schema.UpstreamVendor{}.Mixin()
+	upstreamvendorMixinHooks1 := upstreamvendorMixin[1].Hooks()
+	upstreamvendor.Hooks[0] = upstreamvendorMixinHooks1[0]
+	upstreamvendorMixinInters1 := upstreamvendorMixin[1].Interceptors()
+	upstreamvendor.Interceptors[0] = upstreamvendorMixinInters1[0]
+	upstreamvendorMixinFields0 := upstreamvendorMixin[0].Fields()
+	_ = upstreamvendorMixinFields0
+	upstreamvendorFields := schema.UpstreamVendor{}.Fields()
+	_ = upstreamvendorFields
+	// upstreamvendorDescCreatedAt is the schema descriptor for created_at field.
+	upstreamvendorDescCreatedAt := upstreamvendorMixinFields0[0].Descriptor()
+	// upstreamvendor.DefaultCreatedAt holds the default value on creation for the created_at field.
+	upstreamvendor.DefaultCreatedAt = upstreamvendorDescCreatedAt.Default.(func() time.Time)
+	// upstreamvendorDescUpdatedAt is the schema descriptor for updated_at field.
+	upstreamvendorDescUpdatedAt := upstreamvendorMixinFields0[1].Descriptor()
+	// upstreamvendor.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	upstreamvendor.DefaultUpdatedAt = upstreamvendorDescUpdatedAt.Default.(func() time.Time)
+	// upstreamvendor.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	upstreamvendor.UpdateDefaultUpdatedAt = upstreamvendorDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// upstreamvendorDescName is the schema descriptor for name field.
+	upstreamvendorDescName := upstreamvendorFields[0].Descriptor()
+	// upstreamvendor.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	upstreamvendor.NameValidator = func() func(string) error {
+		validators := upstreamvendorDescName.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(name string) error {
+			for _, fn := range fns {
+				if err := fn(name); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// upstreamvendorDescConcurrencyBudget is the schema descriptor for concurrency_budget field.
+	upstreamvendorDescConcurrencyBudget := upstreamvendorFields[1].Descriptor()
+	// upstreamvendor.DefaultConcurrencyBudget holds the default value on creation for the concurrency_budget field.
+	upstreamvendor.DefaultConcurrencyBudget = upstreamvendorDescConcurrencyBudget.Default.(int)
+	// upstreamvendor.ConcurrencyBudgetValidator is a validator for the "concurrency_budget" field. It is called by the builders before save.
+	upstreamvendor.ConcurrencyBudgetValidator = upstreamvendorDescConcurrencyBudget.Validators[0].(func(int) error)
 	usagecleanuptaskMixin := schema.UsageCleanupTask{}.Mixin()
 	usagecleanuptaskMixinFields0 := usagecleanuptaskMixin[0].Fields()
 	_ = usagecleanuptaskMixinFields0

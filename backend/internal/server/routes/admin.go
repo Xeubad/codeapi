@@ -101,7 +101,8 @@ func RegisterAdminRoutes(
 		registerErrorPassthroughRoutes(admin, h)
 
 		// TLS 指纹模板管理
-		registerTLSFingerprintProfileRoutes(admin, h)
+		registerUpstreamHubRoutes(admin, h)
+	registerTLSFingerprintProfileRoutes(admin, h)
 
 		// 本地进程插件管理
 		registerPluginRoutes(admin, h, stepUpAuth)
@@ -746,6 +747,27 @@ func registerErrorPassthroughRoutes(admin *gin.RouterGroup, h *handler.Handlers)
 		rules.PUT("/:id", h.Admin.ErrorPassthrough.Update)
 		rules.DELETE("/:id", h.Admin.ErrorPassthrough.Delete)
 	}
+}
+
+func registerUpstreamHubRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	vendors := admin.Group("/upstream-vendors")
+	{
+		vendors.GET("", h.Admin.UpstreamHub.ListVendors)
+		vendors.GET("/:id", h.Admin.UpstreamHub.GetVendor)
+		vendors.POST("", h.Admin.UpstreamHub.CreateVendor)
+		vendors.PUT("/:id", h.Admin.UpstreamHub.UpdateVendor)
+		vendors.DELETE("/:id", h.Admin.UpstreamHub.DeleteVendor)
+		vendors.POST("/:id/entries", h.Admin.UpstreamHub.CreateEntry)
+	}
+	entries := admin.Group("/upstream-entries")
+	{
+		entries.PUT("/:id", h.Admin.UpstreamHub.UpdateEntry)
+		entries.DELETE("/:id", h.Admin.UpstreamHub.DeleteEntry)
+		entries.PUT("/:id/schedulable", h.Admin.UpstreamHub.SetEntrySchedulable)
+		entries.PUT("/:id/groups", h.Admin.UpstreamHub.SetEntryGroups)
+		entries.PUT("/:id/groups/:groupId/enabled", h.Admin.UpstreamHub.SetEntryGroupEnabled)
+	}
+	admin.GET("/upstream-groups", h.Admin.UpstreamHub.ListGroups)
 }
 
 func registerTLSFingerprintProfileRoutes(admin *gin.RouterGroup, h *handler.Handlers) {

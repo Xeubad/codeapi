@@ -36,6 +36,36 @@
 
 ---
 
+## 2026年10月26日
+
+**主题**：上游聚合（Upstream Hub）MVP 落地：厂家台账 + 透传条目 + 分组引用开关
+
+### 改动
+
+- **数据模型**：新增 `upstream_vendors` 表（名称唯一、账号级并发预算、备注，软删）；`account_groups` 增加 `enabled` 列（本组是否调用该账号，默认 true）。迁移 `900_xeu_upstream_vendors.sql` / `900_xeu_account_group_enabled.sql`，Ent schema 同步并重新生成。
+- **后端**：`internal/service/upstream_hub.go` 新增厂家 CRUD、条目（`Account type=upstream`）编排、预算超限警告、条目→分组引用与逐组开关；`internal/repository/upstream_vendor_repo.go` 持久化实现；`internal/handler/admin/upstream_hub_handler.go` + `/admin/upstream-vendors`、`/admin/upstream-entries`、`/admin/upstream-groups` 路由。
+- **调度**：`queryAccountsByGroup` 在可调度路径追加 `account_groups.enabled=true` 过滤；分组账号统计 SQL 同步排除本组停用条目。
+- **前端**：`api/admin/upstreamHub.ts`、`views/admin/UpstreamHubView.vue`（厂家列表、一页建上游多 key、条目管理、分组引用与开关）、路由 `/admin/upstream-hub`、侧边栏与 i18n（en+zh）。
+
+### 关键决策
+
+- 条目复用现有账号体系（`Account(type=upstream)` + `extra.upstream_vendor_id` 归属），不新建实体；厂家属全局，跨聚合共享预算。
+- 「暂不调用」只落在 `account_groups.enabled`（仅本组候选池剔除），与账号全局 `schedulable` 两级独立并存。
+- 条目创建复用 `AdminService.CreateAccount` 全套校验，`SkipDefaultGroupBind` 避免自动挂默认组。
+
+### 验证
+
+- `go build ./...`、`go test ./internal/service/ ./internal/repository/ ./internal/handler/admin/` 通过（service 139s）。
+- 新增 `upstream_hub_test.go`：厂家校验/超预算警告/extra 归属解析/BaseURL 归一 均通过。
+- 迁移 SQL 在 dev 库事务内执行后 ROLLBACK，语法与幂等性通过（未实际写入）。
+- 前端 `pnpm run check:i18n`、`pnpm exec vue-tsc -b`、`pnpm build` 全部通过；`make build-backend`（embed tag）通过。
+- 运行态验收未做：8080 仍跑 10月22日旧二进制，重启后新页面/接口才生效（需用户确认重启）。
+- `golangci-lint` 已后台执行，结果见提交后说明。
+
+### 产出
+
+- 见本次提交短 SHA。
+
 ## 2026年10月25日
 
 **主题**：① 价格目录切换到 models.dev + 模型广场改版（块网格/弹窗/管理端比价）；② 包管理器升级 pnpm 9 → 12（供应链加固 + CVE 修复窗口外移）+ 补两个新披露漏洞的版本钉子

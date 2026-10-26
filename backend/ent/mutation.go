@@ -44,6 +44,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/setting"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionplan"
 	"github.com/Wei-Shaw/sub2api/ent/tlsfingerprintprofile"
+	"github.com/Wei-Shaw/sub2api/ent/upstreamvendor"
 	"github.com/Wei-Shaw/sub2api/ent/usagecleanuptask"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
@@ -95,6 +96,7 @@ const (
 	TypeSetting                       = "Setting"
 	TypeSubscriptionPlan              = "SubscriptionPlan"
 	TypeTLSFingerprintProfile         = "TLSFingerprintProfile"
+	TypeUpstreamVendor                = "UpstreamVendor"
 	TypeUsageCleanupTask              = "UsageCleanupTask"
 	TypeUsageLog                      = "UsageLog"
 	TypeUser                          = "User"
@@ -5092,6 +5094,7 @@ type AccountGroupMutation struct {
 	typ            string
 	priority       *int
 	addpriority    *int
+	enabled        *bool
 	created_at     *time.Time
 	clearedFields  map[string]struct{}
 	account        *int64
@@ -5218,6 +5221,25 @@ func (m *AccountGroupMutation) ResetPriority() {
 	m.addpriority = nil
 }
 
+// SetEnabled sets the "enabled" field.
+func (m *AccountGroupMutation) SetEnabled(b bool) {
+	m.enabled = &b
+}
+
+// Enabled returns the value of the "enabled" field in the mutation.
+func (m *AccountGroupMutation) Enabled() (r bool, exists bool) {
+	v := m.enabled
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetEnabled resets all changes to the "enabled" field.
+func (m *AccountGroupMutation) ResetEnabled() {
+	m.enabled = nil
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (m *AccountGroupMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -5325,7 +5347,7 @@ func (m *AccountGroupMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AccountGroupMutation) Fields() []string {
-	fields := make([]string, 0, 4)
+	fields := make([]string, 0, 5)
 	if m.account != nil {
 		fields = append(fields, accountgroup.FieldAccountID)
 	}
@@ -5334,6 +5356,9 @@ func (m *AccountGroupMutation) Fields() []string {
 	}
 	if m.priority != nil {
 		fields = append(fields, accountgroup.FieldPriority)
+	}
+	if m.enabled != nil {
+		fields = append(fields, accountgroup.FieldEnabled)
 	}
 	if m.created_at != nil {
 		fields = append(fields, accountgroup.FieldCreatedAt)
@@ -5352,6 +5377,8 @@ func (m *AccountGroupMutation) Field(name string) (ent.Value, bool) {
 		return m.GroupID()
 	case accountgroup.FieldPriority:
 		return m.Priority()
+	case accountgroup.FieldEnabled:
+		return m.Enabled()
 	case accountgroup.FieldCreatedAt:
 		return m.CreatedAt()
 	}
@@ -5390,6 +5417,13 @@ func (m *AccountGroupMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetPriority(v)
+		return nil
+	case accountgroup.FieldEnabled:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEnabled(v)
 		return nil
 	case accountgroup.FieldCreatedAt:
 		v, ok := value.(time.Time)
@@ -5470,6 +5504,9 @@ func (m *AccountGroupMutation) ResetField(name string) error {
 		return nil
 	case accountgroup.FieldPriority:
 		m.ResetPriority()
+		return nil
+	case accountgroup.FieldEnabled:
+		m.ResetEnabled()
 		return nil
 	case accountgroup.FieldCreatedAt:
 		m.ResetCreatedAt()
@@ -43580,6 +43617,679 @@ func (m *TLSFingerprintProfileMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *TLSFingerprintProfileMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown TLSFingerprintProfile edge %s", name)
+}
+
+// UpstreamVendorMutation represents an operation that mutates the UpstreamVendor nodes in the graph.
+type UpstreamVendorMutation struct {
+	config
+	op                    Op
+	typ                   string
+	id                    *int64
+	created_at            *time.Time
+	updated_at            *time.Time
+	deleted_at            *time.Time
+	name                  *string
+	concurrency_budget    *int
+	addconcurrency_budget *int
+	notes                 *string
+	clearedFields         map[string]struct{}
+	done                  bool
+	oldValue              func(context.Context) (*UpstreamVendor, error)
+	predicates            []predicate.UpstreamVendor
+}
+
+var _ ent.Mutation = (*UpstreamVendorMutation)(nil)
+
+// upstreamvendorOption allows management of the mutation configuration using functional options.
+type upstreamvendorOption func(*UpstreamVendorMutation)
+
+// newUpstreamVendorMutation creates new mutation for the UpstreamVendor entity.
+func newUpstreamVendorMutation(c config, op Op, opts ...upstreamvendorOption) *UpstreamVendorMutation {
+	m := &UpstreamVendorMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeUpstreamVendor,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withUpstreamVendorID sets the ID field of the mutation.
+func withUpstreamVendorID(id int64) upstreamvendorOption {
+	return func(m *UpstreamVendorMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *UpstreamVendor
+		)
+		m.oldValue = func(ctx context.Context) (*UpstreamVendor, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().UpstreamVendor.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withUpstreamVendor sets the old UpstreamVendor of the mutation.
+func withUpstreamVendor(node *UpstreamVendor) upstreamvendorOption {
+	return func(m *UpstreamVendorMutation) {
+		m.oldValue = func(context.Context) (*UpstreamVendor, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m UpstreamVendorMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m UpstreamVendorMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *UpstreamVendorMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *UpstreamVendorMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().UpstreamVendor.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *UpstreamVendorMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *UpstreamVendorMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the UpstreamVendor entity.
+// If the UpstreamVendor object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UpstreamVendorMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *UpstreamVendorMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *UpstreamVendorMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *UpstreamVendorMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the UpstreamVendor entity.
+// If the UpstreamVendor object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UpstreamVendorMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *UpstreamVendorMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetDeletedAt sets the "deleted_at" field.
+func (m *UpstreamVendorMutation) SetDeletedAt(t time.Time) {
+	m.deleted_at = &t
+}
+
+// DeletedAt returns the value of the "deleted_at" field in the mutation.
+func (m *UpstreamVendorMutation) DeletedAt() (r time.Time, exists bool) {
+	v := m.deleted_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDeletedAt returns the old "deleted_at" field's value of the UpstreamVendor entity.
+// If the UpstreamVendor object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UpstreamVendorMutation) OldDeletedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDeletedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDeletedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDeletedAt: %w", err)
+	}
+	return oldValue.DeletedAt, nil
+}
+
+// ClearDeletedAt clears the value of the "deleted_at" field.
+func (m *UpstreamVendorMutation) ClearDeletedAt() {
+	m.deleted_at = nil
+	m.clearedFields[upstreamvendor.FieldDeletedAt] = struct{}{}
+}
+
+// DeletedAtCleared returns if the "deleted_at" field was cleared in this mutation.
+func (m *UpstreamVendorMutation) DeletedAtCleared() bool {
+	_, ok := m.clearedFields[upstreamvendor.FieldDeletedAt]
+	return ok
+}
+
+// ResetDeletedAt resets all changes to the "deleted_at" field.
+func (m *UpstreamVendorMutation) ResetDeletedAt() {
+	m.deleted_at = nil
+	delete(m.clearedFields, upstreamvendor.FieldDeletedAt)
+}
+
+// SetName sets the "name" field.
+func (m *UpstreamVendorMutation) SetName(s string) {
+	m.name = &s
+}
+
+// Name returns the value of the "name" field in the mutation.
+func (m *UpstreamVendorMutation) Name() (r string, exists bool) {
+	v := m.name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldName returns the old "name" field's value of the UpstreamVendor entity.
+// If the UpstreamVendor object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UpstreamVendorMutation) OldName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldName: %w", err)
+	}
+	return oldValue.Name, nil
+}
+
+// ResetName resets all changes to the "name" field.
+func (m *UpstreamVendorMutation) ResetName() {
+	m.name = nil
+}
+
+// SetConcurrencyBudget sets the "concurrency_budget" field.
+func (m *UpstreamVendorMutation) SetConcurrencyBudget(i int) {
+	m.concurrency_budget = &i
+	m.addconcurrency_budget = nil
+}
+
+// ConcurrencyBudget returns the value of the "concurrency_budget" field in the mutation.
+func (m *UpstreamVendorMutation) ConcurrencyBudget() (r int, exists bool) {
+	v := m.concurrency_budget
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldConcurrencyBudget returns the old "concurrency_budget" field's value of the UpstreamVendor entity.
+// If the UpstreamVendor object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UpstreamVendorMutation) OldConcurrencyBudget(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldConcurrencyBudget is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldConcurrencyBudget requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldConcurrencyBudget: %w", err)
+	}
+	return oldValue.ConcurrencyBudget, nil
+}
+
+// AddConcurrencyBudget adds i to the "concurrency_budget" field.
+func (m *UpstreamVendorMutation) AddConcurrencyBudget(i int) {
+	if m.addconcurrency_budget != nil {
+		*m.addconcurrency_budget += i
+	} else {
+		m.addconcurrency_budget = &i
+	}
+}
+
+// AddedConcurrencyBudget returns the value that was added to the "concurrency_budget" field in this mutation.
+func (m *UpstreamVendorMutation) AddedConcurrencyBudget() (r int, exists bool) {
+	v := m.addconcurrency_budget
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetConcurrencyBudget resets all changes to the "concurrency_budget" field.
+func (m *UpstreamVendorMutation) ResetConcurrencyBudget() {
+	m.concurrency_budget = nil
+	m.addconcurrency_budget = nil
+}
+
+// SetNotes sets the "notes" field.
+func (m *UpstreamVendorMutation) SetNotes(s string) {
+	m.notes = &s
+}
+
+// Notes returns the value of the "notes" field in the mutation.
+func (m *UpstreamVendorMutation) Notes() (r string, exists bool) {
+	v := m.notes
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNotes returns the old "notes" field's value of the UpstreamVendor entity.
+// If the UpstreamVendor object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UpstreamVendorMutation) OldNotes(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNotes is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNotes requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNotes: %w", err)
+	}
+	return oldValue.Notes, nil
+}
+
+// ClearNotes clears the value of the "notes" field.
+func (m *UpstreamVendorMutation) ClearNotes() {
+	m.notes = nil
+	m.clearedFields[upstreamvendor.FieldNotes] = struct{}{}
+}
+
+// NotesCleared returns if the "notes" field was cleared in this mutation.
+func (m *UpstreamVendorMutation) NotesCleared() bool {
+	_, ok := m.clearedFields[upstreamvendor.FieldNotes]
+	return ok
+}
+
+// ResetNotes resets all changes to the "notes" field.
+func (m *UpstreamVendorMutation) ResetNotes() {
+	m.notes = nil
+	delete(m.clearedFields, upstreamvendor.FieldNotes)
+}
+
+// Where appends a list predicates to the UpstreamVendorMutation builder.
+func (m *UpstreamVendorMutation) Where(ps ...predicate.UpstreamVendor) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the UpstreamVendorMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *UpstreamVendorMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.UpstreamVendor, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *UpstreamVendorMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *UpstreamVendorMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (UpstreamVendor).
+func (m *UpstreamVendorMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *UpstreamVendorMutation) Fields() []string {
+	fields := make([]string, 0, 6)
+	if m.created_at != nil {
+		fields = append(fields, upstreamvendor.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, upstreamvendor.FieldUpdatedAt)
+	}
+	if m.deleted_at != nil {
+		fields = append(fields, upstreamvendor.FieldDeletedAt)
+	}
+	if m.name != nil {
+		fields = append(fields, upstreamvendor.FieldName)
+	}
+	if m.concurrency_budget != nil {
+		fields = append(fields, upstreamvendor.FieldConcurrencyBudget)
+	}
+	if m.notes != nil {
+		fields = append(fields, upstreamvendor.FieldNotes)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *UpstreamVendorMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case upstreamvendor.FieldCreatedAt:
+		return m.CreatedAt()
+	case upstreamvendor.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case upstreamvendor.FieldDeletedAt:
+		return m.DeletedAt()
+	case upstreamvendor.FieldName:
+		return m.Name()
+	case upstreamvendor.FieldConcurrencyBudget:
+		return m.ConcurrencyBudget()
+	case upstreamvendor.FieldNotes:
+		return m.Notes()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *UpstreamVendorMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case upstreamvendor.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case upstreamvendor.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case upstreamvendor.FieldDeletedAt:
+		return m.OldDeletedAt(ctx)
+	case upstreamvendor.FieldName:
+		return m.OldName(ctx)
+	case upstreamvendor.FieldConcurrencyBudget:
+		return m.OldConcurrencyBudget(ctx)
+	case upstreamvendor.FieldNotes:
+		return m.OldNotes(ctx)
+	}
+	return nil, fmt.Errorf("unknown UpstreamVendor field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *UpstreamVendorMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case upstreamvendor.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case upstreamvendor.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case upstreamvendor.FieldDeletedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDeletedAt(v)
+		return nil
+	case upstreamvendor.FieldName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetName(v)
+		return nil
+	case upstreamvendor.FieldConcurrencyBudget:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetConcurrencyBudget(v)
+		return nil
+	case upstreamvendor.FieldNotes:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNotes(v)
+		return nil
+	}
+	return fmt.Errorf("unknown UpstreamVendor field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *UpstreamVendorMutation) AddedFields() []string {
+	var fields []string
+	if m.addconcurrency_budget != nil {
+		fields = append(fields, upstreamvendor.FieldConcurrencyBudget)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *UpstreamVendorMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case upstreamvendor.FieldConcurrencyBudget:
+		return m.AddedConcurrencyBudget()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *UpstreamVendorMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case upstreamvendor.FieldConcurrencyBudget:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddConcurrencyBudget(v)
+		return nil
+	}
+	return fmt.Errorf("unknown UpstreamVendor numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *UpstreamVendorMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(upstreamvendor.FieldDeletedAt) {
+		fields = append(fields, upstreamvendor.FieldDeletedAt)
+	}
+	if m.FieldCleared(upstreamvendor.FieldNotes) {
+		fields = append(fields, upstreamvendor.FieldNotes)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *UpstreamVendorMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *UpstreamVendorMutation) ClearField(name string) error {
+	switch name {
+	case upstreamvendor.FieldDeletedAt:
+		m.ClearDeletedAt()
+		return nil
+	case upstreamvendor.FieldNotes:
+		m.ClearNotes()
+		return nil
+	}
+	return fmt.Errorf("unknown UpstreamVendor nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *UpstreamVendorMutation) ResetField(name string) error {
+	switch name {
+	case upstreamvendor.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case upstreamvendor.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case upstreamvendor.FieldDeletedAt:
+		m.ResetDeletedAt()
+		return nil
+	case upstreamvendor.FieldName:
+		m.ResetName()
+		return nil
+	case upstreamvendor.FieldConcurrencyBudget:
+		m.ResetConcurrencyBudget()
+		return nil
+	case upstreamvendor.FieldNotes:
+		m.ResetNotes()
+		return nil
+	}
+	return fmt.Errorf("unknown UpstreamVendor field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *UpstreamVendorMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *UpstreamVendorMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *UpstreamVendorMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *UpstreamVendorMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *UpstreamVendorMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *UpstreamVendorMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *UpstreamVendorMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown UpstreamVendor unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *UpstreamVendorMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown UpstreamVendor edge %s", name)
 }
 
 // UsageCleanupTaskMutation represents an operation that mutates the UsageCleanupTask nodes in the graph.

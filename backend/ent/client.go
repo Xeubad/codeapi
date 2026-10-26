@@ -46,6 +46,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/setting"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionplan"
 	"github.com/Wei-Shaw/sub2api/ent/tlsfingerprintprofile"
+	"github.com/Wei-Shaw/sub2api/ent/upstreamvendor"
 	"github.com/Wei-Shaw/sub2api/ent/usagecleanuptask"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
@@ -125,6 +126,8 @@ type Client struct {
 	SubscriptionPlan *SubscriptionPlanClient
 	// TLSFingerprintProfile is the client for interacting with the TLSFingerprintProfile builders.
 	TLSFingerprintProfile *TLSFingerprintProfileClient
+	// UpstreamVendor is the client for interacting with the UpstreamVendor builders.
+	UpstreamVendor *UpstreamVendorClient
 	// UsageCleanupTask is the client for interacting with the UsageCleanupTask builders.
 	UsageCleanupTask *UsageCleanupTaskClient
 	// UsageLog is the client for interacting with the UsageLog builders.
@@ -183,6 +186,7 @@ func (c *Client) init() {
 	c.Setting = NewSettingClient(c.config)
 	c.SubscriptionPlan = NewSubscriptionPlanClient(c.config)
 	c.TLSFingerprintProfile = NewTLSFingerprintProfileClient(c.config)
+	c.UpstreamVendor = NewUpstreamVendorClient(c.config)
 	c.UsageCleanupTask = NewUsageCleanupTaskClient(c.config)
 	c.UsageLog = NewUsageLogClient(c.config)
 	c.User = NewUserClient(c.config)
@@ -314,6 +318,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Setting:                       NewSettingClient(cfg),
 		SubscriptionPlan:              NewSubscriptionPlanClient(cfg),
 		TLSFingerprintProfile:         NewTLSFingerprintProfileClient(cfg),
+		UpstreamVendor:                NewUpstreamVendorClient(cfg),
 		UsageCleanupTask:              NewUsageCleanupTaskClient(cfg),
 		UsageLog:                      NewUsageLogClient(cfg),
 		User:                          NewUserClient(cfg),
@@ -372,6 +377,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Setting:                       NewSettingClient(cfg),
 		SubscriptionPlan:              NewSubscriptionPlanClient(cfg),
 		TLSFingerprintProfile:         NewTLSFingerprintProfileClient(cfg),
+		UpstreamVendor:                NewUpstreamVendorClient(cfg),
 		UsageCleanupTask:              NewUsageCleanupTaskClient(cfg),
 		UsageLog:                      NewUsageLogClient(cfg),
 		User:                          NewUserClient(cfg),
@@ -417,8 +423,8 @@ func (c *Client) Use(hooks ...Hook) {
 		c.IdentityAdoptionDecision, c.PaymentAuditLog, c.PaymentOrder,
 		c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode, c.PromoCodeUsage,
 		c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting, c.SubscriptionPlan,
-		c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog, c.User,
-		c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
+		c.TLSFingerprintProfile, c.UpstreamVendor, c.UsageCleanupTask, c.UsageLog,
+		c.User, c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
 		c.UserPlatformQuota, c.UserSubscription,
 	} {
 		n.Use(hooks...)
@@ -437,8 +443,8 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.IdentityAdoptionDecision, c.PaymentAuditLog, c.PaymentOrder,
 		c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode, c.PromoCodeUsage,
 		c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting, c.SubscriptionPlan,
-		c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog, c.User,
-		c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
+		c.TLSFingerprintProfile, c.UpstreamVendor, c.UsageCleanupTask, c.UsageLog,
+		c.User, c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
 		c.UserPlatformQuota, c.UserSubscription,
 	} {
 		n.Intercept(interceptors...)
@@ -510,6 +516,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.SubscriptionPlan.mutate(ctx, m)
 	case *TLSFingerprintProfileMutation:
 		return c.TLSFingerprintProfile.mutate(ctx, m)
+	case *UpstreamVendorMutation:
+		return c.UpstreamVendor.mutate(ctx, m)
 	case *UsageCleanupTaskMutation:
 		return c.UsageCleanupTask.mutate(ctx, m)
 	case *UsageLogMutation:
@@ -5351,6 +5359,141 @@ func (c *TLSFingerprintProfileClient) mutate(ctx context.Context, m *TLSFingerpr
 	}
 }
 
+// UpstreamVendorClient is a client for the UpstreamVendor schema.
+type UpstreamVendorClient struct {
+	config
+}
+
+// NewUpstreamVendorClient returns a client for the UpstreamVendor from the given config.
+func NewUpstreamVendorClient(c config) *UpstreamVendorClient {
+	return &UpstreamVendorClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `upstreamvendor.Hooks(f(g(h())))`.
+func (c *UpstreamVendorClient) Use(hooks ...Hook) {
+	c.hooks.UpstreamVendor = append(c.hooks.UpstreamVendor, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `upstreamvendor.Intercept(f(g(h())))`.
+func (c *UpstreamVendorClient) Intercept(interceptors ...Interceptor) {
+	c.inters.UpstreamVendor = append(c.inters.UpstreamVendor, interceptors...)
+}
+
+// Create returns a builder for creating a UpstreamVendor entity.
+func (c *UpstreamVendorClient) Create() *UpstreamVendorCreate {
+	mutation := newUpstreamVendorMutation(c.config, OpCreate)
+	return &UpstreamVendorCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of UpstreamVendor entities.
+func (c *UpstreamVendorClient) CreateBulk(builders ...*UpstreamVendorCreate) *UpstreamVendorCreateBulk {
+	return &UpstreamVendorCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *UpstreamVendorClient) MapCreateBulk(slice any, setFunc func(*UpstreamVendorCreate, int)) *UpstreamVendorCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &UpstreamVendorCreateBulk{err: fmt.Errorf("calling to UpstreamVendorClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*UpstreamVendorCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &UpstreamVendorCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for UpstreamVendor.
+func (c *UpstreamVendorClient) Update() *UpstreamVendorUpdate {
+	mutation := newUpstreamVendorMutation(c.config, OpUpdate)
+	return &UpstreamVendorUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *UpstreamVendorClient) UpdateOne(_m *UpstreamVendor) *UpstreamVendorUpdateOne {
+	mutation := newUpstreamVendorMutation(c.config, OpUpdateOne, withUpstreamVendor(_m))
+	return &UpstreamVendorUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *UpstreamVendorClient) UpdateOneID(id int64) *UpstreamVendorUpdateOne {
+	mutation := newUpstreamVendorMutation(c.config, OpUpdateOne, withUpstreamVendorID(id))
+	return &UpstreamVendorUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for UpstreamVendor.
+func (c *UpstreamVendorClient) Delete() *UpstreamVendorDelete {
+	mutation := newUpstreamVendorMutation(c.config, OpDelete)
+	return &UpstreamVendorDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *UpstreamVendorClient) DeleteOne(_m *UpstreamVendor) *UpstreamVendorDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *UpstreamVendorClient) DeleteOneID(id int64) *UpstreamVendorDeleteOne {
+	builder := c.Delete().Where(upstreamvendor.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &UpstreamVendorDeleteOne{builder}
+}
+
+// Query returns a query builder for UpstreamVendor.
+func (c *UpstreamVendorClient) Query() *UpstreamVendorQuery {
+	return &UpstreamVendorQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeUpstreamVendor},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a UpstreamVendor entity by its id.
+func (c *UpstreamVendorClient) Get(ctx context.Context, id int64) (*UpstreamVendor, error) {
+	return c.Query().Where(upstreamvendor.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *UpstreamVendorClient) GetX(ctx context.Context, id int64) *UpstreamVendor {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *UpstreamVendorClient) Hooks() []Hook {
+	hooks := c.hooks.UpstreamVendor
+	return append(hooks[:len(hooks):len(hooks)], upstreamvendor.Hooks[:]...)
+}
+
+// Interceptors returns the client interceptors.
+func (c *UpstreamVendorClient) Interceptors() []Interceptor {
+	inters := c.inters.UpstreamVendor
+	return append(inters[:len(inters):len(inters)], upstreamvendor.Interceptors[:]...)
+}
+
+func (c *UpstreamVendorClient) mutate(ctx context.Context, m *UpstreamVendorMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&UpstreamVendorCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&UpstreamVendorUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&UpstreamVendorUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&UpstreamVendorDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown UpstreamVendor mutation op: %q", m.Op())
+	}
+}
+
 // UsageCleanupTaskClient is a client for the UsageCleanupTask schema.
 type UsageCleanupTaskClient struct {
 	config
@@ -6848,9 +6991,9 @@ type (
 		Group, IdempotencyRecord, IdentityAdoptionDecision, PaymentAuditLog,
 		PaymentOrder, PaymentProviderInstance, PendingAuthSession, PromoCode,
 		PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting, SubscriptionPlan,
-		TLSFingerprintProfile, UsageCleanupTask, UsageLog, User, UserAllowedGroup,
-		UserAttributeDefinition, UserAttributeValue, UserPlatformQuota,
-		UserSubscription []ent.Hook
+		TLSFingerprintProfile, UpstreamVendor, UsageCleanupTask, UsageLog, User,
+		UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
+		UserPlatformQuota, UserSubscription []ent.Hook
 	}
 	inters struct {
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead, AuthIdentity,
@@ -6860,9 +7003,9 @@ type (
 		Group, IdempotencyRecord, IdentityAdoptionDecision, PaymentAuditLog,
 		PaymentOrder, PaymentProviderInstance, PendingAuthSession, PromoCode,
 		PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting, SubscriptionPlan,
-		TLSFingerprintProfile, UsageCleanupTask, UsageLog, User, UserAllowedGroup,
-		UserAttributeDefinition, UserAttributeValue, UserPlatformQuota,
-		UserSubscription []ent.Interceptor
+		TLSFingerprintProfile, UpstreamVendor, UsageCleanupTask, UsageLog, User,
+		UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
+		UserPlatformQuota, UserSubscription []ent.Interceptor
 	}
 )
 

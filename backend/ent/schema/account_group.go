@@ -32,6 +32,9 @@ func (AccountGroup) Fields() []ent.Field {
 		field.Int64("group_id"),
 		field.Int("priority").
 			Default(50),
+		field.Bool("enabled").
+			Default(true).
+			Comment("本分组是否调用该账号；false=暂不调用（仅本分组候选池剔除）"),
 		field.Time("created_at").
 			Immutable().
 			Default(time.Now).

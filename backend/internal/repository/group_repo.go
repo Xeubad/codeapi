@@ -841,7 +841,7 @@ func (r *groupRepository) GetAccountCount(ctx context.Context, groupID int64) (t
 			COUNT(*) FILTER (WHERE %s),
 			COUNT(*) FILTER (WHERE %s)
 		FROM account_groups ag JOIN accounts a ON a.id = ag.account_id
-		WHERE ag.group_id = $1`, groupAccountAvailableSQL, groupAccountTemporarilyLimitedSQL),
+		WHERE ag.group_id = $1 AND ag.enabled`, groupAccountAvailableSQL, groupAccountTemporarilyLimitedSQL),
 		[]any{groupID}, &total, &active, &rateLimited)
 	return
 }
@@ -1045,7 +1045,7 @@ func (r *groupRepository) loadAccountCounts(ctx context.Context, groupIDs []int6
 			COUNT(*) FILTER (WHERE %s) AS rate_limited
 		FROM account_groups ag
 		JOIN accounts a ON a.id = ag.account_id
-		WHERE ag.group_id = ANY($1)
+		WHERE ag.group_id = ANY($1) AND ag.enabled
 		GROUP BY ag.group_id`, groupAccountAvailableSQL, groupAccountTemporarilyLimitedSQL),
 		pq.Array(groupIDs),
 	)

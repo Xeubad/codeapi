@@ -3307,6 +3307,11 @@ func (r *accountRepository) queryAccountsByGroup(ctx context.Context, groupID in
 	q := r.client.AccountGroup.Query().
 		Where(dbaccountgroup.GroupIDEQ(groupID))
 
+	// 调度/候选路径必须尊重"暂不调用"（仅本分组生效）。
+	if opts.schedulable {
+		q = q.Where(dbaccountgroup.EnabledEQ(true))
+	}
+
 	// 通过 account_groups 中间表查询账号，并按需叠加状态/平台/调度能力过滤。
 	preds := make([]dbpredicate.Account, 0, 6)
 	preds = append(preds, dbaccount.DeletedAtIsNil())

@@ -68,6 +68,8 @@ export default {
     addOrEdit: 'Add / edit',
     overBudgetBlocked: 'Total key concurrency {used} exceeds the budget {total}; adjust before saving',
     overBudgetBlockedInline: 'Total key concurrency {used} / budget {total}, over by {over} — adjust before saving',
+    ungrouped: 'Ungrouped',
+    selectedGroups: '{count} groups selected',
     fillRequiredFields: 'Name, base URL and API key are required',
     saveFailed: 'Failed to save',
     close: 'Close'

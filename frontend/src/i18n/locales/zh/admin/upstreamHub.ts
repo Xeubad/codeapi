@@ -68,6 +68,8 @@ export default {
     addOrEdit: '添加/编辑',
     overBudgetBlocked: '各 Key 并发合计 {used} 已超过总并发 {total}，请调整后再保存',
     overBudgetBlockedInline: '各 Key 并发合计 {used} / 总并发 {total}，超出 {over} —— 必须调整到不超出后才能保存',
+    ungrouped: '未分组',
+    selectedGroups: '已选 {count} 组',
     fillRequiredFields: '请填写名称、Base URL 与 API Key',
     saveFailed: '保存失败',
     close: '关闭'

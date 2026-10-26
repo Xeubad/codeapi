@@ -64,7 +64,7 @@
 
 ### 产出
 
-- 见本次提交短 SHA。
+- `bdb49a5af` feat(upstream-hub): vendor ledger, passthrough entries and per-group switches
 
 ## 2026年10月25日
 

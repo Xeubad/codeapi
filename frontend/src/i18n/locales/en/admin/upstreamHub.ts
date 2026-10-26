@@ -63,6 +63,8 @@ export default {
     duplicateSource: 'Source entry',
     duplicateSuccess: 'Entry duplicated',
     selectOneToDuplicate: 'Select exactly one entry to duplicate',
+    apiKeyKeepPlaceholder: 'Leave blank to keep',
+    platformLockedHint: 'Platform is immutable after creation',
     fillRequiredFields: 'Name, base URL and API key are required',
     saveFailed: 'Failed to save',
     close: 'Close'

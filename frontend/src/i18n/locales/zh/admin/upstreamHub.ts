@@ -63,6 +63,8 @@ export default {
     duplicateSource: '模板条目',
     duplicateSuccess: '条目已复制',
     selectOneToDuplicate: '请先勾选一条要复制的条目',
+    apiKeyKeepPlaceholder: '留空保持不变',
+    platformLockedHint: '平台创建后不可修改',
     fillRequiredFields: '请填写名称、Base URL 与 API Key',
     saveFailed: '保存失败',
     close: '关闭'

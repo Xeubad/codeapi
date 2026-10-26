@@ -336,7 +336,6 @@
           </p>
         </div>
       </div>
-      </div>
       <template #footer>
         <button class="btn btn-secondary" @click="closeEntriesDialog">{{ t('admin.upstreamHub.cancel') }}</button>
         <button class="btn btn-primary" :disabled="saving || addRowsOverBudget" @click="saveEntryRows">

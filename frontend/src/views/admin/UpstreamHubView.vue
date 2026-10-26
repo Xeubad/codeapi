@@ -79,7 +79,11 @@
                     <span v-else class="badge badge-success">{{ t('common.active') }}</span>
                   </td>
                   <td class="text-right whitespace-nowrap">
-                    <button class="btn btn-sm btn-secondary" @click="openDetail(vendor.id)">
+                    <button
+                      class="btn btn-sm"
+                      :class="detail?.vendor.id === vendor.id ? 'btn-primary' : 'btn-secondary'"
+                      @click="toggleDetail(vendor.id)"
+                    >
                       {{ t('admin.upstreamHub.manage') }}
                     </button>
                     <button class="btn btn-sm btn-secondary ml-1" @click="openEditVendor(vendor)">
@@ -97,127 +101,106 @@
       </div>
 
       <!-- Vendor detail: entries -->
-      <div v-if="detail" class="space-y-6">
-        <div class="card">
-          <div class="card-header flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
-                {{ detail.vendor.name }}
-                <span class="badge badge-primary ml-1">
-                  {{ detail.vendor.concurrency_budget > 0 ? detail.vendor.concurrency_budget : '∞' }}
-                </span>
-              </h2>
-              <p class="text-xs text-gray-500 dark:text-gray-400">
-                {{ t('admin.upstreamHub.budgetUsage', {
-                  used: detail.vendor.allocated_concurrency,
-                  total: detail.vendor.concurrency_budget || '∞'
-                }) }}
-              </p>
-            </div>
-            <div class="flex gap-2">
-              <button class="btn btn-secondary btn-sm" @click="detail = null">{{ t('admin.upstreamHub.close') }}</button>
-              <button
-                class="btn btn-secondary btn-sm"
-                :disabled="selectedEntryIDs.length !== 1"
-                @click="openDuplicateDialog"
-              >
-                {{ t('admin.upstreamHub.duplicateSelected') }}
+      <Transition
+        enter-active-class="transition duration-200 ease-out"
+        enter-from-class="opacity-0 -translate-y-1"
+        leave-active-class="transition duration-150 ease-in"
+        leave-to-class="opacity-0 -translate-y-1"
+      >
+        <div v-if="detail" class="space-y-6">
+          <div class="card">
+            <div class="card-header flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                  {{ detail.vendor.name }}
+                  <span class="badge badge-primary ml-1">
+                    {{ detail.vendor.concurrency_budget > 0 ? detail.vendor.concurrency_budget : '∞' }}
+                  </span>
+                </h2>
+                <p class="text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.upstreamHub.budgetUsage', {
+                    used: detail.vendor.allocated_concurrency,
+                    total: detail.vendor.concurrency_budget || '∞'
+                  }) }}
+                </p>
+              </div>
+              <button class="btn btn-primary btn-sm" @click="openEntriesDialog">
+                {{ t('admin.upstreamHub.addOrEdit') }}
               </button>
-              <button class="btn btn-primary btn-sm" @click="openAddEntries">{{ t('admin.upstreamHub.addEntry') }}</button>
             </div>
-          </div>
-          <div class="p-6">
-            <div
-              v-for="warning in detail.warnings"
-              :key="warning"
-              class="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300"
-            >
-              {{ warning }}
-            </div>
-            <EmptyState
-              v-if="detail.entries.length === 0"
-              :title="t('admin.upstreamHub.empty')"
-              :description="t('admin.upstreamHub.emptyHint')"
-              :action-text="t('admin.upstreamHub.addEntry')"
-              @action="openAddEntries"
-            />
-            <div v-else class="table-container">
-              <table class="table">
-                <thead>
-                  <tr>
-                    <th class="w-8">
-                      <input
-                        type="checkbox"
-                        class="h-4 w-4"
-                        :checked="selectedEntryIDs.length > 0 && selectedEntryIDs.length === detail.entries.length"
-                        @change="toggleSelectAll"
-                      />
-                    </th>
-                    <th>{{ t('admin.upstreamHub.entryName') }}</th>
-                    <th>{{ t('admin.upstreamHub.platform') }}</th>
-                    <th>Base URL</th>
-                    <th>{{ t('admin.upstreamHub.concurrency') }}</th>
-                    <th>{{ t('admin.upstreamHub.priority') }}</th>
-                    <th>{{ t('admin.upstreamHub.groups') }}</th>
-                    <th>{{ t('admin.upstreamHub.schedulable') }}</th>
-                    <th class="text-right">{{ t('common.actions') }}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="entry in detail.entries" :key="entry.account_id">
-                    <td>
-                      <input v-model="selectedEntryIDs" type="checkbox" class="h-4 w-4" :value="entry.account_id" />
-                    </td>
-                    <td>
-                      <div class="font-medium text-gray-900 dark:text-white">{{ entry.name }}</div>
-                      <div class="text-xs text-gray-500">{{ entry.status }}</div>
-                    </td>
-                    <td><span class="badge badge-primary">{{ entry.platform }}</span></td>
-                    <td class="max-w-[16rem] truncate text-xs" :title="entry.base_url">{{ entry.base_url }}</td>
-                    <td>{{ entry.concurrency }}</td>
-                    <td>{{ entry.priority }}</td>
-                    <td>
-                      <button
-                        v-if="groupRefs(entry).length === 0"
-                        class="badge badge-gray"
-                        @click="openGroups(entry)"
-                      >
-                        {{ t('admin.upstreamHub.noGroups') }}
-                      </button>
-                      <div v-else class="flex flex-wrap gap-1">
+            <div class="p-6">
+              <div
+                v-for="warning in detail.warnings"
+                :key="warning"
+                class="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300"
+              >
+                {{ warning }}
+              </div>
+              <EmptyState
+                v-if="detail.entries.length === 0"
+                :title="t('admin.upstreamHub.empty')"
+                :description="t('admin.upstreamHub.emptyHint')"
+                :action-text="t('admin.upstreamHub.addOrEdit')"
+                @action="openEntriesDialog"
+              />
+              <div v-else class="table-container">
+                <table class="table">
+                  <thead>
+                    <tr>
+                      <th>{{ t('admin.upstreamHub.entryName') }}</th>
+                      <th>{{ t('admin.upstreamHub.platform') }}</th>
+                      <th>Base URL</th>
+                      <th>{{ t('admin.upstreamHub.concurrency') }}</th>
+                      <th>{{ t('admin.upstreamHub.priority') }}</th>
+                      <th>{{ t('admin.upstreamHub.groups') }}</th>
+                      <th>{{ t('admin.upstreamHub.schedulable') }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="entry in detail.entries" :key="entry.account_id">
+                      <td>
+                        <div class="font-medium text-gray-900 dark:text-white">{{ entry.name }}</div>
+                        <div class="text-xs text-gray-500">{{ entry.status }}</div>
+                      </td>
+                      <td><span class="badge badge-primary">{{ entry.platform }}</span></td>
+                      <td class="max-w-[16rem] truncate text-xs" :title="entry.base_url">{{ entry.base_url }}</td>
+                      <td>{{ entry.concurrency }}</td>
+                      <td>{{ entry.priority }}</td>
+                      <td>
                         <button
-                          v-for="group in groupRefs(entry)"
-                          :key="group.group_id"
-                          class="badge"
-                          :class="group.enabled ? 'badge-success' : 'badge-gray'"
-                          :title="group.enabled ? t('admin.upstreamHub.groupEnabled') : t('admin.upstreamHub.groupDisabled')"
-                          @click="toggleGroupEnabled(entry, group)"
+                          v-if="groupRefs(entry).length === 0"
+                          class="badge badge-gray"
+                          @click="openGroups(entry)"
                         >
-                          {{ group.group_name }}
+                          {{ t('admin.upstreamHub.noGroups') }}
                         </button>
-                        <button class="badge badge-primary" @click="openGroups(entry)">
-                          {{ t('admin.upstreamHub.manageGroups') }}
-                        </button>
-                      </div>
-                    </td>
-                    <td>
-                      <Toggle :model-value="entry.schedulable" @update:model-value="(v) => toggleSchedulable(entry, v)" />
-                    </td>
-                    <td class="text-right whitespace-nowrap">
-                      <button class="btn btn-sm btn-secondary" @click="openEditEntry(entry)">
-                        {{ t('admin.upstreamHub.edit') }}
-                      </button>
-                      <button class="btn btn-sm btn-ghost ml-1 text-red-600" @click="askDeleteEntry(entry)">
-                        {{ t('admin.upstreamHub.delete') }}
-                      </button>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+                        <div v-else class="flex flex-wrap gap-1">
+                          <button
+                            v-for="group in groupRefs(entry)"
+                            :key="group.group_id"
+                            class="badge"
+                            :class="group.enabled ? 'badge-success' : 'badge-gray'"
+                            :title="group.enabled ? t('admin.upstreamHub.groupEnabled') : t('admin.upstreamHub.groupDisabled')"
+                            @click="toggleGroupEnabled(entry, group)"
+                          >
+                            {{ group.group_name }}
+                          </button>
+                          <button class="badge badge-primary" @click="openGroups(entry)">
+                            {{ t('admin.upstreamHub.manageGroups') }}
+                          </button>
+                        </div>
+                      </td>
+                      <td>
+                        <Toggle :model-value="entry.schedulable" @update:model-value="(v) => toggleSchedulable(entry, v)" />
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      </Transition>
     </div>
 
     <!-- Vendor dialog -->
@@ -243,13 +226,8 @@
       </template>
     </BaseDialog>
 
-    <!-- Entry dialog: add (multi-key) / edit (single row) share one layout -->
-    <BaseDialog
-      :show="showEntryDialog"
-      :title="entryDialogMode === 'edit' ? t('admin.upstreamHub.editEntry') : t('admin.upstreamHub.addEntry')"
-      width="extra-wide"
-      @close="showEntryDialog = false"
-    >
+    <!-- Entries dialog: add / edit / copy in one layout -->
+    <BaseDialog :show="showEntryDialog" :title="t('admin.upstreamHub.addOrEdit')" width="extra-wide" @close="closeEntriesDialog">
       <div class="space-y-3">
         <div class="table-container">
           <table class="table">
@@ -261,14 +239,14 @@
                 <th>{{ t('admin.upstreamHub.apiKey') }}</th>
                 <th>{{ t('admin.upstreamHub.concurrency') }}</th>
                 <th>{{ t('admin.upstreamHub.priority') }}</th>
-                <th></th>
+                <th class="text-right">{{ t('common.actions') }}</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="(row, index) in entryRows" :key="index">
                 <td><input v-model="row.name" class="input" type="text" :placeholder="t('admin.upstreamHub.entryNamePlaceholder')" /></td>
                 <td>
-                  <Select v-model="row.platform" :options="platformOptions" :disabled="entryDialogMode === 'edit'" />
+                  <Select v-model="row.platform" :options="platformOptions" :disabled="!!row.accountId" />
                 </td>
                 <td><input v-model="row.base_url" class="input" type="text" placeholder="https://..." /></td>
                 <td>
@@ -276,31 +254,23 @@
                     v-model="row.api_key"
                     class="input"
                     type="password"
-                    :placeholder="entryDialogMode === 'edit' ? t('admin.upstreamHub.apiKeyKeepPlaceholder') : 'sk-...'"
+                    :placeholder="row.accountId ? t('admin.upstreamHub.apiKeyKeepPlaceholder') : 'sk-...'"
                   />
                 </td>
                 <td><input v-model.number="row.concurrency" class="input" type="number" min="1" /></td>
                 <td><input v-model.number="row.priority" class="input" type="number" /></td>
-                <td>
-                  <button
-                    v-if="entryDialogMode === 'create'"
-                    class="btn btn-sm btn-ghost text-red-600"
-                    :disabled="entryRows.length <= 1"
-                    @click="entryRows.splice(index, 1)"
-                  >
-                    {{ t('admin.upstreamHub.removeRow') }}
+                <td class="text-right whitespace-nowrap">
+                  <button class="btn btn-sm btn-secondary" @click="copyRow(row)">{{ t('admin.upstreamHub.duplicate') }}</button>
+                  <button class="btn btn-sm btn-ghost ml-1 text-red-600" @click="removeRow(row, index)">
+                    {{ t('admin.upstreamHub.delete') }}
                   </button>
-                  <span v-else class="text-xs text-gray-400">{{ t('admin.upstreamHub.platformLockedHint') }}</span>
                 </td>
               </tr>
             </tbody>
           </table>
         </div>
         <div class="flex flex-wrap items-center justify-between gap-2">
-          <button v-if="entryDialogMode === 'create'" class="btn btn-secondary btn-sm" @click="addEntryRow">
-            {{ t('admin.upstreamHub.addRow') }}
-          </button>
-          <span v-else></span>
+          <button class="btn btn-secondary btn-sm" @click="addEntryRow">{{ t('admin.upstreamHub.addRow') }}</button>
           <p class="text-xs" :class="addRowsOverBudget ? 'text-red-600 dark:text-red-400' : 'text-gray-500'">
             {{ t('admin.upstreamHub.budgetUsage', { used: effectiveAllocated, total: detail?.vendor.concurrency_budget || '∞' }) }}
             <template v-if="addRowsOverBudget"> — {{ t('admin.upstreamHub.overBudgetHint') }}</template>
@@ -308,11 +278,10 @@
         </div>
       </div>
       <template #footer>
-        <button class="btn btn-secondary" @click="showEntryDialog = false">{{ t('admin.upstreamHub.cancel') }}</button>
+        <button class="btn btn-secondary" @click="closeEntriesDialog">{{ t('admin.upstreamHub.cancel') }}</button>
         <button class="btn btn-primary" :disabled="saving" @click="saveEntryRows">{{ t('admin.upstreamHub.save') }}</button>
       </template>
     </BaseDialog>
-
 
     <!-- Groups dialog -->
     <BaseDialog :show="showGroupsDialog" :title="t('admin.upstreamHub.selectGroups')" @close="showGroupsDialog = false">
@@ -339,37 +308,6 @@
       </template>
     </BaseDialog>
 
-    <BaseDialog :show="showDuplicateDialog" :title="t('admin.upstreamHub.duplicateDialogTitle')" @close="showDuplicateDialog = false">
-      <div class="space-y-4">
-        <div>
-          <label class="input-label">{{ t('admin.upstreamHub.duplicateSource') }}</label>
-          <input class="input" type="text" :value="duplicateForm.sourceName" disabled />
-        </div>
-        <div>
-          <label class="input-label">{{ t('admin.upstreamHub.entryName') }}</label>
-          <input v-model="duplicateForm.name" class="input" type="text" />
-        </div>
-        <div>
-          <label class="input-label">{{ t('admin.upstreamHub.platform') }}</label>
-          <Select v-model="duplicateForm.platform" :options="platformOptions" />
-        </div>
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <label class="input-label">{{ t('admin.upstreamHub.concurrency') }}</label>
-            <input v-model.number="duplicateForm.concurrency" class="input" type="number" min="1" />
-          </div>
-          <div>
-            <label class="input-label">{{ t('admin.upstreamHub.priority') }}</label>
-            <input v-model.number="duplicateForm.priority" class="input" type="number" />
-          </div>
-        </div>
-        <p class="input-hint">{{ t('admin.upstreamHub.duplicateHint') }}</p>
-      </div>
-      <template #footer>
-        <button class="btn btn-secondary" @click="showDuplicateDialog = false">{{ t('admin.upstreamHub.cancel') }}</button>
-        <button class="btn btn-primary" :disabled="saving" @click="saveDuplicate">{{ t('admin.upstreamHub.save') }}</button>
-      </template>
-    </BaseDialog>
 
     <ConfirmDialog
       :show="showDeleteConfirm"
@@ -419,9 +357,6 @@ const platformOptions = computed(() => CONCRETE_PLATFORM_OPTIONS.map((p) => ({ l
 const showVendorDialog = ref(false)
 const vendorForm = reactive({ id: 0, name: '', concurrency_budget: 0, notes: '' })
 
-const showEntryDialog = ref(false)
-const entryDialogMode = ref<'create' | 'edit'>('create')
-const editingOriginalConcurrency = ref(0)
 interface EntryRow {
   accountId?: number
   name: string
@@ -431,19 +366,9 @@ interface EntryRow {
   concurrency: number
   priority: number
 }
+const showEntryDialog = ref(false)
 const entryRows = ref<EntryRow[]>([])
-
-
-const selectedEntryIDs = ref<number[]>([])
-const showDuplicateDialog = ref(false)
-const duplicateForm = reactive({
-  sourceId: 0,
-  sourceName: '',
-  name: '',
-  platform: '',
-  concurrency: 1,
-  priority: 50
-})
+const pendingDeletes = ref<Array<{ accountId: number; concurrency: number }>>([])
 
 const showGroupsDialog = ref(false)
 const groupOptions = ref<UpstreamGroupOption[]>([])
@@ -451,21 +376,19 @@ const selectedGroupIDs = ref<number[]>([])
 const groupsEntry = ref<UpstreamEntry | null>(null)
 
 const showDeleteConfirm = ref(false)
-const deleteTarget = ref<{ type: 'vendor' | 'entry'; id: number; name: string } | null>(null)
-const deleteMessage = computed(() => {
-  if (!deleteTarget.value) return ''
-  return deleteTarget.value.type === 'vendor'
-    ? t('admin.upstreamHub.deleteVendorConfirm', { name: deleteTarget.value.name })
-    : t('admin.upstreamHub.deleteEntryConfirm', { name: deleteTarget.value.name })
-})
+const deleteTarget = ref<{ type: 'vendor'; id: number; name: string } | null>(null)
+const deleteMessage = computed(() =>
+  deleteTarget.value ? t('admin.upstreamHub.deleteVendorConfirm', { name: deleteTarget.value.name }) : ''
+)
 
-const addRowsTotal = computed(() => entryRows.value.reduce((sum, row) => sum + (Number(row.concurrency) || 0), 0))
 const effectiveAllocated = computed(() => {
   const allocated = detail.value?.vendor.allocated_concurrency ?? 0
-  if (entryDialogMode.value === 'edit') {
-    return Math.max(0, allocated - editingOriginalConcurrency.value + addRowsTotal.value)
-  }
-  return allocated + addRowsTotal.value
+  const drafts = entryRows.value.reduce(
+    (sum, row) => sum + (row.accountId ? 0 : Number(row.concurrency) || 0),
+    0
+  )
+  const removed = pendingDeletes.value.reduce((sum, item) => sum + item.concurrency, 0)
+  return Math.max(0, allocated + drafts - removed)
 })
 const addRowsOverBudget = computed(() => {
   const budget = detail.value?.vendor.concurrency_budget ?? 0
@@ -476,44 +399,15 @@ function groupRefs(entry: UpstreamEntry): UpstreamEntryGroupRef[] {
   return entry.groups || []
 }
 
-function toggleSelectAll(event: Event) {
-  const checked = (event.target as HTMLInputElement).checked
-  selectedEntryIDs.value = checked && detail.value ? detail.value.entries.map((entry) => entry.account_id) : []
-}
-
-function openDuplicateDialog() {
-  if (selectedEntryIDs.value.length !== 1 || !detail.value) {
-    appStore.showError(t('admin.upstreamHub.selectOneToDuplicate'))
-    return
-  }
-  const source = detail.value.entries.find((entry) => entry.account_id === selectedEntryIDs.value[0])
-  if (!source) return
-  duplicateForm.sourceId = source.account_id
-  duplicateForm.sourceName = source.name
-  duplicateForm.name = `${source.name}-copy`
-  duplicateForm.platform = source.platform
-  duplicateForm.concurrency = source.concurrency
-  duplicateForm.priority = source.priority
-  showDuplicateDialog.value = true
-}
-
-async function saveDuplicate() {
-  saving.value = true
-  try {
-    await upstreamHubAPI.duplicateEntry(duplicateForm.sourceId, {
-      name: duplicateForm.name,
-      platform: duplicateForm.platform,
-      concurrency: Number(duplicateForm.concurrency) || 1,
-      priority: Number(duplicateForm.priority) || 50
-    })
-    appStore.showSuccess(t('admin.upstreamHub.duplicateSuccess'))
-    showDuplicateDialog.value = false
-    selectedEntryIDs.value = []
-    await reloadDetail()
-  } catch (err) {
-    appStore.showError(errorMessage(err))
-  } finally {
-    saving.value = false
+function entryToRow(entry: UpstreamEntry): EntryRow {
+  return {
+    accountId: entry.account_id,
+    name: entry.name,
+    platform: entry.platform,
+    base_url: entry.base_url,
+    api_key: '',
+    concurrency: entry.concurrency,
+    priority: entry.priority
   }
 }
 
@@ -532,6 +426,20 @@ async function load() {
   }
 }
 
+async function toggleDetail(vendorId: number) {
+  if (detail.value?.vendor.id === vendorId) {
+    detail.value = null
+    return
+  }
+  try {
+    detail.value = await upstreamHubAPI.getVendor(vendorId)
+  } catch (err) {
+    appStore.showError(extractApiErrorMessage(err, t('admin.upstreamHub.loadFailed')))
+  }
+}
+
+
+// ---------- vendor ----------
 function openCreateVendor() {
   vendorForm.id = 0
   vendorForm.name = ''
@@ -565,7 +473,7 @@ async function saveVendor() {
     }
     showVendorDialog.value = false
     await load()
-    if (detail.value) await reloadDetail()
+    if (detail.value) await refreshDetailEntries()
   } catch (err) {
     appStore.showError(errorMessage(err))
   } finally {
@@ -573,20 +481,34 @@ async function saveVendor() {
   }
 }
 
-async function openDetail(vendorId: number) {
+async function refreshDetailEntries() {
+  if (!detail.value) return
   try {
-    detail.value = await upstreamHubAPI.getVendor(vendorId)
+    detail.value = await upstreamHubAPI.getVendor(detail.value.vendor.id)
   } catch (err) {
     appStore.showError(extractApiErrorMessage(err, t('admin.upstreamHub.loadFailed')))
   }
 }
 
-async function reloadDetail() {
-  if (!detail.value) return
-  await openDetail(detail.value.vendor.id)
-  await load()
+function askDeleteVendor(vendor: UpstreamVendor) {
+  deleteTarget.value = { type: 'vendor', id: vendor.id, name: vendor.name }
+  showDeleteConfirm.value = true
 }
 
+async function confirmDelete() {
+  if (!deleteTarget.value) return
+  try {
+    await upstreamHubAPI.deleteVendor(deleteTarget.value.id)
+    appStore.showSuccess(t('admin.upstreamHub.vendorDeleted'))
+    if (detail.value?.vendor.id === deleteTarget.value.id) detail.value = null
+    showDeleteConfirm.value = false
+    await load()
+  } catch (err) {
+    appStore.showError(errorMessage(err))
+  }
+}
+
+// ---------- entries dialog ----------
 function addEntryRow() {
   entryRows.value.push({
     name: '',
@@ -598,34 +520,65 @@ function addEntryRow() {
   })
 }
 
-function openAddEntries() {
-  entryDialogMode.value = 'create'
-  editingOriginalConcurrency.value = 0
-  entryRows.value = []
-  addEntryRow()
+function openEntriesDialog() {
+  if (!detail.value) return
+  pendingDeletes.value = []
+  entryRows.value = detail.value.entries.map(entryToRow)
+  if (entryRows.value.length === 0) addEntryRow()
   showEntryDialog.value = true
+}
+
+function closeEntriesDialog() {
+  showEntryDialog.value = false
+  entryRows.value = []
+  pendingDeletes.value = []
+}
+
+async function copyRow(row: EntryRow) {
+  if (row.accountId) {
+    // 已存在条目：服务端复制凭据（API Key 不回显）
+    try {
+      const created = await upstreamHubAPI.duplicateEntry(row.accountId, {
+        name: `${row.name}-copy`,
+        platform: row.platform,
+        concurrency: Number(row.concurrency) || 1,
+        priority: Number(row.priority) || 50
+      })
+      entryRows.value.push(entryToRow(created))
+      appStore.showSuccess(t('admin.upstreamHub.duplicateSuccess'))
+    } catch (err) {
+      appStore.showError(errorMessage(err))
+    }
+    return
+  }
+  entryRows.value.push({ ...row, name: row.name ? `${row.name}-copy` : row.name })
+}
+
+function removeRow(row: EntryRow, index: number) {
+  if (row.accountId) {
+    pendingDeletes.value.push({ accountId: row.accountId, concurrency: row.concurrency })
+  }
+  entryRows.value.splice(index, 1)
 }
 
 async function saveEntryRows() {
   if (!detail.value) return
   saving.value = true
   try {
-    if (entryDialogMode.value === 'edit') {
-      const row = entryRows.value[0]
-      if (!row || !row.accountId || !row.name.trim() || !row.base_url.trim()) {
+    for (const row of entryRows.value) {
+      if (!row.name.trim() || !row.base_url.trim()) {
         throw new Error(t('admin.upstreamHub.fillRequiredFields'))
       }
-      await upstreamHubAPI.updateEntry(row.accountId, {
-        name: row.name,
-        base_url: row.base_url,
-        api_key: row.api_key,
-        concurrency: Number(row.concurrency) || 1,
-        priority: Number(row.priority) || 50
-      })
-      appStore.showSuccess(t('admin.upstreamHub.entryUpdated'))
-    } else {
-      for (const row of entryRows.value) {
-        if (!row.name.trim() || !row.base_url.trim() || !row.api_key.trim()) {
+      if (row.accountId) {
+        await upstreamHubAPI.updateEntry(row.accountId, {
+          name: row.name,
+          base_url: row.base_url,
+          api_key: row.api_key,
+          concurrency: Number(row.concurrency) || 1,
+          priority: Number(row.priority) || 50
+        })
+      } else {
+        if (!row.api_key.trim()) {
           throw new Error(t('admin.upstreamHub.fillRequiredFields'))
         }
         await upstreamHubAPI.createEntry(detail.value.vendor.id, {
@@ -637,10 +590,14 @@ async function saveEntryRows() {
           priority: Number(row.priority) || 50
         })
       }
-      appStore.showSuccess(t('admin.upstreamHub.entryCreated'))
     }
-    showEntryDialog.value = false
-    await reloadDetail()
+    for (const removed of pendingDeletes.value) {
+      await upstreamHubAPI.deleteEntry(removed.accountId)
+    }
+    appStore.showSuccess(t('admin.upstreamHub.entryUpdated'))
+    closeEntriesDialog()
+    await refreshDetailEntries()
+    await load()
   } catch (err) {
     appStore.showError(errorMessage(err))
   } finally {
@@ -648,22 +605,7 @@ async function saveEntryRows() {
   }
 }
 
-function openEditEntry(entry: UpstreamEntry) {
-  entryDialogMode.value = 'edit'
-  editingOriginalConcurrency.value = entry.concurrency
-  entryRows.value = [{
-    accountId: entry.account_id,
-    name: entry.name,
-    platform: entry.platform,
-    base_url: entry.base_url,
-    api_key: '',
-    concurrency: entry.concurrency,
-    priority: entry.priority
-  }]
-  showEntryDialog.value = true
-}
-
-
+// ---------- entry row actions ----------
 async function toggleSchedulable(entry: UpstreamEntry, value: boolean) {
   try {
     const updated = await upstreamHubAPI.setEntrySchedulable(entry.account_id, value)
@@ -707,7 +649,7 @@ async function saveGroups() {
     }
     appStore.showSuccess(t('admin.upstreamHub.entryUpdated'))
     showGroupsDialog.value = false
-    await reloadDetail()
+    await refreshDetailEntries()
     if (detail.value) {
       const refreshed = detail.value.entries.find((item) => item.account_id === groupsEntry.value?.account_id)
       groupsEntry.value = refreshed || null
@@ -716,35 +658,6 @@ async function saveGroups() {
     appStore.showError(errorMessage(err))
   } finally {
     saving.value = false
-  }
-}
-
-function askDeleteVendor(vendor: UpstreamVendor) {
-  deleteTarget.value = { type: 'vendor', id: vendor.id, name: vendor.name }
-  showDeleteConfirm.value = true
-}
-
-function askDeleteEntry(entry: UpstreamEntry) {
-  deleteTarget.value = { type: 'entry', id: entry.account_id, name: entry.name }
-  showDeleteConfirm.value = true
-}
-
-async function confirmDelete() {
-  if (!deleteTarget.value) return
-  try {
-    if (deleteTarget.value.type === 'vendor') {
-      await upstreamHubAPI.deleteVendor(deleteTarget.value.id)
-      appStore.showSuccess(t('admin.upstreamHub.vendorDeleted'))
-      if (detail.value?.vendor.id === deleteTarget.value.id) detail.value = null
-      await load()
-    } else {
-      await upstreamHubAPI.deleteEntry(deleteTarget.value.id)
-      appStore.showSuccess(t('admin.upstreamHub.entryDeleted'))
-      await reloadDetail()
-    }
-    showDeleteConfirm.value = false
-  } catch (err) {
-    appStore.showError(errorMessage(err))
   }
 }
 

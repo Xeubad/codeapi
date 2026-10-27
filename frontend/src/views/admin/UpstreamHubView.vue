@@ -216,36 +216,36 @@
     </BaseDialog>
 
     <!-- Entries dialog: add / edit / copy in one layout -->
-    <BaseDialog :show="showEntryDialog" :title="t('admin.upstreamHub.addOrEdit')" width="full" @close="closeEntriesDialog">
+    <BaseDialog :show="showEntryDialog" :title="t('admin.upstreamHub.addOrEdit')" width="max" @close="closeEntriesDialog">
       <div v-if="anyRowDropdownOpen" class="fixed inset-0 z-30" @click="closeAllDropdowns"></div>
       <div class="space-y-3">
         <div class="table-container">
           <table class="table">
             <thead>
               <tr>
-                <th>{{ t('admin.upstreamHub.entryName') }}</th>
-                <th>{{ t('admin.upstreamHub.platform') }}</th>
-                <th>Base URL</th>
-                <th>{{ t('admin.upstreamHub.apiKey') }}</th>
-                <th>{{ t('admin.upstreamHub.concurrency') }}</th>
-                <th>{{ t('admin.upstreamHub.priority') }}</th>
-                <th class="min-w-[10rem]">{{ t('admin.upstreamHub.groups') }}</th>
-                <th class="text-right">{{ t('common.actions') }}</th>
+                <th class="min-w-[9rem] whitespace-nowrap">{{ t('admin.upstreamHub.entryName') }}</th>
+                <th class="min-w-[8rem] whitespace-nowrap">{{ t('admin.upstreamHub.platform') }}</th>
+                <th class="min-w-[12rem] whitespace-nowrap">Base URL</th>
+                <th class="min-w-[10rem] whitespace-nowrap">{{ t('admin.upstreamHub.apiKey') }}</th>
+                <th class="min-w-[6rem] whitespace-nowrap">{{ t('admin.upstreamHub.concurrency') }}</th>
+                <th class="min-w-[8.5rem] whitespace-nowrap">{{ t('admin.upstreamHub.priority') }}</th>
+                <th class="min-w-[9rem] whitespace-nowrap">{{ t('admin.upstreamHub.groups') }}</th>
+                <th class="whitespace-nowrap text-right">{{ t('common.actions') }}</th>
               </tr>
             </thead>
             <tbody>
               <template v-for="(row, index) in entryRows" :key="index">
                 <tr>
-                  <td class="min-w-[10rem]">
+                  <td>
                     <input v-model="row.name" class="input" type="text" :placeholder="t('admin.upstreamHub.entryNamePlaceholder')" />
                   </td>
-                  <td class="min-w-[9rem]">
+                  <td>
                     <Select v-model="row.platform" :options="platformOptions" :disabled="!!row.accountId" />
                   </td>
-                  <td class="min-w-[14rem]">
+                  <td>
                     <input v-model="row.base_url" class="input" type="text" placeholder="https://..." />
                   </td>
-                  <td class="min-w-[12rem]">
+                  <td>
                     <input
                       v-model="row.api_key"
                       class="input"
@@ -253,8 +253,8 @@
                       :placeholder="row.accountId ? t('admin.upstreamHub.apiKeyKeepPlaceholder') : 'sk-...'"
                     />
                   </td>
-                  <td class="w-24"><input v-model.number="row.concurrency" class="input" type="number" min="1" /></td>
-                  <td class="w-24"><input v-model.number="row.priority" class="input" type="number" /></td>
+                  <td><input v-model.number="row.concurrency" class="input" type="number" min="1" /></td>
+                  <td><input v-model.number="row.priority" class="input" type="number" /></td>
                   <td class="relative">
                     <button
                       type="button"

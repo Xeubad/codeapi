@@ -164,20 +164,22 @@
                         <span v-if="groupRefs(entry).length === 0" class="text-xs text-gray-400 dark:text-dark-400">
                           {{ t('admin.upstreamHub.ungrouped') }}
                         </span>
-                        <div v-else class="flex flex-col items-start gap-1">
-                          <span
+                        <div v-else class="flex flex-col items-stretch gap-1">
+                          <button
                             v-for="group in groupRefs(entry)"
                             :key="group.group_id"
-                            class="block w-full rounded-md px-2 py-0.5 text-xs"
+                            type="button"
+                            class="block w-full cursor-pointer rounded-md px-2 py-0.5 text-left text-xs transition-colors"
                             :class="
                               group.enabled
-                                ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400'
-                                : 'bg-gray-100 text-gray-500 dark:bg-dark-700 dark:text-dark-300'
+                                ? 'bg-primary-50 text-primary-700 hover:bg-primary-100 dark:bg-primary-900/30 dark:text-primary-400'
+                                : 'bg-gray-100 text-gray-500 hover:bg-gray-200 dark:bg-dark-700 dark:text-dark-300 dark:hover:bg-dark-600'
                             "
                             :title="group.enabled ? t('admin.upstreamHub.groupEnabled') : t('admin.upstreamHub.groupDisabled')"
+                            @click="toggleGroupEnabled(entry, group)"
                           >
                             {{ group.group_name }}
-                          </span>
+                          </button>
                         </div>
                       </td>
                       <td>
@@ -281,28 +283,16 @@
                         <div
                           v-for="group in groupsForRow(row)"
                           :key="group.id"
-                          class="dropdown-item w-full cursor-pointer justify-between"
+                          class="dropdown-item w-full cursor-pointer"
+                          :class="
+                            row.groupIds.includes(group.id)
+                              ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/20 dark:text-primary-300'
+                              : ''
+                          "
                           @click="toggleRowGroup(row, group.id)"
                         >
-                          <div class="flex min-w-0 items-center gap-2 text-sm">
-                            <input
-                              type="checkbox"
-                              class="pointer-events-none h-4 w-4"
-                              :checked="row.groupIds.includes(group.id)"
-                            />
-                            <span class="truncate">{{ group.name }}</span>
-                            <span class="badge badge-primary">{{ group.platform }}</span>
-                          </div>
-                          <div
-                            v-if="row.groupIds.includes(group.id)"
-                            class="flex items-center gap-1.5"
-                            @click.stop
-                          >
-                            <Toggle
-                              :model-value="row.groupEnabled[group.id] !== false"
-                              @update:model-value="(v) => (row.groupEnabled[group.id] = v)"
-                            />
-                          </div>
+                          <span class="truncate">{{ group.name }}</span>
+                          <span class="badge badge-primary">{{ group.platform }}</span>
                         </div>
                         <div v-if="groupsForRow(row).length === 0" class="px-4 py-2 text-xs text-gray-500">
                           {{ t('admin.upstreamHub.noGroupsForPlatform') }}
@@ -731,6 +721,15 @@ async function saveEntryRows() {
 }
 
 // ---------- entry row actions ----------
+async function toggleGroupEnabled(entry: UpstreamEntry, group: UpstreamEntryGroupRef) {
+  try {
+    await upstreamHubAPI.setEntryGroupEnabled(entry.account_id, group.group_id, !group.enabled)
+    group.enabled = !group.enabled
+  } catch (err) {
+    appStore.showError(errorMessage(err))
+  }
+}
+
 async function toggleSchedulable(entry: UpstreamEntry, value: boolean) {
   try {
     const updated = await upstreamHubAPI.setEntrySchedulable(entry.account_id, value)

@@ -281,23 +281,28 @@
                         <div
                           v-for="group in groupsForRow(row)"
                           :key="group.id"
-                          class="dropdown-item w-full justify-between"
+                          class="dropdown-item w-full cursor-pointer justify-between"
+                          @click="toggleRowGroup(row, group.id)"
                         >
-                          <label class="flex min-w-0 items-center gap-2 text-sm">
+                          <div class="flex min-w-0 items-center gap-2 text-sm">
                             <input
                               type="checkbox"
-                              class="h-4 w-4"
+                              class="pointer-events-none h-4 w-4"
                               :checked="row.groupIds.includes(group.id)"
-                              @change="toggleRowGroup(row, group.id)"
                             />
                             <span class="truncate">{{ group.name }}</span>
                             <span class="badge badge-primary">{{ group.platform }}</span>
-                          </label>
-                          <Toggle
+                          </div>
+                          <div
                             v-if="row.groupIds.includes(group.id)"
-                            :model-value="row.groupEnabled[group.id] !== false"
-                            @update:model-value="(v) => (row.groupEnabled[group.id] = v)"
-                          />
+                            class="flex items-center gap-1.5"
+                            @click.stop
+                          >
+                            <Toggle
+                              :model-value="row.groupEnabled[group.id] !== false"
+                              @update:model-value="(v) => (row.groupEnabled[group.id] = v)"
+                            />
+                          </div>
                         </div>
                         <div v-if="groupsForRow(row).length === 0" class="px-4 py-2 text-xs text-gray-500">
                           {{ t('admin.upstreamHub.noGroupsForPlatform') }}

@@ -477,6 +477,30 @@ func TestCreateEntryPicksFastestVendorBaseURL(t *testing.T) {
 	require.Equal(t, "https://fast.example.com", admin.created.Credentials["base_url"])
 }
 
+func TestCreateEntryUsesSingleVendorBaseURL(t *testing.T) {
+	admin := &stubUpstreamAdmin{account: &Account{
+		ID:    99,
+		Name:  "A",
+		Extra: map[string]any{UpstreamVendorIDExtraKey: int64(2)},
+	}}
+	repo := &stubUpstreamVendorRepo{
+		vendors: []UpstreamVendor{{ID: 2, Name: "A"}},
+		entries: map[int64][]UpstreamEntry{2: {{AccountID: 99, VendorID: 2, Name: "A"}}},
+	}
+	svc := NewUpstreamHubService(repo, admin, &stubUpstreamProber{})
+
+	_, err := svc.CreateEntry(context.Background(), 2, CreateUpstreamEntryInput{
+		Name:        "A",
+		Platform:    PlatformDeepseek,
+		APIKey:      "sk-x",
+		Concurrency: 1,
+		Priority:    50,
+		BaseURLs:    []string{"https://only.example.com"},
+	})
+	require.NoError(t, err)
+	require.Equal(t, "https://only.example.com", admin.created.Credentials["base_url"])
+}
+
 func TestCreateEntryBlocksWhenAllVendorBaseURLsUnreachable(t *testing.T) {
 	admin := &stubUpstreamAdmin{}
 	repo := &stubUpstreamVendorRepo{vendors: []UpstreamVendor{{ID: 2, Name: "A"}}}

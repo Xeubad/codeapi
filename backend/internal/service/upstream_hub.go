@@ -314,7 +314,7 @@ func (s *UpstreamHubService) CreateEntry(ctx context.Context, vendorID int64, in
 			return nil, err
 		}
 		baseURL = normalized
-	} else if len(input.BaseURLs) < 2 {
+	} else if len(input.BaseURLs) < 1 {
 		return nil, fmt.Errorf("base url is required")
 	}
 	apiKey := strings.TrimSpace(input.APIKey)
@@ -326,7 +326,7 @@ func (s *UpstreamHubService) CreateEntry(ctx context.Context, vendorID int64, in
 	}
 	platform := strings.TrimSpace(input.Platform)
 	// 厂家配了多个地址：保存前实测，只固化最快的一个；全不可达则拒绝保存。
-	if len(input.BaseURLs) >= 2 {
+	if len(input.BaseURLs) >= 1 {
 		measureAccount := &Account{
 			Platform:    platform,
 			Type:        AccountTypeAPIKey,
@@ -386,10 +386,10 @@ func (s *UpstreamHubService) UpdateEntry(ctx context.Context, accountID int64, i
 		if err != nil {
 			return nil, err
 		}
-	} else if len(input.BaseURLs) < 2 {
+	} else if len(input.BaseURLs) < 1 {
 		return nil, fmt.Errorf("base url is required")
 	}
-	if len(input.BaseURLs) >= 2 {
+	if len(input.BaseURLs) >= 1 {
 		chosen, pickErr := s.pickSaveBaseURL(ctx, current, baseURL, input.BaseURLs)
 		if pickErr != nil {
 			return nil, pickErr
@@ -496,7 +496,10 @@ func (s *UpstreamHubService) pickSaveBaseURL(ctx context.Context, account *Accou
 	if err != nil {
 		return "", err
 	}
-	if len(urls) < 2 {
+	if len(urls) == 1 {
+		return urls[0], nil
+	}
+	if len(urls) == 0 {
 		return fallback, nil
 	}
 	if s.probe == nil {

@@ -72,6 +72,7 @@ func (r *upstreamVendorRepository) Create(ctx context.Context, name string, budg
 
 func (r *upstreamVendorRepository) Update(ctx context.Context, id int64, name string, budget int, notes *string, baseURLs []string) (*service.UpstreamVendor, error) {
 	builder := r.client.UpstreamVendor.UpdateOneID(id).
+		Where(dbupstreamvendor.DeletedAtIsNil()).
 		SetName(name).
 		SetConcurrencyBudget(budget).
 		SetBaseUrls(baseURLs)

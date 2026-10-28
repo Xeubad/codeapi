@@ -223,21 +223,6 @@
           <label class="input-label">{{ t('admin.upstreamHub.notes') }}</label>
           <input v-model="vendorForm.notes" class="input" type="text" :placeholder="t('admin.upstreamHub.notesPlaceholder')" />
         </div>
-        <div>
-          <label class="input-label">{{ t('admin.upstreamHub.vendorBaseURLs') }}</label>
-          <p class="input-hint">{{ t('admin.upstreamHub.vendorBaseURLsHint') }}</p>
-          <div class="mt-2 space-y-2">
-            <div v-for="(_, index) in vendorForm.base_urls" :key="index" class="flex items-center gap-2">
-              <input v-model="vendorForm.base_urls[index]" class="input flex-1" type="text" placeholder="https://api.example.com/v1" />
-              <button class="btn btn-sm btn-ghost text-red-600" @click="vendorForm.base_urls.splice(index, 1)">
-                {{ t('admin.upstreamHub.removeRow') }}
-              </button>
-            </div>
-            <button class="btn btn-secondary btn-sm" @click="vendorForm.base_urls.push('')">
-              {{ t('admin.upstreamHub.addBaseURL') }}
-            </button>
-          </div>
-        </div>
       </div>
       <template #footer>
         <button class="btn btn-secondary" @click="showVendorDialog = false">{{ t('admin.upstreamHub.cancel') }}</button>
@@ -249,13 +234,22 @@
     <BaseDialog :show="showEntryDialog" :title="t('admin.upstreamHub.addOrEdit')" width="max" @close="closeEntriesDialog">
       <div v-if="anyRowDropdownOpen" class="fixed inset-0 z-30" @click="closeAllDropdowns"></div>
       <div class="space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-200 px-3 py-2 dark:border-dark-600">
+          <div class="flex items-center gap-2">
+            <span class="text-sm text-gray-700 dark:text-gray-300">{{ t('admin.upstreamHub.baseURLPool') }}</span>
+            <span class="badge badge-gray">{{ vendorBaseURLs.length }}</span>
+            <button class="btn btn-secondary btn-sm" @click="openBaseURLDialog">
+              {{ t('admin.upstreamHub.manageBaseURLs') }}
+            </button>
+          </div>
+          <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.upstreamHub.baseURLPoolHint') }}</span>
+        </div>
         <div class="table-container">
           <table class="table">
             <thead>
               <tr>
                 <th class="min-w-[9rem] whitespace-nowrap">{{ t('admin.upstreamHub.entryName') }}</th>
                 <th class="min-w-[8rem] whitespace-nowrap">{{ t('admin.upstreamHub.platform') }}</th>
-                <th class="min-w-[12rem] whitespace-nowrap">Base URL</th>
                 <th class="min-w-[10rem] whitespace-nowrap">{{ t('admin.upstreamHub.apiKey') }}</th>
                 <th class="min-w-[6rem] whitespace-nowrap">{{ t('admin.upstreamHub.concurrency') }}</th>
                 <th class="min-w-[8.5rem] whitespace-nowrap">{{ t('admin.upstreamHub.priority') }}</th>
@@ -269,27 +263,12 @@
                 <tr>
                   <td>
                     <input v-model="row.name" class="input" type="text" :placeholder="t('admin.upstreamHub.entryNamePlaceholder')" />
+                    <div v-if="row.base_url" class="mt-0.5 truncate text-xs text-gray-500 dark:text-gray-400" :title="row.base_url">
+                      {{ row.base_url }}
+                    </div>
                   </td>
                   <td>
                     <Select v-model="row.platform" :options="platformOptions" :disabled="!!row.accountId" />
-                  </td>
-                  <td>
-                    <input v-model="row.base_url" class="input" type="text" placeholder="https://..." />
-                    <div v-if="vendorBaseURLs.length > 1" class="mt-1 flex items-center gap-2">
-                      <button
-                        type="button"
-                        class="shrink-0 text-xs text-primary-600 hover:underline disabled:opacity-50"
-                        :disabled="row.latencyLoading"
-                        @click="measureRowLatencies(row)"
-                      >
-                        {{ row.latencyLoading ? t('admin.upstreamHub.measuring') : t('admin.upstreamHub.measureBaseURLs') }}
-                      </button>
-                      <span
-                        v-if="row.latencySummary"
-                        class="truncate text-xs"
-                        :class="row.latencyFailed ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'"
-                      >{{ row.latencySummary }}</span>
-                    </div>
                   </td>
                   <td>
                     <input
@@ -379,7 +358,7 @@
                   </td>
                 </tr>
                 <tr v-if="row.modelPanelOpen">
-                  <td colspan="9" class="bg-gray-50 dark:bg-dark-800/40">
+                  <td colspan="8" class="bg-gray-50 dark:bg-dark-800/40">
                     <div class="space-y-2">
                       <div class="flex flex-wrap items-center gap-2">
                         <button
@@ -494,6 +473,56 @@
 
 
 
+    <!-- Base URL pool dialog：厂家地址池在这里统一维护与测速 -->
+    <BaseDialog
+      :show="showBaseURLDialog"
+      :title="t('admin.upstreamHub.baseURLDialogTitle')"
+      @close="showBaseURLDialog = false"
+    >
+      <div class="space-y-3">
+        <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.upstreamHub.baseURLDialogHint') }}</p>
+        <div class="space-y-2">
+          <div v-for="(_, index) in baseURLForm.urls" :key="index" class="flex items-center gap-2">
+            <input v-model="baseURLForm.urls[index]" class="input flex-1" type="text" placeholder="https://api.example.com/v1" />
+            <button class="btn btn-sm btn-ghost text-red-600" @click="baseURLForm.urls.splice(index, 1)">
+              {{ t('admin.upstreamHub.removeRow') }}
+            </button>
+          </div>
+          <button class="btn btn-secondary btn-sm" @click="baseURLForm.urls.push('')">
+            {{ t('admin.upstreamHub.addBaseURL') }}
+          </button>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <button class="btn btn-secondary btn-sm" :disabled="baseURLTesting || cleanBaseURLs.length === 0" @click="testBaseURLs">
+            {{ baseURLTesting ? t('admin.upstreamHub.measuring') : t('admin.upstreamHub.measureBaseURLs') }}
+          </button>
+          <span v-if="baseURLTestError" class="text-xs text-red-600 dark:text-red-400">{{ baseURLTestError }}</span>
+        </div>
+        <div v-if="baseURLTestResults.length" class="max-h-48 overflow-y-auto rounded-lg border border-gray-200 dark:border-dark-600">
+          <div
+            v-for="item in baseURLTestResults"
+            :key="item.url"
+            class="flex items-center justify-between gap-2 px-3 py-1 text-xs"
+          >
+            <span class="truncate font-mono">{{ item.url }}</span>
+            <span :class="item.ok ? 'text-primary-600 dark:text-primary-400' : 'text-red-600 dark:text-red-400'">
+              {{ item.ok ? `${item.latency_ms}ms` : item.error || t('admin.upstreamHub.allBaseURLsUnreachable') }}
+            </span>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <button class="btn btn-secondary" @click="showBaseURLDialog = false">{{ t('admin.upstreamHub.cancel') }}</button>
+        <button
+          class="btn btn-primary"
+          :disabled="baseURLSaving || cleanBaseURLs.length === 0"
+          @click="saveBaseURLs"
+        >
+          {{ t('admin.upstreamHub.saveBaseURLs') }}
+        </button>
+      </template>
+    </BaseDialog>
+
     <ConfirmDialog
       :show="showDeleteConfirm"
       :title="t('admin.upstreamHub.delete')"
@@ -514,6 +543,7 @@ import { useAppStore } from '@/stores/app'
 import { extractApiErrorMessage } from '@/utils/apiError'
 import { syncUpstreamModelsPreview } from '@/api/admin/accounts'
 import upstreamHubAPI, {
+  type UpstreamBaseURLLatency,
   type UpstreamEntry,
   type UpstreamEntryGroupRef,
   type UpstreamGroupOption,
@@ -541,7 +571,7 @@ const saving = ref(false)
 const platformOptions = computed(() => CONCRETE_PLATFORM_OPTIONS.map((p) => ({ label: p.label, value: p.value })))
 
 const showVendorDialog = ref(false)
-const vendorForm = reactive({ id: 0, name: '', concurrency_budget: 0, notes: '', base_urls: [] as string[] })
+const vendorForm = reactive({ id: 0, name: '', concurrency_budget: 0, notes: '' })
 
 interface EntryRow {
   accountId?: number
@@ -566,9 +596,6 @@ interface EntryRow {
   probeSource: string
   probeWarning: string
   manualModel: string
-  latencyLoading: boolean
-  latencySummary: string
-  latencyFailed: boolean
 }
 const showEntryDialog = ref(false)
 const entryRows = ref<EntryRow[]>([])
@@ -620,10 +647,7 @@ function entryToRow(entry: UpstreamEntry): EntryRow {
     probeModels: [],
     probeSource: '',
     probeWarning: '',
-    manualModel: '',
-    latencyLoading: false,
-    latencySummary: '',
-    latencyFailed: false
+    manualModel: ''
   }
 }
 
@@ -661,7 +685,6 @@ function openCreateVendor() {
   vendorForm.name = ''
   vendorForm.concurrency_budget = 0
   vendorForm.notes = ''
-  vendorForm.base_urls = []
   showVendorDialog.value = true
 }
 
@@ -670,7 +693,6 @@ function openEditVendor(vendor: UpstreamVendor) {
   vendorForm.name = vendor.name
   vendorForm.concurrency_budget = vendor.concurrency_budget
   vendorForm.notes = vendor.notes || ''
-  vendorForm.base_urls = [...(vendor.base_urls || [])]
   showVendorDialog.value = true
 }
 
@@ -680,8 +702,7 @@ async function saveVendor() {
     const payload = {
       name: vendorForm.name,
       concurrency_budget: Number(vendorForm.concurrency_budget) || 0,
-      notes: vendorForm.notes || null,
-      base_urls: vendorForm.base_urls.map((url) => url.trim()).filter(Boolean)
+      notes: vendorForm.notes || null
     }
     if (vendorForm.id > 0) {
       await upstreamHubAPI.updateVendor(vendorForm.id, payload)
@@ -749,10 +770,7 @@ function blankRow(): EntryRow {
     probeModels: [],
     probeSource: '',
     probeWarning: '',
-    manualModel: '',
-    latencyLoading: false,
-    latencySummary: '',
-    latencyFailed: false
+    manualModel: ''
   }
 }
 
@@ -942,9 +960,6 @@ async function copyRow(row: EntryRow) {
     probeSource: '',
     probeWarning: '',
     manualModel: '',
-    latencyLoading: false,
-    latencySummary: '',
-    latencyFailed: false,
     expanded: false,
     dropdownTop: 0,
     dropdownRight: 0
@@ -958,44 +973,69 @@ function removeRow(row: EntryRow, index: number) {
   entryRows.value.splice(index, 1)
 }
 
-// 保存前测速：厂家配置了多个地址时，实测各地址延迟并把最快的一个固化到条目，
-// 运行时不再切换地址（避免请求途中换线路）。
-async function measureRowLatencies(row: EntryRow) {
-  if (vendorBaseURLs.value.length < 2) return
-  row.latencyLoading = true
+// ---------- 接入地址池（厂家级，添加/编辑页内维护） ----------
+const showBaseURLDialog = ref(false)
+const baseURLForm = reactive({ urls: [] as string[] })
+const baseURLTesting = ref(false)
+const baseURLSaving = ref(false)
+const baseURLTestResults = ref<UpstreamBaseURLLatency[]>([])
+const baseURLTestError = ref('')
+
+const cleanBaseURLs = computed(() => baseURLForm.urls.map((url) => url.trim()).filter(Boolean))
+
+function openBaseURLDialog() {
+  baseURLForm.urls = vendorBaseURLs.value.length ? [...vendorBaseURLs.value] : ['']
+  baseURLTestResults.value = []
+  baseURLTestError.value = ''
+  showBaseURLDialog.value = true
+}
+
+function baseURLTestTarget() {
+  const row = entryRows.value.find((item) => item.accountId) || entryRows.value[0]
+  if (!row) return null
+  if (row.accountId) return { account_id: row.accountId }
+  if (row.api_key.trim()) return { platform: row.platform, api_key: row.api_key.trim() }
+  return null
+}
+
+async function testBaseURLs() {
+  const urls = cleanBaseURLs.value
+  if (urls.length === 0) return
+  const target = baseURLTestTarget()
+  if (!target) {
+    baseURLTestError.value = t('admin.upstreamHub.baseURLTestNeedsKey')
+    return
+  }
+  baseURLTesting.value = true
+  baseURLTestError.value = ''
   try {
-    const results = await upstreamHubAPI.measureBaseURLs({
-      account_id: row.accountId,
-      platform: row.platform,
-      api_key: row.api_key,
-      base_urls: vendorBaseURLs.value
-    })
-    const reachable = results.filter((item) => item.ok).sort((a, b) => a.latency_ms - b.latency_ms)
-    if (reachable.length === 0) {
-      row.latencyFailed = true
-      row.latencySummary = t('admin.upstreamHub.allBaseURLsUnreachable')
-      return
-    }
-    const fastest = reachable[0]
-    row.base_url = fastest.url
-    row.latencyFailed = false
-    row.latencySummary = t('admin.upstreamHub.fastestBaseURL', {
-      host: baseURLHost(fastest.url),
-      ms: fastest.latency_ms
-    })
+    baseURLTestResults.value = await upstreamHubAPI.measureBaseURLs({ ...target, base_urls: urls })
   } catch (err) {
-    row.latencyFailed = true
-    row.latencySummary = extractApiErrorMessage(err, t('admin.upstreamHub.measureFailed'))
+    baseURLTestError.value = extractApiErrorMessage(err, t('admin.upstreamHub.measureFailed'))
   } finally {
-    row.latencyLoading = false
+    baseURLTesting.value = false
   }
 }
 
-function baseURLHost(raw: string): string {
+async function saveBaseURLs() {
+  if (!detail.value) return
+  const urls = cleanBaseURLs.value
+  if (urls.length === 0) return
+  baseURLSaving.value = true
   try {
-    return new URL(raw).host
-  } catch {
-    return raw
+    await upstreamHubAPI.updateVendor(detail.value.vendor.id, {
+      name: detail.value.vendor.name,
+      concurrency_budget: detail.value.vendor.concurrency_budget,
+      notes: detail.value.vendor.notes || null,
+      base_urls: urls
+    })
+    await refreshDetailEntries()
+    showBaseURLDialog.value = false
+    appStore.showSuccess(t('admin.upstreamHub.baseURLsSaved'))
+  } catch (err) {
+    appStore.showError(errorMessage(err))
+  } finally {
+    baseURLSaving.value = false
   }
 }
 
@@ -1008,19 +1048,22 @@ async function saveEntryRows() {
     )
     return
   }
+  if (vendorBaseURLs.value.length === 0) {
+    appStore.showError(t('admin.upstreamHub.baseURLPoolRequired'))
+    return
+  }
   saving.value = true
   try {
+    // 地址池由厂家统一维护；最快者由服务端在保存时实测决定，客户端绕不过去。
+    const baseURLs = vendorBaseURLs.value
     for (const row of entryRows.value) {
-      const multiBaseURL = vendorBaseURLs.value.length > 1
-      if (!row.name.trim() || (!multiBaseURL && !row.base_url.trim())) {
+      if (!row.name.trim()) {
         throw new Error(t('admin.upstreamHub.fillRequiredFields'))
       }
-      // 多地址时最快者由服务端在保存时实测决定（客户端只做预览），绕不过去。
-      const baseURLs = multiBaseURL ? vendorBaseURLs.value : undefined
       if (row.accountId) {
         await upstreamHubAPI.updateEntry(row.accountId, {
           name: row.name,
-          base_url: row.base_url,
+          base_url: row.base_url || baseURLs[0] || '',
           api_key: row.api_key,
           concurrency: Number(row.concurrency) || 1,
           priority: Number(row.priority) || 50,
@@ -1037,7 +1080,7 @@ async function saveEntryRows() {
         const created = await upstreamHubAPI.createEntry(detail.value.vendor.id, {
           name: row.name,
           platform: row.platform,
-          base_url: row.base_url,
+          base_url: row.base_url || baseURLs[0] || '',
           api_key: row.api_key,
           concurrency: Number(row.concurrency) || 1,
           priority: Number(row.priority) || 50,

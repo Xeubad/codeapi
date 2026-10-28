@@ -285,7 +285,7 @@ DI 走 google/wire（`cmd/server/wire_gen.go` 手工补丁，本机无 wire CLI 
 
 ### 第三轮修正（2026-10-29）：多 BaseURL 保存时定稿、模型按钮块
 
-- **厂家多 BaseURL**：`upstream_vendors.base_urls`（jsonb，≤10）。厂家弹窗多行维护。
+- **厂家多 BaseURL**：`upstream_vendors.base_urls`（jsonb，≤10）。地址池在**添加/编辑页的「接入地址」弹窗**里维护（多行增删 + 逐地址测速），厂家弹窗不再重复配置；条目行不填地址，名称下方只读显示当前固化值。
 - **保存即定稿**：`POST /admin/upstream-base-urls/latency` 并发测各候选地址（拿到任意 HTTP 响应即算可达，401/404 也算；只记传输失败）；`CreateEntry`/`UpdateEntry` 在服务端用同一测量选最快者写入 `credentials.base_url`，全部不可达则 400 阻断保存。**运行期不切换地址**，避免请求途中换线路导致行为漂移。
 - **探测结果按钮块**：模型以按钮块展示，点击切换启用（选中=青柠实底），无复选框；手动添加保留。
 - 账号页的模型同步保持原有 404/405 语义，端点变体只在 hub 探测路径启用（`fetchUpstreamModelList(..., allowEndpointVariants)`）。

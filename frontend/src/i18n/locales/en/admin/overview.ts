@@ -1179,6 +1179,9 @@ export default {
         fallbackHint: 'Off: return 503 / the upstream error. On: fall back to the existing scheduler path.',
         selectAtLeastOne: 'Select at least one account after enabling pinned accounts'
       },
+      aggregation: {
+        action: 'Aggregation'
+      },
       compositeRoutes: {
         action: 'Routes',
         title: 'Composite Routes',

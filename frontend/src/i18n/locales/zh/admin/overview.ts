@@ -1176,6 +1176,9 @@ export default {
         fallbackHint: '关闭时返回 503 / 上游错误；开启时回退到现有调度器选账路径。',
         selectAtLeastOne: '开启固定账号后至少选择一个账号'
       },
+      aggregation: {
+        action: '聚合调度'
+      },
       compositeRoutes: {
         action: '路由',
         title: 'Composite 路由',

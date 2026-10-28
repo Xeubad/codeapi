@@ -3,29 +3,81 @@
     <div class="space-y-4">
       <div class="page-header">
         <div>
-          <h1 class="page-title">{{ t('admin.aggregation.title') }}</h1>
-          <p class="page-subtitle">{{ t('admin.aggregation.description') }}</p>
+          <div class="flex flex-wrap items-center gap-2">
+            <button v-if="selectedUnitId" class="btn btn-ghost btn-sm" @click="backToList">
+              ← {{ t('admin.aggregation.back') }}
+            </button>
+            <h1 class="page-title">
+              {{ selectedUnit ? selectedUnit.name : t('admin.aggregation.title') }}
+            </h1>
+            <span v-if="selectedUnit" class="badge badge-primary">{{ t('admin.aggregation.compositeBadge') }}</span>
+          </div>
+          <p class="page-subtitle">
+            {{ selectedUnit ? t('admin.aggregation.unitDesc') : t('admin.aggregation.description') }}
+          </p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
-          <Select
-            v-if="compositeGroups.length"
-            v-model="selectedGroupId"
-            class="w-56"
-            :options="compositeGroupOptions"
-            @update:model-value="loadGroupData"
-          />
+          <template v-if="selectedUnitId">
+            <button class="btn btn-secondary btn-sm" @click="goToGroups">
+              {{ t('admin.aggregation.configureInGroups') }}
+            </button>
+          </template>
+          <template v-else>
+            <button class="btn btn-primary btn-sm" @click="openCreateUnit">{{ t('admin.aggregation.createUnit') }}</button>
+          </template>
           <button class="btn btn-secondary btn-sm" :disabled="loading" @click="loadAll">
             {{ t('admin.aggregation.refresh') }}
           </button>
         </div>
       </div>
 
-      <EmptyState
-        v-if="!loading && compositeGroups.length === 0"
-        :title="t('admin.aggregation.noCompositeGroups')"
-        :description="t('admin.aggregation.noCompositeGroupsHint')"
-      />
+      <!-- 单元列表 -->
+      <template v-if="!selectedUnitId">
+        <EmptyState
+          v-if="!loading && units.length === 0"
+          :title="t('admin.aggregation.noUnits')"
+          :description="t('admin.aggregation.noUnitsHint')"
+        />
+        <div v-else class="table-container">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>{{ t('admin.aggregation.unitName') }}</th>
+                <th>{{ t('admin.aggregation.entryCount') }}</th>
+                <th>{{ t('admin.aggregation.routeCount') }}</th>
+                <th>RPM</th>
+                <th>{{ t('admin.aggregation.status') }}</th>
+                <th class="text-right">{{ t('common.actions') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="unit in units" :key="unit.id">
+                <td>
+                  <div class="font-medium text-gray-900 dark:text-white">{{ unit.name }}</div>
+                  <div v-if="unit.description" class="max-w-[28rem] truncate text-xs text-gray-500">
+                    {{ unit.description }}
+                  </div>
+                </td>
+                <td>{{ attachedCountFor(unit.id) }}</td>
+                <td>{{ routesCountByGroup[unit.id] ?? '—' }}</td>
+                <td>{{ unit.rpm_limit || '∞' }}</td>
+                <td>
+                  <span class="badge" :class="unit.status === 'active' ? 'badge-primary' : 'badge-gray'">
+                    {{ unit.status }}
+                  </span>
+                </td>
+                <td class="text-right">
+                  <button class="btn btn-sm btn-secondary" @click="openUnit(unit.id)">
+                    {{ t('admin.aggregation.manage') }}
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </template>
 
+      <!-- 单元详情 -->
       <template v-else>
         <div class="grid gap-4 xl:grid-cols-2">
           <!-- 供给汇入 -->
@@ -71,10 +123,9 @@
                       {{ entry.platform }} · {{ t('admin.aggregation.modelsCount', { count: entry.models?.length || 0 }) }}
                     </div>
                   </div>
-                  <span
-                    v-if="isAttached(entry) && !isEnabledHere(entry)"
-                    class="badge badge-gray"
-                  >{{ t('admin.aggregation.disabledHere') }}</span>
+                  <span v-if="isAttached(entry) && !isEnabledHere(entry)" class="badge badge-gray">
+                    {{ t('admin.aggregation.disabledHere') }}
+                  </span>
                   <Toggle
                     v-if="isAttached(entry)"
                     :model-value="isEnabledHere(entry)"
@@ -205,11 +256,11 @@
               <h3 class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
                 {{ t('admin.aggregation.group') }}
               </h3>
-              <div v-if="selectedGroup" class="rounded-lg border border-primary-300 bg-primary-50 px-2 py-1.5 text-sm text-primary-800 dark:border-primary-700 dark:bg-primary-900/20 dark:text-primary-300">
-                <div class="truncate font-medium">{{ selectedGroup.name }}</div>
+              <div v-if="selectedUnit" class="rounded-lg border border-primary-300 bg-primary-50 px-2 py-1.5 text-sm text-primary-800 dark:border-primary-700 dark:bg-primary-900/20 dark:text-primary-300">
+                <div class="truncate font-medium">{{ selectedUnit.name }}</div>
                 <div class="text-xs opacity-80">
                   {{ t('admin.aggregation.attachedCount', { count: attachedCount }) }}
-                  · RPM {{ selectedGroup.rpm_limit || '∞' }}
+                  · RPM {{ selectedUnit.rpm_limit || '∞' }}
                 </div>
               </div>
             </div>
@@ -230,12 +281,38 @@
         </div>
       </template>
     </div>
+
+    <!-- 新建单元 -->
+    <BaseDialog
+      :show="showCreateDialog"
+      :title="t('admin.aggregation.createUnit')"
+      @close="showCreateDialog = false"
+    >
+      <div class="space-y-3">
+        <div>
+          <label class="input-label">{{ t('admin.aggregation.unitName') }}</label>
+          <input v-model="createForm.name" class="input" type="text" :placeholder="t('admin.aggregation.unitNamePlaceholder')" />
+        </div>
+        <div>
+          <label class="input-label">{{ t('admin.aggregation.unitDescription') }}</label>
+          <input v-model="createForm.description" class="input" type="text" :placeholder="t('admin.aggregation.unitDescriptionPlaceholder')" />
+        </div>
+        <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.aggregation.createUnitHint') }}</p>
+      </div>
+      <template #footer>
+        <button class="btn btn-secondary" @click="showCreateDialog = false">{{ t('admin.aggregation.cancel') }}</button>
+        <button class="btn btn-primary" :disabled="creating || !createForm.name.trim()" @click="createUnit">
+          {{ t('admin.aggregation.createUnit') }}
+        </button>
+      </template>
+    </BaseDialog>
   </AppLayout>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute, useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import { extractApiErrorMessage } from '@/utils/apiError'
 import upstreamHubAPI, { type UpstreamEntry, type UpstreamVendor } from '@/api/admin/upstreamHub'
@@ -243,44 +320,46 @@ import groupsAPI from '@/api/admin/groups'
 import { CONCRETE_PLATFORM_OPTIONS } from '@/constants/platforms'
 import type { AdminGroup, CompositeModelRoute } from '@/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
+import BaseDialog from '@/components/common/BaseDialog.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import Select from '@/components/common/Select.vue'
 import Toggle from '@/components/common/Toggle.vue'
 
 const { t } = useI18n()
 const appStore = useAppStore()
+const route = useRoute()
+const router = useRouter()
 
 const loading = ref(false)
 const saving = ref(false)
+const creating = ref(false)
 const groups = ref<AdminGroup[]>([])
 const vendors = ref<UpstreamVendor[]>([])
 const entries = ref<UpstreamEntry[]>([])
 const routes = ref<CompositeModelRoute[]>([])
+const routesCountByGroup = ref<Record<number, number>>({})
 const stats = ref<{ total_api_keys: number; active_api_keys: number } | null>(null)
-const selectedGroupId = ref<number | null>(null)
+const selectedUnitId = ref<number | null>(null)
 
-const compositeGroups = computed(() => groups.value.filter((group) => group.platform === 'composite'))
-const compositeGroupOptions = computed(() =>
-  compositeGroups.value.map((group) => ({ label: group.name, value: group.id }))
-)
-const selectedGroup = computed(
-  () => compositeGroups.value.find((group) => group.id === selectedGroupId.value) || null
-)
+const units = computed(() => groups.value.filter((group) => group.platform === 'composite'))
+const selectedUnit = computed(() => units.value.find((group) => group.id === selectedUnitId.value) || null)
 const platformOptions = computed(() =>
   CONCRETE_PLATFORM_OPTIONS.map((platform) => ({ label: platform.label, value: platform.value }))
 )
-
 const vendorGroups = computed(() =>
   vendors.value.map((vendor) => ({
     ...vendor,
     entries: entries.value.filter((entry) => entry.vendor_id === vendor.id)
   }))
 )
-
 const attachedCount = computed(() => entries.value.filter((entry) => isAttached(entry)).length)
 
+function attachedCountFor(groupId: number): number {
+  return entries.value.filter((entry) => (entry.groups || []).some((group) => group.group_id === groupId)).length
+}
+
 function groupRef(entry: UpstreamEntry) {
-  return entry.groups?.find((group) => group.group_id === selectedGroupId.value)
+  return entry.groups?.find((group) => group.group_id === selectedUnitId.value)
 }
 
 function isAttached(entry: UpstreamEntry): boolean {
@@ -295,23 +374,31 @@ function errorMessage(err: unknown): string {
   return extractApiErrorMessage(err, t('admin.aggregation.loadFailed'))
 }
 
-async function loadGroups() {
+async function loadUnits() {
   groups.value = await groupsAPI.getAllIncludingInactive()
-  if (!selectedGroupId.value || !compositeGroups.value.some((group) => group.id === selectedGroupId.value)) {
-    selectedGroupId.value = compositeGroups.value[0]?.id ?? null
-  }
+  const counts: Record<number, number> = {}
+  await Promise.all(
+    units.value.map(async (unit) => {
+      try {
+        counts[unit.id] = (await groupsAPI.listCompositeRoutes(unit.id)).length
+      } catch {
+        counts[unit.id] = 0
+      }
+    })
+  )
+  routesCountByGroup.value = counts
 }
 
-async function loadGroupData() {
-  if (!selectedGroupId.value) {
+async function loadUnitData() {
+  if (!selectedUnitId.value) {
     routes.value = []
     stats.value = null
     return
   }
   try {
     const [routeList, groupStats] = await Promise.all([
-      groupsAPI.listCompositeRoutes(selectedGroupId.value),
-      groupsAPI.getStats(selectedGroupId.value)
+      groupsAPI.listCompositeRoutes(selectedUnitId.value),
+      groupsAPI.getStats(selectedUnitId.value)
     ])
     routes.value = routeList
     stats.value = { total_api_keys: groupStats.total_api_keys, active_api_keys: groupStats.active_api_keys }
@@ -326,8 +413,8 @@ async function loadAll() {
     const [vendorList, entryList] = await Promise.all([upstreamHubAPI.listVendors(), upstreamHubAPI.listAllEntries()])
     vendors.value = vendorList
     entries.value = entryList
-    await loadGroups()
-    await loadGroupData()
+    await loadUnits()
+    await loadUnitData()
   } catch (err) {
     appStore.showError(errorMessage(err))
   } finally {
@@ -340,12 +427,64 @@ async function refreshEntries() {
   vendors.value = await upstreamHubAPI.listVendors()
 }
 
+function openUnit(unitId: number) {
+  selectedUnitId.value = unitId
+  void router.replace({ query: { ...route.query, unit: String(unitId) } })
+  void loadUnitData()
+}
+
+function backToList() {
+  selectedUnitId.value = null
+  const query = { ...route.query }
+  delete query.unit
+  void router.replace({ query })
+  routes.value = []
+  stats.value = null
+}
+
+function goToGroups() {
+  void router.push('/admin/groups')
+}
+
+// ---------- 新建单元 ----------
+const showCreateDialog = ref(false)
+const createForm = reactive({ name: '', description: '' })
+
+function openCreateUnit() {
+  createForm.name = ''
+  createForm.description = ''
+  showCreateDialog.value = true
+}
+
+async function createUnit() {
+  if (!createForm.name.trim()) return
+  creating.value = true
+  try {
+    const group = await groupsAPI.create({
+      name: createForm.name.trim(),
+      description: createForm.description.trim() || undefined,
+      platform: 'composite',
+      rate_multiplier: 1,
+      subscription_type: 'standard'
+    })
+    showCreateDialog.value = false
+    appStore.showSuccess(t('admin.aggregation.unitCreated'))
+    await loadAll()
+    openUnit(group.id)
+  } catch (err) {
+    appStore.showError(errorMessage(err))
+  } finally {
+    creating.value = false
+  }
+}
+
+// ---------- 供给 ----------
 async function toggleAttach(entry: UpstreamEntry) {
-  if (!selectedGroupId.value) return
+  if (!selectedUnitId.value) return
   const otherGroups = (entry.groups || [])
     .map((group) => group.group_id)
-    .filter((groupId) => groupId !== selectedGroupId.value)
-  const nextGroupIds = isAttached(entry) ? otherGroups : [...otherGroups, selectedGroupId.value]
+    .filter((groupId) => groupId !== selectedUnitId.value)
+  const nextGroupIds = isAttached(entry) ? otherGroups : [...otherGroups, selectedUnitId.value]
   try {
     await upstreamHubAPI.setEntryGroups(entry.account_id, nextGroupIds)
     await refreshEntries()
@@ -365,6 +504,7 @@ async function toggleEntryEnabled(entry: UpstreamEntry) {
   }
 }
 
+// ---------- 归一模型 ----------
 const routeForm = reactive({
   public_model: '',
   target_platform: platformOptions.value[0]?.value || 'openai',
@@ -373,14 +513,14 @@ const routeForm = reactive({
 })
 
 async function addRoute() {
-  if (!selectedGroupId.value) return
+  if (!selectedUnitId.value) return
   if (!routeForm.public_model.trim()) {
     appStore.showError(t('admin.aggregation.routeRequired'))
     return
   }
   saving.value = true
   try {
-    await groupsAPI.createCompositeRoute(selectedGroupId.value, {
+    await groupsAPI.createCompositeRoute(selectedUnitId.value, {
       public_model: routeForm.public_model.trim(),
       match_type: 'exact',
       target_platform: routeForm.target_platform,
@@ -392,7 +532,8 @@ async function addRoute() {
     routeForm.public_model = ''
     routeForm.upstream_model = ''
     appStore.showSuccess(t('admin.aggregation.routeCreated'))
-    await loadGroupData()
+    await loadUnitData()
+    await loadUnits()
   } catch (err) {
     appStore.showError(errorMessage(err))
   } finally {
@@ -401,9 +542,9 @@ async function addRoute() {
 }
 
 async function toggleRouteEnabled(route: CompositeModelRoute) {
-  if (!selectedGroupId.value) return
+  if (!selectedUnitId.value) return
   try {
-    await groupsAPI.updateCompositeRoute(selectedGroupId.value, route.id, {
+    await groupsAPI.updateCompositeRoute(selectedUnitId.value, route.id, {
       public_model: route.public_model,
       match_type: route.match_type,
       target_platform: route.target_platform,
@@ -413,22 +554,30 @@ async function toggleRouteEnabled(route: CompositeModelRoute) {
       enabled: !route.enabled,
       notes: route.notes
     })
-    await loadGroupData()
+    await loadUnitData()
   } catch (err) {
     appStore.showError(errorMessage(err))
   }
 }
 
 async function removeRoute(route: CompositeModelRoute) {
-  if (!selectedGroupId.value) return
+  if (!selectedUnitId.value) return
   try {
-    await groupsAPI.deleteCompositeRoute(selectedGroupId.value, route.id)
+    await groupsAPI.deleteCompositeRoute(selectedUnitId.value, route.id)
     appStore.showSuccess(t('admin.aggregation.routeDeleted'))
-    await loadGroupData()
+    await loadUnitData()
+    await loadUnits()
   } catch (err) {
     appStore.showError(errorMessage(err))
   }
 }
 
-onMounted(loadAll)
+onMounted(async () => {
+  await loadAll()
+  const unitParam = Number(route.query.unit)
+  if (Number.isFinite(unitParam) && unitParam > 0 && units.value.some((unit) => unit.id === unitParam)) {
+    selectedUnitId.value = unitParam
+    await loadUnitData()
+  }
+})
 </script>

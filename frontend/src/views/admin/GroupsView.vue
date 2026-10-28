@@ -420,6 +420,17 @@
                   t("admin.groups.compositeRoutes.action")
                 }}</span>
               </button>
+              <a
+                v-if="!authStore.isSimpleMode && row.platform === 'composite'"
+                data-testid="group-aggregation"
+                :href="`/admin/aggregation?unit=${row.id}`"
+                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400"
+              >
+                <Icon name="cube" size="sm" />
+                <span class="text-xs">{{
+                  t("admin.groups.aggregation.action")
+                }}</span>
+              </a>
               <button
                 v-if="!authStore.isSimpleMode"
                 data-testid="group-rate-multipliers"

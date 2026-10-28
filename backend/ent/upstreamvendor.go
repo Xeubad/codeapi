@@ -3,6 +3,7 @@
 package ent
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -28,7 +29,9 @@ type UpstreamVendor struct {
 	// 账号级并发预算；0 表示不启用共享限制
 	ConcurrencyBudget int `json:"concurrency_budget,omitempty"`
 	// Notes holds the value of the "notes" field.
-	Notes        *string `json:"notes,omitempty"`
+	Notes *string `json:"notes,omitempty"`
+	// BaseUrls holds the value of the "base_urls" field.
+	BaseUrls     []string `json:"base_urls,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -37,6 +40,8 @@ func (*UpstreamVendor) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case upstreamvendor.FieldBaseUrls:
+			values[i] = new([]byte)
 		case upstreamvendor.FieldID, upstreamvendor.FieldConcurrencyBudget:
 			values[i] = new(sql.NullInt64)
 		case upstreamvendor.FieldName, upstreamvendor.FieldNotes:
@@ -102,6 +107,14 @@ func (_m *UpstreamVendor) assignValues(columns []string, values []any) error {
 				_m.Notes = new(string)
 				*_m.Notes = value.String
 			}
+		case upstreamvendor.FieldBaseUrls:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field base_urls", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.BaseUrls); err != nil {
+					return fmt.Errorf("unmarshal field base_urls: %w", err)
+				}
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -159,6 +172,9 @@ func (_m *UpstreamVendor) String() string {
 		builder.WriteString("notes=")
 		builder.WriteString(*v)
 	}
+	builder.WriteString(", ")
+	builder.WriteString("base_urls=")
+	builder.WriteString(fmt.Sprintf("%v", _m.BaseUrls))
 	builder.WriteByte(')')
 	return builder.String()
 }

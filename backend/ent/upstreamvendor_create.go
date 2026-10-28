@@ -98,6 +98,12 @@ func (_c *UpstreamVendorCreate) SetNillableNotes(v *string) *UpstreamVendorCreat
 	return _c
 }
 
+// SetBaseUrls sets the "base_urls" field.
+func (_c *UpstreamVendorCreate) SetBaseUrls(v []string) *UpstreamVendorCreate {
+	_c.mutation.SetBaseUrls(v)
+	return _c
+}
+
 // Mutation returns the UpstreamVendorMutation object of the builder.
 func (_c *UpstreamVendorCreate) Mutation() *UpstreamVendorMutation {
 	return _c.mutation
@@ -231,6 +237,10 @@ func (_c *UpstreamVendorCreate) createSpec() (*UpstreamVendor, *sqlgraph.CreateS
 		_spec.SetField(upstreamvendor.FieldNotes, field.TypeString, value)
 		_node.Notes = &value
 	}
+	if value, ok := _c.mutation.BaseUrls(); ok {
+		_spec.SetField(upstreamvendor.FieldBaseUrls, field.TypeJSON, value)
+		_node.BaseUrls = value
+	}
 	return _node, _spec
 }
 
@@ -358,6 +368,24 @@ func (u *UpstreamVendorUpsert) UpdateNotes() *UpstreamVendorUpsert {
 // ClearNotes clears the value of the "notes" field.
 func (u *UpstreamVendorUpsert) ClearNotes() *UpstreamVendorUpsert {
 	u.SetNull(upstreamvendor.FieldNotes)
+	return u
+}
+
+// SetBaseUrls sets the "base_urls" field.
+func (u *UpstreamVendorUpsert) SetBaseUrls(v []string) *UpstreamVendorUpsert {
+	u.Set(upstreamvendor.FieldBaseUrls, v)
+	return u
+}
+
+// UpdateBaseUrls sets the "base_urls" field to the value that was provided on create.
+func (u *UpstreamVendorUpsert) UpdateBaseUrls() *UpstreamVendorUpsert {
+	u.SetExcluded(upstreamvendor.FieldBaseUrls)
+	return u
+}
+
+// ClearBaseUrls clears the value of the "base_urls" field.
+func (u *UpstreamVendorUpsert) ClearBaseUrls() *UpstreamVendorUpsert {
+	u.SetNull(upstreamvendor.FieldBaseUrls)
 	return u
 }
 
@@ -494,6 +522,27 @@ func (u *UpstreamVendorUpsertOne) UpdateNotes() *UpstreamVendorUpsertOne {
 func (u *UpstreamVendorUpsertOne) ClearNotes() *UpstreamVendorUpsertOne {
 	return u.Update(func(s *UpstreamVendorUpsert) {
 		s.ClearNotes()
+	})
+}
+
+// SetBaseUrls sets the "base_urls" field.
+func (u *UpstreamVendorUpsertOne) SetBaseUrls(v []string) *UpstreamVendorUpsertOne {
+	return u.Update(func(s *UpstreamVendorUpsert) {
+		s.SetBaseUrls(v)
+	})
+}
+
+// UpdateBaseUrls sets the "base_urls" field to the value that was provided on create.
+func (u *UpstreamVendorUpsertOne) UpdateBaseUrls() *UpstreamVendorUpsertOne {
+	return u.Update(func(s *UpstreamVendorUpsert) {
+		s.UpdateBaseUrls()
+	})
+}
+
+// ClearBaseUrls clears the value of the "base_urls" field.
+func (u *UpstreamVendorUpsertOne) ClearBaseUrls() *UpstreamVendorUpsertOne {
+	return u.Update(func(s *UpstreamVendorUpsert) {
+		s.ClearBaseUrls()
 	})
 }
 
@@ -796,6 +845,27 @@ func (u *UpstreamVendorUpsertBulk) UpdateNotes() *UpstreamVendorUpsertBulk {
 func (u *UpstreamVendorUpsertBulk) ClearNotes() *UpstreamVendorUpsertBulk {
 	return u.Update(func(s *UpstreamVendorUpsert) {
 		s.ClearNotes()
+	})
+}
+
+// SetBaseUrls sets the "base_urls" field.
+func (u *UpstreamVendorUpsertBulk) SetBaseUrls(v []string) *UpstreamVendorUpsertBulk {
+	return u.Update(func(s *UpstreamVendorUpsert) {
+		s.SetBaseUrls(v)
+	})
+}
+
+// UpdateBaseUrls sets the "base_urls" field to the value that was provided on create.
+func (u *UpstreamVendorUpsertBulk) UpdateBaseUrls() *UpstreamVendorUpsertBulk {
+	return u.Update(func(s *UpstreamVendorUpsert) {
+		s.UpdateBaseUrls()
+	})
+}
+
+// ClearBaseUrls clears the value of the "base_urls" field.
+func (u *UpstreamVendorUpsertBulk) ClearBaseUrls() *UpstreamVendorUpsertBulk {
+	return u.Update(func(s *UpstreamVendorUpsert) {
+		s.ClearBaseUrls()
 	})
 }
 

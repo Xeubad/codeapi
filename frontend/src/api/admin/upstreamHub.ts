@@ -5,6 +5,7 @@ export interface UpstreamVendor {
   name: string
   concurrency_budget: number
   notes: string
+  base_urls: string[]
   entry_count: number
   allocated_concurrency: number
   referenced_group_count: number
@@ -60,6 +61,14 @@ export interface UpstreamVendorRequest {
   name: string
   concurrency_budget: number
   notes?: string | null
+  base_urls?: string[]
+}
+
+export interface UpstreamBaseURLLatency {
+  url: string
+  ok: boolean
+  latency_ms: number
+  error?: string
 }
 
 export interface UpstreamEntryRequest {
@@ -70,6 +79,8 @@ export interface UpstreamEntryRequest {
   concurrency?: number
   priority?: number
   schedulable?: boolean
+  /** 厂家候选地址；>=2 个时服务端在保存前实测并只固化最快的一个 */
+  base_urls?: string[]
 }
 
 export async function listVendors(): Promise<UpstreamVendor[]> {
@@ -153,6 +164,18 @@ export async function setEntryModels(accountId: number, models: string[]): Promi
   return data
 }
 
+export interface MeasureBaseURLsRequest {
+  account_id?: number
+  platform?: string
+  api_key?: string
+  base_urls: string[]
+}
+
+export async function measureBaseURLs(payload: MeasureBaseURLsRequest): Promise<UpstreamBaseURLLatency[]> {
+  const { data } = await apiClient.post<UpstreamBaseURLLatency[]>('/admin/upstream-base-urls/latency', payload)
+  return data
+}
+
 export async function listGroups(): Promise<UpstreamGroupOption[]> {
   const { data } = await apiClient.get<UpstreamGroupOption[]>('/admin/upstream-groups')
   return data
@@ -174,6 +197,7 @@ const upstreamHubAPI = {
   setEntryGroupEnabled,
   probeEntryModels,
   setEntryModels,
+  measureBaseURLs,
   listGroups
 }
 

@@ -20,19 +20,21 @@ func NewUpstreamHubHandler(svc *service.UpstreamHubService) *UpstreamHubHandler 
 }
 
 type upstreamVendorRequest struct {
-	Name              string  `json:"name"`
-	ConcurrencyBudget int     `json:"concurrency_budget"`
-	Notes             *string `json:"notes"`
+	Name              string   `json:"name"`
+	ConcurrencyBudget int      `json:"concurrency_budget"`
+	Notes             *string  `json:"notes"`
+	BaseURLs          []string `json:"base_urls"`
 }
 
 type upstreamEntryRequest struct {
-	Name        string `json:"name"`
-	Platform    string `json:"platform"`
-	BaseURL     string `json:"base_url"`
-	APIKey      string `json:"api_key"`
-	Concurrency *int   `json:"concurrency"`
-	Priority    *int   `json:"priority"`
-	Schedulable *bool  `json:"schedulable"`
+	Name        string   `json:"name"`
+	Platform    string   `json:"platform"`
+	BaseURL     string   `json:"base_url"`
+	APIKey      string   `json:"api_key"`
+	Concurrency *int     `json:"concurrency"`
+	Priority    *int     `json:"priority"`
+	Schedulable *bool    `json:"schedulable"`
+	BaseURLs    []string `json:"base_urls"`
 }
 
 type upstreamEntryGroupEnabledRequest struct {
@@ -84,6 +86,7 @@ func (h *UpstreamHubHandler) CreateVendor(c *gin.Context) {
 		Name:              req.Name,
 		ConcurrencyBudget: req.ConcurrencyBudget,
 		Notes:             req.Notes,
+		BaseURLs:          req.BaseURLs,
 	})
 	if err != nil {
 		response.ErrorFrom(c, err)
@@ -106,6 +109,7 @@ func (h *UpstreamHubHandler) UpdateVendor(c *gin.Context) {
 		Name:              req.Name,
 		ConcurrencyBudget: req.ConcurrencyBudget,
 		Notes:             req.Notes,
+		BaseURLs:          req.BaseURLs,
 	})
 	if err != nil {
 		writeUpstreamHubError(c, err)
@@ -152,6 +156,7 @@ func (h *UpstreamHubHandler) CreateEntry(c *gin.Context) {
 		Concurrency: concurrency,
 		Priority:    priority,
 		Schedulable: req.Schedulable,
+		BaseURLs:    req.BaseURLs,
 	})
 	if err != nil {
 		writeUpstreamHubError(c, err)
@@ -177,6 +182,7 @@ func (h *UpstreamHubHandler) UpdateEntry(c *gin.Context) {
 		Concurrency: req.Concurrency,
 		Priority:    req.Priority,
 		Schedulable: req.Schedulable,
+		BaseURLs:    req.BaseURLs,
 	})
 	if err != nil {
 		writeUpstreamHubError(c, err)
@@ -333,6 +339,34 @@ func (h *UpstreamHubHandler) SetEntryModels(c *gin.Context) {
 	response.Success(c, entry)
 }
 
+type upstreamBaseURLLatencyRequest struct {
+	AccountID int64    `json:"account_id"`
+	Platform  string   `json:"platform"`
+	APIKey    string   `json:"api_key"`
+	BaseURLs  []string `json:"base_urls"`
+}
+
+// MeasureBaseURLs 并发测候选接入地址的延迟（只读），供保存前挑选最快者。
+// POST /api/v1/admin/upstream-base-urls/latency
+func (h *UpstreamHubHandler) MeasureBaseURLs(c *gin.Context) {
+	var req upstreamBaseURLLatencyRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	results, err := h.svc.MeasureBaseURLs(c.Request.Context(), service.MeasureUpstreamBaseURLsInput{
+		AccountID: req.AccountID,
+		Platform:  req.Platform,
+		APIKey:    req.APIKey,
+		BaseURLs:  req.BaseURLs,
+	})
+	if err != nil {
+		writeUpstreamHubError(c, err)
+		return
+	}
+	response.Success(c, results)
+}
+
 func (h *UpstreamHubHandler) ListGroups(c *gin.Context) {
 	groups, err := h.svc.ListGroups(c.Request.Context())
 	if err != nil {
@@ -361,6 +395,8 @@ func writeUpstreamHubError(c *gin.Context, err error) {
 		response.NotFound(c, err.Error())
 	case errors.Is(err, service.ErrUpstreamVendorNotEmpty):
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+	case errors.Is(err, service.ErrUpstreamBaseURLUnreachable):
+		response.BadRequest(c, "All vendor base URLs are unreachable; adjust the vendor URLs before saving")
 	default:
 		response.ErrorFrom(c, err)
 	}

@@ -43632,6 +43632,8 @@ type UpstreamVendorMutation struct {
 	concurrency_budget    *int
 	addconcurrency_budget *int
 	notes                 *string
+	base_urls             *[]string
+	appendbase_urls       []string
 	clearedFields         map[string]struct{}
 	done                  bool
 	oldValue              func(context.Context) (*UpstreamVendor, error)
@@ -43998,6 +44000,71 @@ func (m *UpstreamVendorMutation) ResetNotes() {
 	delete(m.clearedFields, upstreamvendor.FieldNotes)
 }
 
+// SetBaseUrls sets the "base_urls" field.
+func (m *UpstreamVendorMutation) SetBaseUrls(s []string) {
+	m.base_urls = &s
+	m.appendbase_urls = nil
+}
+
+// BaseUrls returns the value of the "base_urls" field in the mutation.
+func (m *UpstreamVendorMutation) BaseUrls() (r []string, exists bool) {
+	v := m.base_urls
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBaseUrls returns the old "base_urls" field's value of the UpstreamVendor entity.
+// If the UpstreamVendor object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UpstreamVendorMutation) OldBaseUrls(ctx context.Context) (v []string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBaseUrls is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBaseUrls requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBaseUrls: %w", err)
+	}
+	return oldValue.BaseUrls, nil
+}
+
+// AppendBaseUrls adds s to the "base_urls" field.
+func (m *UpstreamVendorMutation) AppendBaseUrls(s []string) {
+	m.appendbase_urls = append(m.appendbase_urls, s...)
+}
+
+// AppendedBaseUrls returns the list of values that were appended to the "base_urls" field in this mutation.
+func (m *UpstreamVendorMutation) AppendedBaseUrls() ([]string, bool) {
+	if len(m.appendbase_urls) == 0 {
+		return nil, false
+	}
+	return m.appendbase_urls, true
+}
+
+// ClearBaseUrls clears the value of the "base_urls" field.
+func (m *UpstreamVendorMutation) ClearBaseUrls() {
+	m.base_urls = nil
+	m.appendbase_urls = nil
+	m.clearedFields[upstreamvendor.FieldBaseUrls] = struct{}{}
+}
+
+// BaseUrlsCleared returns if the "base_urls" field was cleared in this mutation.
+func (m *UpstreamVendorMutation) BaseUrlsCleared() bool {
+	_, ok := m.clearedFields[upstreamvendor.FieldBaseUrls]
+	return ok
+}
+
+// ResetBaseUrls resets all changes to the "base_urls" field.
+func (m *UpstreamVendorMutation) ResetBaseUrls() {
+	m.base_urls = nil
+	m.appendbase_urls = nil
+	delete(m.clearedFields, upstreamvendor.FieldBaseUrls)
+}
+
 // Where appends a list predicates to the UpstreamVendorMutation builder.
 func (m *UpstreamVendorMutation) Where(ps ...predicate.UpstreamVendor) {
 	m.predicates = append(m.predicates, ps...)
@@ -44032,7 +44099,7 @@ func (m *UpstreamVendorMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UpstreamVendorMutation) Fields() []string {
-	fields := make([]string, 0, 6)
+	fields := make([]string, 0, 7)
 	if m.created_at != nil {
 		fields = append(fields, upstreamvendor.FieldCreatedAt)
 	}
@@ -44050,6 +44117,9 @@ func (m *UpstreamVendorMutation) Fields() []string {
 	}
 	if m.notes != nil {
 		fields = append(fields, upstreamvendor.FieldNotes)
+	}
+	if m.base_urls != nil {
+		fields = append(fields, upstreamvendor.FieldBaseUrls)
 	}
 	return fields
 }
@@ -44071,6 +44141,8 @@ func (m *UpstreamVendorMutation) Field(name string) (ent.Value, bool) {
 		return m.ConcurrencyBudget()
 	case upstreamvendor.FieldNotes:
 		return m.Notes()
+	case upstreamvendor.FieldBaseUrls:
+		return m.BaseUrls()
 	}
 	return nil, false
 }
@@ -44092,6 +44164,8 @@ func (m *UpstreamVendorMutation) OldField(ctx context.Context, name string) (ent
 		return m.OldConcurrencyBudget(ctx)
 	case upstreamvendor.FieldNotes:
 		return m.OldNotes(ctx)
+	case upstreamvendor.FieldBaseUrls:
+		return m.OldBaseUrls(ctx)
 	}
 	return nil, fmt.Errorf("unknown UpstreamVendor field %s", name)
 }
@@ -44142,6 +44216,13 @@ func (m *UpstreamVendorMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetNotes(v)
+		return nil
+	case upstreamvendor.FieldBaseUrls:
+		v, ok := value.([]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBaseUrls(v)
 		return nil
 	}
 	return fmt.Errorf("unknown UpstreamVendor field %s", name)
@@ -44194,6 +44275,9 @@ func (m *UpstreamVendorMutation) ClearedFields() []string {
 	if m.FieldCleared(upstreamvendor.FieldNotes) {
 		fields = append(fields, upstreamvendor.FieldNotes)
 	}
+	if m.FieldCleared(upstreamvendor.FieldBaseUrls) {
+		fields = append(fields, upstreamvendor.FieldBaseUrls)
+	}
 	return fields
 }
 
@@ -44213,6 +44297,9 @@ func (m *UpstreamVendorMutation) ClearField(name string) error {
 		return nil
 	case upstreamvendor.FieldNotes:
 		m.ClearNotes()
+		return nil
+	case upstreamvendor.FieldBaseUrls:
+		m.ClearBaseUrls()
 		return nil
 	}
 	return fmt.Errorf("unknown UpstreamVendor nullable field %s", name)
@@ -44239,6 +44326,9 @@ func (m *UpstreamVendorMutation) ResetField(name string) error {
 		return nil
 	case upstreamvendor.FieldNotes:
 		m.ResetNotes()
+		return nil
+	case upstreamvendor.FieldBaseUrls:
+		m.ResetBaseUrls()
 		return nil
 	}
 	return fmt.Errorf("unknown UpstreamVendor field %s", name)

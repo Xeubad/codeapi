@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
@@ -199,7 +200,7 @@ func newUpstreamModelSyncInternalError(message string, err error) error {
 // FetchUpstreamSupportedModels fetches only live model IDs. The admin sync path
 // uses SyncUpstreamModelCatalog so capability metadata can also be persisted.
 func (s *AccountTestService) FetchUpstreamSupportedModels(ctx context.Context, account *Account) ([]string, error) {
-	models, _, err := s.fetchUpstreamModelList(ctx, account)
+	models, _, err := s.fetchUpstreamModelList(ctx, account, true)
 	return models, err
 }
 
@@ -213,7 +214,7 @@ func (s *AccountTestService) FetchUpstreamSupportedModels(ctx context.Context, a
 // snapshot. When no model is complete, the existing account snapshot is left
 // untouched.
 func (s *AccountTestService) SyncUpstreamModelCatalog(ctx context.Context, account *Account) (*UpstreamModelCatalog, error) {
-	models, body, err := s.fetchUpstreamModelList(ctx, account)
+	models, body, err := s.fetchUpstreamModelList(ctx, account, false)
 	liveListAvailable := err == nil
 	if err != nil {
 		configuredModels := configuredUpstreamModelsForCapabilitySync(account)
@@ -548,60 +549,39 @@ func (s *AccountTestService) fetchModelsDevRegistry(ctx context.Context, account
 	}
 	s.modelMetadataRegistryMu.Unlock()
 
-	// 目录服务抖动不应把整次探测拖垮：与上游模型列表同样重试。
-	var lastErr error
-	for attempt := 1; attempt <= upstreamModelsMaxAttempts; attempt++ {
-		if attempt > 1 {
-			if err := waitForRetry(ctx, upstreamModelsRetryDelay(attempt-1)); err != nil {
-				return nil, err
-			}
-		}
-		registry, retryable, err := s.fetchModelsDevRegistryOnce(ctx, account)
-		if err == nil {
-			s.modelMetadataRegistryMu.Lock()
-			s.modelMetadataRegistry = registry
-			s.modelMetadataRegistryAt = now
-			s.modelMetadataRegistryMu.Unlock()
-			return registry, nil
-		}
-		lastErr = err
-		if !retryable {
-			break
-		}
-	}
-	return nil, lastErr
-}
-
-func (s *AccountTestService) fetchModelsDevRegistryOnce(ctx context.Context, account *Account) (map[string]modelsDevProvider, bool, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, modelsDevRegistryURL, nil)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 	req.Header.Set("Accept", "application/json")
 	resp, err := s.doUpstreamModelsRequest(req, upstreamModelsProxyURL(account), account)
 	if err != nil {
-		return nil, true, err
+		return nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		retryable := resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= http.StatusInternalServerError
-		return nil, retryable, fmt.Errorf("model metadata registry returned HTTP %d", resp.StatusCode)
+		return nil, fmt.Errorf("model metadata registry returned HTTP %d", resp.StatusCode)
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, upstreamModelsBodyLimit+1))
 	if err != nil {
-		return nil, true, err
+		return nil, err
 	}
 	if int64(len(body)) > upstreamModelsBodyLimit {
-		return nil, false, fmt.Errorf("model metadata registry response exceeds %d bytes", upstreamModelsBodyLimit)
+		return nil, fmt.Errorf("model metadata registry response exceeds %d bytes", upstreamModelsBodyLimit)
 	}
 	var registry map[string]modelsDevProvider
 	if err := json.Unmarshal(body, &registry); err != nil {
-		return nil, false, fmt.Errorf("parse model metadata registry: %w", err)
+		return nil, fmt.Errorf("parse model metadata registry: %w", err)
 	}
 	if len(registry) == 0 {
-		return nil, false, fmt.Errorf("model metadata registry is empty")
+		return nil, fmt.Errorf("model metadata registry is empty")
 	}
-	return registry, false, nil
+
+	s.modelMetadataRegistryMu.Lock()
+	s.modelMetadataRegistry = registry
+	s.modelMetadataRegistryAt = now
+	s.modelMetadataRegistryMu.Unlock()
+	return registry, nil
 }
 
 func upstreamMetadataFromModelsDevModel(modelID string, model modelsDevModel) UpstreamModelMetadata {
@@ -787,6 +767,78 @@ func (s *AccountTestService) SuggestUpstreamModelsFromCatalog(ctx context.Contex
 	return models, nil
 }
 
+// UpstreamBaseURLLatency 是一个候选接入地址的测速结果。
+type UpstreamBaseURLLatency struct {
+	URL       string `json:"url"`
+	OK        bool   `json:"ok"`
+	LatencyMS int64  `json:"latency_ms"`
+	Error     string `json:"error,omitempty"`
+}
+
+const (
+	upstreamBaseURLMeasureTimeout = 6 * time.Second
+	upstreamBaseURLMeasureLimit   = 10
+)
+
+// MeasureBaseURLLatencies 并发测每个候选地址：拿到任意 HTTP 响应即算可达（401/404 也算，
+// 说明网络通），只记录耗时；传输错误算失败。结果按输入顺序返回。
+func (s *AccountTestService) MeasureBaseURLLatencies(ctx context.Context, account *Account, urls []string) []UpstreamBaseURLLatency {
+	results := make([]UpstreamBaseURLLatency, len(urls))
+	if s == nil || account == nil {
+		for i, u := range urls {
+			results[i] = UpstreamBaseURLLatency{URL: u, Error: "account test service is not configured"}
+		}
+		return results
+	}
+	if len(urls) > upstreamBaseURLMeasureLimit {
+		urls = urls[:upstreamBaseURLMeasureLimit]
+		results = results[:upstreamBaseURLMeasureLimit]
+	}
+	var wg sync.WaitGroup
+	for i, rawURL := range urls {
+		wg.Add(1)
+		go func(index int, candidate string) {
+			defer wg.Done()
+			results[index] = s.measureBaseURLLatency(ctx, account, candidate)
+		}(i, rawURL)
+	}
+	wg.Wait()
+	return results
+}
+
+func (s *AccountTestService) measureBaseURLLatency(ctx context.Context, account *Account, rawURL string) UpstreamBaseURLLatency {
+	result := UpstreamBaseURLLatency{URL: rawURL}
+
+	probeAccount := *account
+	probeAccount.ID = 0
+	probeAccount.Concurrency = 0
+	probeAccount.Credentials = map[string]any{}
+	for key, value := range account.Credentials {
+		probeAccount.Credentials[key] = value
+	}
+	probeAccount.Credentials["base_url"] = rawURL
+	probeAccount.Credentials["api_key"] = account.GetCredential("api_key")
+
+	requestCtx, cancel := context.WithTimeout(ctx, upstreamBaseURLMeasureTimeout)
+	defer cancel()
+	req, err := s.buildUpstreamModelsRequest(requestCtx, &probeAccount)
+	if err != nil {
+		result.Error = "unsupported platform"
+		return result
+	}
+
+	started := time.Now()
+	resp, err := s.doUpstreamModelsRequest(req, upstreamModelsProxyURL(&probeAccount), &probeAccount)
+	result.LatencyMS = time.Since(started).Milliseconds()
+	if err != nil {
+		result.Error = err.Error()
+		return result
+	}
+	_ = resp.Body.Close()
+	result.OK = true
+	return result
+}
+
 func modelRegistryHostname(raw string) string {
 	normalized := normalizeModelRegistryBaseURL(raw)
 	if normalized == "" {
@@ -811,7 +863,7 @@ func normalizeModelRegistryBaseURL(raw string) string {
 	return strings.ToLower(parsed.Scheme) + "://" + strings.ToLower(parsed.Host) + path
 }
 
-func (s *AccountTestService) fetchUpstreamModelList(ctx context.Context, account *Account) ([]string, []byte, error) {
+func (s *AccountTestService) fetchUpstreamModelList(ctx context.Context, account *Account, allowEndpointVariants bool) ([]string, []byte, error) {
 	if s == nil {
 		return nil, nil, newUpstreamModelSyncConfigError("Account test service is not configured", nil)
 	}
@@ -837,7 +889,14 @@ func (s *AccountTestService) fetchUpstreamModelList(ctx context.Context, account
 		return nil, nil, err
 	}
 
-	body, err := s.readUpstreamModelsResponseWithFallback(req, account)
+	// 端点变体只在上游聚合的探测路径启用；管理端账号同步对 404/405 有独立语义
+	// （回退已配置的 model_mapping），不能被变体重试吞掉。
+	var body []byte
+	if allowEndpointVariants {
+		body, err = s.readUpstreamModelsResponseWithFallback(req, account)
+	} else {
+		body, err = s.readUpstreamModelsResponse(req, account)
+	}
 	if err != nil {
 		return nil, nil, err
 	}

@@ -394,6 +394,16 @@ func NotesContainsFold(v string) predicate.UpstreamVendor {
 	return predicate.UpstreamVendor(sql.FieldContainsFold(FieldNotes, v))
 }
 
+// BaseUrlsIsNil applies the IsNil predicate on the "base_urls" field.
+func BaseUrlsIsNil() predicate.UpstreamVendor {
+	return predicate.UpstreamVendor(sql.FieldIsNull(FieldBaseUrls))
+}
+
+// BaseUrlsNotNil applies the NotNil predicate on the "base_urls" field.
+func BaseUrlsNotNil() predicate.UpstreamVendor {
+	return predicate.UpstreamVendor(sql.FieldNotNull(FieldBaseUrls))
+}
+
 // And groups predicates with the AND operator between them.
 func And(predicates ...predicate.UpstreamVendor) predicate.UpstreamVendor {
 	return predicate.UpstreamVendor(sql.AndPredicates(predicates...))

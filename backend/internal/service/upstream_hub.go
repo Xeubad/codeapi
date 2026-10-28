@@ -22,6 +22,7 @@ type UpstreamVendor struct {
 	Name                 string    `json:"name"`
 	ConcurrencyBudget    int       `json:"concurrency_budget"`
 	Notes                string    `json:"notes"`
+	BaseURLs             []string  `json:"base_urls"`
 	EntryCount           int       `json:"entry_count"`
 	AllocatedConcurrency int       `json:"allocated_concurrency"`
 	ReferencedGroupCount int       `json:"referenced_group_count"`
@@ -80,6 +81,7 @@ type CreateUpstreamVendorInput struct {
 	Name              string
 	ConcurrencyBudget int
 	Notes             *string
+	BaseURLs          []string
 }
 
 type CreateUpstreamEntryInput struct {
@@ -90,6 +92,8 @@ type CreateUpstreamEntryInput struct {
 	Concurrency int
 	Priority    int
 	Schedulable *bool
+	// BaseURLs 是厂家的候选地址；>=2 个时保存前实测延迟，只固化最快的一个。
+	BaseURLs []string
 }
 
 type UpdateUpstreamEntryInput struct {
@@ -99,6 +103,7 @@ type UpdateUpstreamEntryInput struct {
 	Concurrency *int
 	Priority    *int
 	Schedulable *bool
+	BaseURLs    []string
 }
 
 var (
@@ -106,14 +111,17 @@ var (
 	ErrUpstreamVendorNotEmpty = errors.New("upstream vendor still has entries")
 	ErrUpstreamEntryNotFound  = errors.New("upstream entry not found")
 	ErrUpstreamGroupInvalid   = errors.New("group platform does not match entry platform")
+	// ErrUpstreamBaseURLUnreachable 表示厂家的候选地址全部不可达：保存必须被阻止，
+	// 不能把一条永不可用的条目写进库里。
+	ErrUpstreamBaseURLUnreachable = errors.New("all upstream base urls are unreachable")
 )
 
 // UpstreamVendorRepository 上游厂家与条目（accounts.extra 归属）的持久化接口。
 type UpstreamVendorRepository interface {
 	List(ctx context.Context) ([]UpstreamVendor, error)
 	GetByID(ctx context.Context, id int64) (*UpstreamVendor, error)
-	Create(ctx context.Context, name string, budget int, notes *string) (*UpstreamVendor, error)
-	Update(ctx context.Context, id int64, name string, budget int, notes *string) (*UpstreamVendor, error)
+	Create(ctx context.Context, name string, budget int, notes *string, baseURLs []string) (*UpstreamVendor, error)
+	Update(ctx context.Context, id int64, name string, budget int, notes *string, baseURLs []string) (*UpstreamVendor, error)
 	SoftDelete(ctx context.Context, id int64) error
 	ListEntries(ctx context.Context, vendorID int64) ([]UpstreamEntry, error)
 	ListGroups(ctx context.Context) ([]UpstreamGroupOption, error)
@@ -126,6 +134,55 @@ type UpstreamVendorRepository interface {
 type upstreamModelProber interface {
 	FetchUpstreamSupportedModels(ctx context.Context, account *Account) ([]string, error)
 	SuggestUpstreamModelsFromCatalog(ctx context.Context, account *Account) ([]string, error)
+	MeasureBaseURLLatencies(ctx context.Context, account *Account, urls []string) []UpstreamBaseURLLatency
+}
+
+// MeasureUpstreamBaseURLsInput 是多地址测速的入参：已保存条目传 AccountID，
+// 新建行传 Platform + APIKey（两者都没有时不可测）。
+type MeasureUpstreamBaseURLsInput struct {
+	AccountID int64
+	Platform  string
+	APIKey    string
+	BaseURLs  []string
+}
+
+// MeasureBaseURLs 并发测厂家候选地址的延迟，供保存前挑选最快者。只测不改数据。
+func (s *UpstreamHubService) MeasureBaseURLs(ctx context.Context, input MeasureUpstreamBaseURLsInput) ([]UpstreamBaseURLLatency, error) {
+	urls, err := normalizeVendorBaseURLs(input.BaseURLs)
+	if err != nil {
+		return nil, err
+	}
+	if len(urls) == 0 {
+		return nil, fmt.Errorf("base urls are required")
+	}
+	if s.probe == nil {
+		return nil, errors.New("upstream model prober is not configured")
+	}
+	var account *Account
+	if input.AccountID > 0 {
+		account, err = s.admin.GetAccount(ctx, input.AccountID)
+		if err != nil {
+			return nil, err
+		}
+		if _, ok := upstreamVendorIDFromExtra(account.Extra); !ok {
+			return nil, ErrUpstreamEntryNotFound
+		}
+	} else {
+		platform := strings.TrimSpace(input.Platform)
+		if !domain.IsConcretePlatform(platform) {
+			return nil, fmt.Errorf("platform %q is not a concrete platform", input.Platform)
+		}
+		apiKey := strings.TrimSpace(input.APIKey)
+		if apiKey == "" {
+			return nil, fmt.Errorf("api key is required for measuring base urls")
+		}
+		account = &Account{
+			Platform:    platform,
+			Type:        AccountTypeAPIKey,
+			Credentials: map[string]any{"api_key": apiKey},
+		}
+	}
+	return s.probe.MeasureBaseURLLatencies(ctx, account, urls), nil
 }
 
 // UpstreamHubService 上游聚合：厂家台账 + 透传条目编排。
@@ -206,7 +263,11 @@ func (s *UpstreamHubService) CreateVendor(ctx context.Context, input CreateUpstr
 	if input.ConcurrencyBudget < 0 {
 		return nil, fmt.Errorf("concurrency_budget must be >= 0")
 	}
-	return s.repo.Create(ctx, name, input.ConcurrencyBudget, trimNotes(input.Notes))
+	baseURLs, err := normalizeVendorBaseURLs(input.BaseURLs)
+	if err != nil {
+		return nil, err
+	}
+	return s.repo.Create(ctx, name, input.ConcurrencyBudget, trimNotes(input.Notes), baseURLs)
 }
 
 func (s *UpstreamHubService) UpdateVendor(ctx context.Context, id int64, input CreateUpstreamVendorInput) (*UpstreamVendor, error) {
@@ -217,7 +278,11 @@ func (s *UpstreamHubService) UpdateVendor(ctx context.Context, id int64, input C
 	if input.ConcurrencyBudget < 0 {
 		return nil, fmt.Errorf("concurrency_budget must be >= 0")
 	}
-	return s.repo.Update(ctx, id, name, input.ConcurrencyBudget, trimNotes(input.Notes))
+	baseURLs, err := normalizeVendorBaseURLs(input.BaseURLs)
+	if err != nil {
+		return nil, err
+	}
+	return s.repo.Update(ctx, id, name, input.ConcurrencyBudget, trimNotes(input.Notes), baseURLs)
 }
 
 func (s *UpstreamHubService) DeleteVendor(ctx context.Context, id int64) error {
@@ -242,9 +307,15 @@ func (s *UpstreamHubService) CreateEntry(ctx context.Context, vendorID int64, in
 	if !domain.IsConcretePlatform(strings.TrimSpace(input.Platform)) {
 		return nil, fmt.Errorf("platform %q is not a concrete platform", input.Platform)
 	}
-	baseURL, err := normalizeUpstreamBaseURL(input.BaseURL)
-	if err != nil {
-		return nil, err
+	baseURL := ""
+	if strings.TrimSpace(input.BaseURL) != "" {
+		normalized, err := normalizeUpstreamBaseURL(input.BaseURL)
+		if err != nil {
+			return nil, err
+		}
+		baseURL = normalized
+	} else if len(input.BaseURLs) < 2 {
+		return nil, fmt.Errorf("base url is required")
 	}
 	apiKey := strings.TrimSpace(input.APIKey)
 	if apiKey == "" {
@@ -253,13 +324,27 @@ func (s *UpstreamHubService) CreateEntry(ctx context.Context, vendorID int64, in
 	if input.Concurrency < 1 {
 		return nil, fmt.Errorf("concurrency must be >= 1")
 	}
+	platform := strings.TrimSpace(input.Platform)
+	// 厂家配了多个地址：保存前实测，只固化最快的一个；全不可达则拒绝保存。
+	if len(input.BaseURLs) >= 2 {
+		measureAccount := &Account{
+			Platform:    platform,
+			Type:        AccountTypeAPIKey,
+			Credentials: map[string]any{"api_key": apiKey},
+		}
+		chosen, pickErr := s.pickSaveBaseURL(ctx, measureAccount, baseURL, input.BaseURLs)
+		if pickErr != nil {
+			return nil, pickErr
+		}
+		baseURL = chosen
+	}
 	schedulable := true
 	if input.Schedulable != nil {
 		schedulable = *input.Schedulable
 	}
 	account, err := s.admin.CreateAccount(ctx, &CreateAccountInput{
 		Name:     name,
-		Platform: strings.TrimSpace(input.Platform),
+		Platform: platform,
 		Type:     AccountTypeAPIKey,
 		Credentials: map[string]any{
 			"api_key":  apiKey,
@@ -295,9 +380,21 @@ func (s *UpstreamHubService) UpdateEntry(ctx context.Context, accountID int64, i
 	if name == "" {
 		return nil, fmt.Errorf("entry name is required")
 	}
-	baseURL, err := normalizeUpstreamBaseURL(input.BaseURL)
-	if err != nil {
-		return nil, err
+	baseURL := ""
+	if strings.TrimSpace(input.BaseURL) != "" {
+		baseURL, err = normalizeUpstreamBaseURL(input.BaseURL)
+		if err != nil {
+			return nil, err
+		}
+	} else if len(input.BaseURLs) < 2 {
+		return nil, fmt.Errorf("base url is required")
+	}
+	if len(input.BaseURLs) >= 2 {
+		chosen, pickErr := s.pickSaveBaseURL(ctx, current, baseURL, input.BaseURLs)
+		if pickErr != nil {
+			return nil, pickErr
+		}
+		baseURL = chosen
 	}
 	// UpdateAccount 的合并语义是「非敏感键完全由 incoming 决定」
 	// （MergePreservingSensitiveCreds），所以必须以现有 credentials 为底，
@@ -390,6 +487,36 @@ func (s *UpstreamHubService) DuplicateEntry(ctx context.Context, accountID int64
 		return nil, err
 	}
 	return s.getEntry(ctx, account.ID)
+}
+
+// pickSaveBaseURL 在保存时实测厂家候选地址并返回最快的一个（只选一次、写入条目）。
+// 运行期不再切换地址，避免请求途中换线路带来的行为漂移。
+func (s *UpstreamHubService) pickSaveBaseURL(ctx context.Context, account *Account, fallback string, candidates []string) (string, error) {
+	urls, err := normalizeVendorBaseURLs(candidates)
+	if err != nil {
+		return "", err
+	}
+	if len(urls) < 2 {
+		return fallback, nil
+	}
+	if s.probe == nil {
+		return "", errors.New("upstream model prober is not configured")
+	}
+	results := s.probe.MeasureBaseURLLatencies(ctx, account, urls)
+	var fastest *UpstreamBaseURLLatency
+	for i := range results {
+		item := &results[i]
+		if !item.OK {
+			continue
+		}
+		if fastest == nil || item.LatencyMS < fastest.LatencyMS {
+			fastest = item
+		}
+	}
+	if fastest == nil {
+		return "", ErrUpstreamBaseURLUnreachable
+	}
+	return fastest.URL, nil
 }
 
 func (s *UpstreamHubService) DeleteEntry(ctx context.Context, accountID int64) error {
@@ -663,6 +790,33 @@ func normalizeUpstreamBaseURL(raw string) (string, error) {
 		return "", fmt.Errorf("base url scheme must be http or https")
 	}
 	return strings.TrimRight(trimmed, "/"), nil
+}
+
+const maxVendorBaseURLs = 10
+
+// normalizeVendorBaseURLs 校验并归一厂家的候选接入地址：去空、去重、保留顺序，最多 10 个。
+func normalizeVendorBaseURLs(raw []string) ([]string, error) {
+	out := make([]string, 0, len(raw))
+	seen := make(map[string]struct{}, len(raw))
+	for _, candidate := range raw {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == "" {
+			continue
+		}
+		normalized, err := normalizeUpstreamBaseURL(candidate)
+		if err != nil {
+			return nil, err
+		}
+		if _, ok := seen[normalized]; ok {
+			continue
+		}
+		seen[normalized] = struct{}{}
+		out = append(out, normalized)
+	}
+	if len(out) > maxVendorBaseURLs {
+		return nil, fmt.Errorf("too many base urls: %d exceeds limit %d", len(out), maxVendorBaseURLs)
+	}
+	return out, nil
 }
 
 func trimNotes(notes *string) *string {

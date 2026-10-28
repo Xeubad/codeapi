@@ -34,13 +34,13 @@ func (s *stubUpstreamVendorRepo) GetByID(_ context.Context, id int64) (*Upstream
 	return nil, ErrUpstreamVendorNotFound
 }
 
-func (s *stubUpstreamVendorRepo) Create(_ context.Context, name string, budget int, _ *string) (*UpstreamVendor, error) {
-	s.created = &UpstreamVendor{ID: 7, Name: name, ConcurrencyBudget: budget, CreatedAt: time.Now(), UpdatedAt: time.Now()}
+func (s *stubUpstreamVendorRepo) Create(_ context.Context, name string, budget int, _ *string, baseURLs []string) (*UpstreamVendor, error) {
+	s.created = &UpstreamVendor{ID: 7, Name: name, ConcurrencyBudget: budget, BaseURLs: baseURLs, CreatedAt: time.Now(), UpdatedAt: time.Now()}
 	return s.created, nil
 }
 
-func (s *stubUpstreamVendorRepo) Update(_ context.Context, id int64, name string, budget int, _ *string) (*UpstreamVendor, error) {
-	s.updated = &UpstreamVendor{ID: id, Name: name, ConcurrencyBudget: budget}
+func (s *stubUpstreamVendorRepo) Update(_ context.Context, id int64, name string, budget int, _ *string, baseURLs []string) (*UpstreamVendor, error) {
+	s.updated = &UpstreamVendor{ID: id, Name: name, ConcurrencyBudget: budget, BaseURLs: baseURLs}
 	return s.updated, nil
 }
 
@@ -162,11 +162,12 @@ func TestGetVendorDetailWarnsOverBudget(t *testing.T) {
 	require.Len(t, detail.Warnings, 1)
 }
 
-// stubUpstreamAdmin 只实现上游聚合用到的两个方法，其余方法由嵌入的 nil 接口满足。
+// stubUpstreamAdmin 只实现上游聚合用到的三个方法，其余方法由嵌入的 nil 接口满足。
 type stubUpstreamAdmin struct {
 	AdminService
 	account *Account
 	updated *UpdateAccountInput
+	created *CreateAccountInput
 }
 
 func (s *stubUpstreamAdmin) GetAccount(context.Context, int64) (*Account, error) {
@@ -181,6 +182,17 @@ func (s *stubUpstreamAdmin) UpdateAccount(_ context.Context, _ int64, input *Upd
 	return s.account, nil
 }
 
+func (s *stubUpstreamAdmin) CreateAccount(_ context.Context, input *CreateAccountInput) (*Account, error) {
+	s.created = input
+	return &Account{
+		ID:          99,
+		Name:        input.Name,
+		Platform:    input.Platform,
+		Credentials: input.Credentials,
+		Extra:       input.Extra,
+	}, nil
+}
+
 type stubUpstreamProber struct {
 	models []string
 	err    error
@@ -189,6 +201,8 @@ type stubUpstreamProber struct {
 	catalog      []string
 	catalogErr   error
 	catalogCalls int
+
+	measureFail bool
 }
 
 func (s *stubUpstreamProber) FetchUpstreamSupportedModels(context.Context, *Account) ([]string, error) {
@@ -199,6 +213,18 @@ func (s *stubUpstreamProber) FetchUpstreamSupportedModels(context.Context, *Acco
 func (s *stubUpstreamProber) SuggestUpstreamModelsFromCatalog(context.Context, *Account) ([]string, error) {
 	s.catalogCalls++
 	return s.catalog, s.catalogErr
+}
+
+func (s *stubUpstreamProber) MeasureBaseURLLatencies(_ context.Context, _ *Account, urls []string) []UpstreamBaseURLLatency {
+	out := make([]UpstreamBaseURLLatency, 0, len(urls))
+	for index, url := range urls {
+		if s.measureFail {
+			out = append(out, UpstreamBaseURLLatency{URL: url, Error: "unreachable"})
+			continue
+		}
+		out = append(out, UpstreamBaseURLLatency{URL: url, OK: true, LatencyMS: int64((index + 1) * 10)})
+	}
+	return out
 }
 
 func TestUpstreamGroupAllowsPlatform(t *testing.T) {
@@ -370,4 +396,122 @@ func TestStoredUpstreamEntryModelsSkipsEmptyMappings(t *testing.T) {
 	}
 	require.Equal(t, []string{"a"}, storedUpstreamEntryModels(credentials))
 	require.Empty(t, storedUpstreamEntryModels(map[string]any{}))
+}
+
+func TestNormalizeVendorBaseURLs(t *testing.T) {
+	got, err := normalizeVendorBaseURLs([]string{
+		" https://a.example.com/ ",
+		"https://a.example.com",
+		"http://b.example.com/v1",
+		"   ",
+	})
+	require.NoError(t, err)
+	require.Equal(t, []string{"https://a.example.com", "http://b.example.com/v1"}, got)
+
+	_, err = normalizeVendorBaseURLs([]string{"ftp://a.example.com"})
+	require.Error(t, err)
+
+	many := make([]string, maxVendorBaseURLs+1)
+	for i := range many {
+		many[i] = fmt.Sprintf("https://host-%d.example.com", i)
+	}
+	_, err = normalizeVendorBaseURLs(many)
+	require.Error(t, err)
+}
+
+func TestCreateVendorStoresBaseURLs(t *testing.T) {
+	svc := NewUpstreamHubService(&stubUpstreamVendorRepo{}, nil, nil)
+	vendor, err := svc.CreateVendor(context.Background(), CreateUpstreamVendorInput{
+		Name:     "A",
+		BaseURLs: []string{"https://a.example.com", "https://a.example.com/"},
+	})
+	require.NoError(t, err)
+	require.Equal(t, []string{"https://a.example.com"}, vendor.BaseURLs)
+}
+
+func TestMeasureBaseURLsForDraftRow(t *testing.T) {
+	svc := NewUpstreamHubService(&stubUpstreamVendorRepo{}, nil, &stubUpstreamProber{})
+	results, err := svc.MeasureBaseURLs(context.Background(), MeasureUpstreamBaseURLsInput{
+		Platform: PlatformDeepseek,
+		APIKey:   "sk-x",
+		BaseURLs: []string{"https://a.example.com", "https://b.example.com"},
+	})
+	require.NoError(t, err)
+	require.Len(t, results, 2)
+	require.Equal(t, "https://a.example.com", results[0].URL)
+	require.True(t, results[0].OK)
+}
+
+func TestMeasureBaseURLsRequiresKeyForDraft(t *testing.T) {
+	svc := NewUpstreamHubService(&stubUpstreamVendorRepo{}, nil, &stubUpstreamProber{})
+	_, err := svc.MeasureBaseURLs(context.Background(), MeasureUpstreamBaseURLsInput{
+		Platform: PlatformDeepseek,
+		BaseURLs: []string{"https://a.example.com"},
+	})
+	require.Error(t, err)
+}
+
+func TestCreateEntryPicksFastestVendorBaseURL(t *testing.T) {
+	admin := &stubUpstreamAdmin{account: &Account{
+		ID:    99,
+		Name:  "A",
+		Extra: map[string]any{UpstreamVendorIDExtraKey: int64(2)},
+	}}
+	repo := &stubUpstreamVendorRepo{
+		vendors: []UpstreamVendor{{ID: 2, Name: "A"}},
+		entries: map[int64][]UpstreamEntry{2: {{AccountID: 99, VendorID: 2, Name: "A"}}},
+	}
+	svc := NewUpstreamHubService(repo, admin, &stubUpstreamProber{})
+
+	_, err := svc.CreateEntry(context.Background(), 2, CreateUpstreamEntryInput{
+		Name:        "A",
+		Platform:    PlatformDeepseek,
+		BaseURL:     "https://slow.example.com",
+		APIKey:      "sk-x",
+		Concurrency: 1,
+		Priority:    50,
+		BaseURLs:    []string{"https://fast.example.com", "https://slow.example.com"},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, admin.created)
+	require.Equal(t, "https://fast.example.com", admin.created.Credentials["base_url"])
+}
+
+func TestCreateEntryBlocksWhenAllVendorBaseURLsUnreachable(t *testing.T) {
+	admin := &stubUpstreamAdmin{}
+	repo := &stubUpstreamVendorRepo{vendors: []UpstreamVendor{{ID: 2, Name: "A"}}}
+	svc := NewUpstreamHubService(repo, admin, &stubUpstreamProber{measureFail: true})
+
+	_, err := svc.CreateEntry(context.Background(), 2, CreateUpstreamEntryInput{
+		Name:        "A",
+		Platform:    PlatformDeepseek,
+		BaseURL:     "https://slow.example.com",
+		APIKey:      "sk-x",
+		Concurrency: 1,
+		Priority:    50,
+		BaseURLs:    []string{"https://a.example.com", "https://b.example.com"},
+	})
+	require.ErrorIs(t, err, ErrUpstreamBaseURLUnreachable)
+	require.Nil(t, admin.created)
+}
+
+func TestUpdateEntryPicksFastestVendorBaseURL(t *testing.T) {
+	admin := &stubUpstreamAdmin{account: &Account{
+		ID:          5,
+		Name:        "A",
+		Platform:    PlatformDeepseek,
+		Extra:       map[string]any{UpstreamVendorIDExtraKey: int64(2)},
+		Credentials: map[string]any{"api_key": "sk-x", "base_url": "https://old.example.com"},
+	}}
+	repo := &stubUpstreamVendorRepo{entries: map[int64][]UpstreamEntry{2: {{AccountID: 5, VendorID: 2, Name: "A"}}}}
+	svc := NewUpstreamHubService(repo, admin, &stubUpstreamProber{})
+
+	_, err := svc.UpdateEntry(context.Background(), 5, UpdateUpstreamEntryInput{
+		Name:     "A",
+		BaseURL:  "",
+		BaseURLs: []string{"https://fast.example.com", "https://slow.example.com"},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, admin.updated)
+	require.Equal(t, "https://fast.example.com", admin.updated.Credentials["base_url"])
 }

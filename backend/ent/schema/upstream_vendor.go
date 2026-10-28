@@ -43,6 +43,11 @@ func (UpstreamVendor) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			SchemaType(map[string]string{dialect.Postgres: "text"}),
+		// base_urls 是厂家的候选接入地址；条目保存时会逐个测速并只固化最快的一个，
+		// 运行时不再切换（避免请求途中换线路）。
+		field.JSON("base_urls", []string{}).
+			Optional().
+			SchemaType(map[string]string{dialect.Postgres: "jsonb"}),
 	}
 }
 

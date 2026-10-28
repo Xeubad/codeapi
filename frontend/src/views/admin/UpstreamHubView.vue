@@ -223,6 +223,21 @@
           <label class="input-label">{{ t('admin.upstreamHub.notes') }}</label>
           <input v-model="vendorForm.notes" class="input" type="text" :placeholder="t('admin.upstreamHub.notesPlaceholder')" />
         </div>
+        <div>
+          <label class="input-label">{{ t('admin.upstreamHub.vendorBaseURLs') }}</label>
+          <p class="input-hint">{{ t('admin.upstreamHub.vendorBaseURLsHint') }}</p>
+          <div class="mt-2 space-y-2">
+            <div v-for="(_, index) in vendorForm.base_urls" :key="index" class="flex items-center gap-2">
+              <input v-model="vendorForm.base_urls[index]" class="input flex-1" type="text" placeholder="https://api.example.com/v1" />
+              <button class="btn btn-sm btn-ghost text-red-600" @click="vendorForm.base_urls.splice(index, 1)">
+                {{ t('admin.upstreamHub.removeRow') }}
+              </button>
+            </div>
+            <button class="btn btn-secondary btn-sm" @click="vendorForm.base_urls.push('')">
+              {{ t('admin.upstreamHub.addBaseURL') }}
+            </button>
+          </div>
+        </div>
       </div>
       <template #footer>
         <button class="btn btn-secondary" @click="showVendorDialog = false">{{ t('admin.upstreamHub.cancel') }}</button>
@@ -260,6 +275,21 @@
                   </td>
                   <td>
                     <input v-model="row.base_url" class="input" type="text" placeholder="https://..." />
+                    <div v-if="vendorBaseURLs.length > 1" class="mt-1 flex items-center gap-2">
+                      <button
+                        type="button"
+                        class="shrink-0 text-xs text-primary-600 hover:underline disabled:opacity-50"
+                        :disabled="row.latencyLoading"
+                        @click="measureRowLatencies(row)"
+                      >
+                        {{ row.latencyLoading ? t('admin.upstreamHub.measuring') : t('admin.upstreamHub.measureBaseURLs') }}
+                      </button>
+                      <span
+                        v-if="row.latencySummary"
+                        class="truncate text-xs"
+                        :class="row.latencyFailed ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'"
+                      >{{ row.latencySummary }}</span>
+                    </div>
                   </td>
                   <td>
                     <input
@@ -393,26 +423,22 @@
                       </p>
                       <div
                         v-if="row.probeModels.length"
-                        class="max-h-40 overflow-y-auto rounded-lg border border-gray-200 bg-white dark:border-dark-600 dark:bg-dark-800"
+                        class="flex max-h-40 flex-wrap gap-1.5 overflow-y-auto rounded-lg border border-gray-200 bg-white p-2 dark:border-dark-600 dark:bg-dark-800"
                       >
-                        <div
+                        <button
                           v-for="model in row.probeModels"
                           :key="model"
-                          class="flex cursor-pointer items-center gap-2 px-3 py-1 text-sm"
+                          type="button"
+                          class="rounded-md px-2 py-1 font-mono text-xs transition-colors"
                           :class="
                             row.models.includes(model)
-                              ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/20 dark:text-primary-300'
-                              : 'hover:bg-gray-100 dark:hover:bg-dark-700'
+                              ? 'bg-primary-500 text-white'
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-dark-700 dark:text-dark-200 dark:hover:bg-dark-600'
                           "
                           @click="toggleRowModel(row, model)"
                         >
-                          <input
-                            type="checkbox"
-                            class="pointer-events-none"
-                            :checked="row.models.includes(model)"
-                          />
-                          <span class="truncate font-mono text-xs">{{ model }}</span>
-                        </div>
+                          {{ model }}
+                        </button>
                       </div>
                       <p v-else class="text-xs text-gray-400 dark:text-dark-400">
                         {{ t('admin.upstreamHub.probeHint') }}
@@ -515,7 +541,7 @@ const saving = ref(false)
 const platformOptions = computed(() => CONCRETE_PLATFORM_OPTIONS.map((p) => ({ label: p.label, value: p.value })))
 
 const showVendorDialog = ref(false)
-const vendorForm = reactive({ id: 0, name: '', concurrency_budget: 0, notes: '' })
+const vendorForm = reactive({ id: 0, name: '', concurrency_budget: 0, notes: '', base_urls: [] as string[] })
 
 interface EntryRow {
   accountId?: number
@@ -540,6 +566,9 @@ interface EntryRow {
   probeSource: string
   probeWarning: string
   manualModel: string
+  latencyLoading: boolean
+  latencySummary: string
+  latencyFailed: boolean
 }
 const showEntryDialog = ref(false)
 const entryRows = ref<EntryRow[]>([])
@@ -555,6 +584,7 @@ const deleteMessage = computed(() =>
 const effectiveAllocated = computed(() =>
   entryRows.value.reduce((sum, row) => sum + (Number(row.concurrency) || 0), 0)
 )
+const vendorBaseURLs = computed(() => detail.value?.vendor.base_urls || [])
 const addRowsOverBudget = computed(() => {
   const budget = detail.value?.vendor.concurrency_budget ?? 0
   return budget > 0 && effectiveAllocated.value > budget
@@ -590,7 +620,10 @@ function entryToRow(entry: UpstreamEntry): EntryRow {
     probeModels: [],
     probeSource: '',
     probeWarning: '',
-    manualModel: ''
+    manualModel: '',
+    latencyLoading: false,
+    latencySummary: '',
+    latencyFailed: false
   }
 }
 
@@ -628,6 +661,7 @@ function openCreateVendor() {
   vendorForm.name = ''
   vendorForm.concurrency_budget = 0
   vendorForm.notes = ''
+  vendorForm.base_urls = []
   showVendorDialog.value = true
 }
 
@@ -636,6 +670,7 @@ function openEditVendor(vendor: UpstreamVendor) {
   vendorForm.name = vendor.name
   vendorForm.concurrency_budget = vendor.concurrency_budget
   vendorForm.notes = vendor.notes || ''
+  vendorForm.base_urls = [...(vendor.base_urls || [])]
   showVendorDialog.value = true
 }
 
@@ -645,7 +680,8 @@ async function saveVendor() {
     const payload = {
       name: vendorForm.name,
       concurrency_budget: Number(vendorForm.concurrency_budget) || 0,
-      notes: vendorForm.notes || null
+      notes: vendorForm.notes || null,
+      base_urls: vendorForm.base_urls.map((url) => url.trim()).filter(Boolean)
     }
     if (vendorForm.id > 0) {
       await upstreamHubAPI.updateVendor(vendorForm.id, payload)
@@ -713,7 +749,10 @@ function blankRow(): EntryRow {
     probeModels: [],
     probeSource: '',
     probeWarning: '',
-    manualModel: ''
+    manualModel: '',
+    latencyLoading: false,
+    latencySummary: '',
+    latencyFailed: false
   }
 }
 
@@ -903,6 +942,9 @@ async function copyRow(row: EntryRow) {
     probeSource: '',
     probeWarning: '',
     manualModel: '',
+    latencyLoading: false,
+    latencySummary: '',
+    latencyFailed: false,
     expanded: false,
     dropdownTop: 0,
     dropdownRight: 0
@@ -914,6 +956,47 @@ function removeRow(row: EntryRow, index: number) {
     pendingDeletes.value.push({ accountId: row.accountId, concurrency: row.concurrency })
   }
   entryRows.value.splice(index, 1)
+}
+
+// 保存前测速：厂家配置了多个地址时，实测各地址延迟并把最快的一个固化到条目，
+// 运行时不再切换地址（避免请求途中换线路）。
+async function measureRowLatencies(row: EntryRow) {
+  if (vendorBaseURLs.value.length < 2) return
+  row.latencyLoading = true
+  try {
+    const results = await upstreamHubAPI.measureBaseURLs({
+      account_id: row.accountId,
+      platform: row.platform,
+      api_key: row.api_key,
+      base_urls: vendorBaseURLs.value
+    })
+    const reachable = results.filter((item) => item.ok).sort((a, b) => a.latency_ms - b.latency_ms)
+    if (reachable.length === 0) {
+      row.latencyFailed = true
+      row.latencySummary = t('admin.upstreamHub.allBaseURLsUnreachable')
+      return
+    }
+    const fastest = reachable[0]
+    row.base_url = fastest.url
+    row.latencyFailed = false
+    row.latencySummary = t('admin.upstreamHub.fastestBaseURL', {
+      host: baseURLHost(fastest.url),
+      ms: fastest.latency_ms
+    })
+  } catch (err) {
+    row.latencyFailed = true
+    row.latencySummary = extractApiErrorMessage(err, t('admin.upstreamHub.measureFailed'))
+  } finally {
+    row.latencyLoading = false
+  }
+}
+
+function baseURLHost(raw: string): string {
+  try {
+    return new URL(raw).host
+  } catch {
+    return raw
+  }
 }
 
 async function saveEntryRows() {
@@ -928,16 +1011,20 @@ async function saveEntryRows() {
   saving.value = true
   try {
     for (const row of entryRows.value) {
-      if (!row.name.trim() || !row.base_url.trim()) {
+      const multiBaseURL = vendorBaseURLs.value.length > 1
+      if (!row.name.trim() || (!multiBaseURL && !row.base_url.trim())) {
         throw new Error(t('admin.upstreamHub.fillRequiredFields'))
       }
+      // 多地址时最快者由服务端在保存时实测决定（客户端只做预览），绕不过去。
+      const baseURLs = multiBaseURL ? vendorBaseURLs.value : undefined
       if (row.accountId) {
         await upstreamHubAPI.updateEntry(row.accountId, {
           name: row.name,
           base_url: row.base_url,
           api_key: row.api_key,
           concurrency: Number(row.concurrency) || 1,
-          priority: Number(row.priority) || 50
+          priority: Number(row.priority) || 50,
+          base_urls: baseURLs
         })
         await applyRowGroups(row.accountId, row)
         if (row.modelsDirty) {
@@ -953,7 +1040,8 @@ async function saveEntryRows() {
           base_url: row.base_url,
           api_key: row.api_key,
           concurrency: Number(row.concurrency) || 1,
-          priority: Number(row.priority) || 50
+          priority: Number(row.priority) || 50,
+          base_urls: baseURLs
         })
         await applyRowGroups(created.account_id, row)
         if (row.models.length > 0) {

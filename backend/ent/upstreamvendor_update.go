@@ -10,6 +10,7 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/upstreamvendor"
@@ -106,6 +107,24 @@ func (_u *UpstreamVendorUpdate) SetNillableNotes(v *string) *UpstreamVendorUpdat
 // ClearNotes clears the value of the "notes" field.
 func (_u *UpstreamVendorUpdate) ClearNotes() *UpstreamVendorUpdate {
 	_u.mutation.ClearNotes()
+	return _u
+}
+
+// SetBaseUrls sets the "base_urls" field.
+func (_u *UpstreamVendorUpdate) SetBaseUrls(v []string) *UpstreamVendorUpdate {
+	_u.mutation.SetBaseUrls(v)
+	return _u
+}
+
+// AppendBaseUrls appends value to the "base_urls" field.
+func (_u *UpstreamVendorUpdate) AppendBaseUrls(v []string) *UpstreamVendorUpdate {
+	_u.mutation.AppendBaseUrls(v)
+	return _u
+}
+
+// ClearBaseUrls clears the value of the "base_urls" field.
+func (_u *UpstreamVendorUpdate) ClearBaseUrls() *UpstreamVendorUpdate {
+	_u.mutation.ClearBaseUrls()
 	return _u
 }
 
@@ -207,6 +226,17 @@ func (_u *UpstreamVendorUpdate) sqlSave(ctx context.Context) (_node int, err err
 	if _u.mutation.NotesCleared() {
 		_spec.ClearField(upstreamvendor.FieldNotes, field.TypeString)
 	}
+	if value, ok := _u.mutation.BaseUrls(); ok {
+		_spec.SetField(upstreamvendor.FieldBaseUrls, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedBaseUrls(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, upstreamvendor.FieldBaseUrls, value)
+		})
+	}
+	if _u.mutation.BaseUrlsCleared() {
+		_spec.ClearField(upstreamvendor.FieldBaseUrls, field.TypeJSON)
+	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{upstreamvendor.Label}
@@ -305,6 +335,24 @@ func (_u *UpstreamVendorUpdateOne) SetNillableNotes(v *string) *UpstreamVendorUp
 // ClearNotes clears the value of the "notes" field.
 func (_u *UpstreamVendorUpdateOne) ClearNotes() *UpstreamVendorUpdateOne {
 	_u.mutation.ClearNotes()
+	return _u
+}
+
+// SetBaseUrls sets the "base_urls" field.
+func (_u *UpstreamVendorUpdateOne) SetBaseUrls(v []string) *UpstreamVendorUpdateOne {
+	_u.mutation.SetBaseUrls(v)
+	return _u
+}
+
+// AppendBaseUrls appends value to the "base_urls" field.
+func (_u *UpstreamVendorUpdateOne) AppendBaseUrls(v []string) *UpstreamVendorUpdateOne {
+	_u.mutation.AppendBaseUrls(v)
+	return _u
+}
+
+// ClearBaseUrls clears the value of the "base_urls" field.
+func (_u *UpstreamVendorUpdateOne) ClearBaseUrls() *UpstreamVendorUpdateOne {
+	_u.mutation.ClearBaseUrls()
 	return _u
 }
 
@@ -435,6 +483,17 @@ func (_u *UpstreamVendorUpdateOne) sqlSave(ctx context.Context) (_node *Upstream
 	}
 	if _u.mutation.NotesCleared() {
 		_spec.ClearField(upstreamvendor.FieldNotes, field.TypeString)
+	}
+	if value, ok := _u.mutation.BaseUrls(); ok {
+		_spec.SetField(upstreamvendor.FieldBaseUrls, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedBaseUrls(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, upstreamvendor.FieldBaseUrls, value)
+		})
+	}
+	if _u.mutation.BaseUrlsCleared() {
+		_spec.ClearField(upstreamvendor.FieldBaseUrls, field.TypeJSON)
 	}
 	_node = &UpstreamVendor{config: _u.config}
 	_spec.Assign = _node.assignValues

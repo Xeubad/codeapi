@@ -1607,6 +1607,7 @@ var (
 		{Name: "name", Type: field.TypeString, Size: 100},
 		{Name: "concurrency_budget", Type: field.TypeInt, Default: 0},
 		{Name: "notes", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "base_urls", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
 	}
 	// UpstreamVendorsTable holds the schema information for the "upstream_vendors" table.
 	UpstreamVendorsTable = &schema.Table{

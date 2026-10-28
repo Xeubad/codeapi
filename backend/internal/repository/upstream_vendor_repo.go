@@ -54,10 +54,11 @@ func (r *upstreamVendorRepository) GetByID(ctx context.Context, id int64) (*serv
 	return &vendor, nil
 }
 
-func (r *upstreamVendorRepository) Create(ctx context.Context, name string, budget int, notes *string) (*service.UpstreamVendor, error) {
+func (r *upstreamVendorRepository) Create(ctx context.Context, name string, budget int, notes *string, baseURLs []string) (*service.UpstreamVendor, error) {
 	builder := r.client.UpstreamVendor.Create().
 		SetName(name).
-		SetConcurrencyBudget(budget)
+		SetConcurrencyBudget(budget).
+		SetBaseUrls(baseURLs)
 	if notes != nil {
 		builder.SetNotes(*notes)
 	}
@@ -69,10 +70,11 @@ func (r *upstreamVendorRepository) Create(ctx context.Context, name string, budg
 	return &vendor, nil
 }
 
-func (r *upstreamVendorRepository) Update(ctx context.Context, id int64, name string, budget int, notes *string) (*service.UpstreamVendor, error) {
+func (r *upstreamVendorRepository) Update(ctx context.Context, id int64, name string, budget int, notes *string, baseURLs []string) (*service.UpstreamVendor, error) {
 	builder := r.client.UpstreamVendor.UpdateOneID(id).
 		SetName(name).
-		SetConcurrencyBudget(budget)
+		SetConcurrencyBudget(budget).
+		SetBaseUrls(baseURLs)
 	if notes != nil {
 		builder.SetNotes(*notes)
 	} else {
@@ -247,8 +249,12 @@ func toServiceUpstreamVendor(row *ent.UpstreamVendor) service.UpstreamVendor {
 		ID:                row.ID,
 		Name:              row.Name,
 		ConcurrencyBudget: row.ConcurrencyBudget,
+		BaseURLs:          append([]string{}, row.BaseUrls...),
 		CreatedAt:         row.CreatedAt,
 		UpdatedAt:         row.UpdatedAt,
+	}
+	if vendor.BaseURLs == nil {
+		vendor.BaseURLs = []string{}
 	}
 	if row.Notes != nil {
 		vendor.Notes = *row.Notes

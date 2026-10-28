@@ -772,6 +772,10 @@ func registerUpstreamHubRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		entries.PUT("/:id/models", h.Admin.UpstreamHub.SetEntryModels)
 	}
 	admin.GET("/upstream-groups", h.Admin.UpstreamHub.ListGroups)
+	baseURLs := admin.Group("/upstream-base-urls")
+	{
+		baseURLs.POST("/latency", h.Admin.UpstreamHub.MeasureBaseURLs)
+	}
 }
 
 func registerTLSFingerprintProfileRoutes(admin *gin.RouterGroup, h *handler.Handlers) {

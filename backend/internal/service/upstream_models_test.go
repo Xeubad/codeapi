@@ -565,12 +565,14 @@ func TestSyncUpstreamModelCatalogUsesConfiguredModelsWhenListEndpointUnsupported
 
 func TestSyncUpstreamModelCatalogDoesNotUseConfiguredModelsForRealUpstreamFailures(t *testing.T) {
 	tests := []struct {
-		name       string
-		statusCode int
+		name         string
+		statusCode   int
+		wantRequests int
 	}{
-		{name: "unauthorized", statusCode: http.StatusUnauthorized},
-		{name: "rate limited", statusCode: http.StatusTooManyRequests},
-		{name: "server error", statusCode: http.StatusBadGateway},
+		{name: "unauthorized", statusCode: http.StatusUnauthorized, wantRequests: 1},
+		// 429/5xx 属于可重试错误：按 upstreamModelsMaxAttempts 次尝试后再报错。
+		{name: "rate limited", statusCode: http.StatusTooManyRequests, wantRequests: upstreamModelsMaxAttempts},
+		{name: "server error", statusCode: http.StatusBadGateway, wantRequests: upstreamModelsMaxAttempts},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -589,7 +591,7 @@ func TestSyncUpstreamModelCatalogDoesNotUseConfiguredModelsForRealUpstreamFailur
 				},
 			})
 			require.Error(t, err)
-			require.Len(t, upstream.requests, 1)
+			require.Len(t, upstream.requests, tt.wantRequests)
 			require.Equal(t, tt.statusCode, upstreamModelSyncStatusCode(err))
 		})
 	}

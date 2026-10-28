@@ -26,6 +26,8 @@ const (
 	FieldConcurrencyBudget = "concurrency_budget"
 	// FieldNotes holds the string denoting the notes field in the database.
 	FieldNotes = "notes"
+	// FieldBaseUrls holds the string denoting the base_urls field in the database.
+	FieldBaseUrls = "base_urls"
 	// Table holds the table name of the upstreamvendor in the database.
 	Table = "upstream_vendors"
 )
@@ -39,6 +41,7 @@ var Columns = []string{
 	FieldName,
 	FieldConcurrencyBudget,
 	FieldNotes,
+	FieldBaseUrls,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).

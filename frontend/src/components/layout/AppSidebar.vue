@@ -465,6 +465,10 @@ const UpstreamIcon = {
   render: () => h(Icon, { name: 'cube' })
 }
 
+const AggregationIcon = {
+  render: () => h(Icon, { name: 'swap' })
+}
+
 const ServerIcon = {
   render: () =>
     h(
@@ -783,6 +787,7 @@ const adminNavItems = computed((): NavItem[] => {
     { path: '/admin/users', label: t('nav.users'), icon: UsersIcon, hideInSimpleMode: true },
     { path: '/admin/groups', label: t('nav.groups'), icon: FolderIcon },
     { path: '/admin/upstream-hub', label: t('nav.upstreamHub'), icon: UpstreamIcon },
+    { path: '/admin/aggregation', label: t('nav.aggregation'), icon: AggregationIcon },
     {
       path: '/admin/channels',
       label: t('nav.channelManagement'),

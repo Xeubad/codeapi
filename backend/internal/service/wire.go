@@ -877,6 +877,7 @@ var ProviderSet = wire.NewSet(
 	NewAnnouncementService,
 	NewAdminService,
 	NewUpstreamHubService,
+	wire.Bind(new(upstreamModelProber), new(*AccountTestService)),
 	NewGatewayService,
 	NewOpenAIGatewayService,
 	ProvideImageStorageSettingService,

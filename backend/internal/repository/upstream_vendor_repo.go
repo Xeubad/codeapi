@@ -2,14 +2,18 @@ package repository
 
 import (
 	"context"
+	"sort"
+	"strconv"
+	"strings"
 	"time"
 
+	entsql "entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqljson"
 	"github.com/Wei-Shaw/sub2api/ent"
 	dbaccount "github.com/Wei-Shaw/sub2api/ent/account"
 	dbaccountgroup "github.com/Wei-Shaw/sub2api/ent/accountgroup"
 	dbgroup "github.com/Wei-Shaw/sub2api/ent/group"
 	dbupstreamvendor "github.com/Wei-Shaw/sub2api/ent/upstreamvendor"
-	"github.com/Wei-Shaw/sub2api/internal/domain"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
 
@@ -99,11 +103,24 @@ func (r *upstreamVendorRepository) SoftDelete(ctx context.Context, id int64) err
 	return nil
 }
 
+// upstreamVendorIDPredicate 按 extra.upstream_vendor_id 过滤条目。归属只认这个 extra
+// 键、与账号 type 无关，因此历史 type=upstream 与现行 type=apikey 的条目都能命中。
+// 数字与字符串两种 JSON 形态都匹配，口径与 accountRepository.FindByExtraField 一致。
+func upstreamVendorIDPredicate(vendorID int64) func(s *entsql.Selector) {
+	return func(s *entsql.Selector) {
+		path := sqljson.Path(service.UpstreamVendorIDExtraKey)
+		s.Where(entsql.Or(
+			sqljson.ValueEQ(dbaccount.FieldExtra, vendorID, path),
+			sqljson.ValueEQ(dbaccount.FieldExtra, strconv.FormatInt(vendorID, 10), path),
+		))
+	}
+}
+
 func (r *upstreamVendorRepository) ListEntries(ctx context.Context, vendorID int64) ([]service.UpstreamEntry, error) {
 	rows, err := r.client.Account.Query().
 		Where(
-			dbaccount.TypeEQ(domain.AccountTypeUpstream),
 			dbaccount.DeletedAtIsNil(),
+			upstreamVendorIDPredicate(vendorID),
 		).
 		Order(ent.Asc(dbaccount.FieldName)).
 		All(ctx)
@@ -130,6 +147,7 @@ func (r *upstreamVendorRepository) ListEntries(ctx context.Context, vendorID int
 			Priority:    row.Priority,
 			Schedulable: row.Schedulable,
 			Status:      row.Status,
+			Models:      storedModelMappingKeys(row.Credentials),
 		}
 		byAccountID[row.ID] = len(entries)
 		entries = append(entries, entry)
@@ -247,6 +265,25 @@ func credentialString(credentials map[string]any, key string) string {
 		return ""
 	}
 	return value
+}
+
+// storedModelMappingKeys 返回 credentials.model_mapping 中已登记的模型名（排序）。
+// 只读实际存储的映射，不补平台默认值——这是管理员登记的口径。
+func storedModelMappingKeys(credentials map[string]any) []string {
+	raw, ok := credentials["model_mapping"].(map[string]any)
+	if !ok || len(raw) == 0 {
+		return []string{}
+	}
+	keys := make([]string, 0, len(raw))
+	for key, value := range raw {
+		mapped, ok := value.(string)
+		if !ok || strings.TrimSpace(key) == "" || strings.TrimSpace(mapped) == "" {
+			continue
+		}
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func repoUpstreamVendorIDFromExtra(extra map[string]any) (int64, bool) {

@@ -33,6 +33,12 @@ export interface UpstreamEntry {
   schedulable: boolean
   status: string
   groups: UpstreamEntryGroupRef[]
+  models: string[]
+}
+
+export interface UpstreamEntryModelProbe {
+  models: string[]
+  existing: string[]
 }
 
 export interface UpstreamVendorDetail {
@@ -65,6 +71,11 @@ export interface UpstreamEntryRequest {
 
 export async function listVendors(): Promise<UpstreamVendor[]> {
   const { data } = await apiClient.get<UpstreamVendor[]>('/admin/upstream-vendors')
+  return data
+}
+
+export async function listAllEntries(): Promise<UpstreamEntry[]> {
+  const { data } = await apiClient.get<UpstreamEntry[]>('/admin/upstream-entries')
   return data
 }
 
@@ -129,6 +140,16 @@ export async function setEntryGroupEnabled(accountId: number, groupId: number, e
   await apiClient.put(`/admin/upstream-entries/${accountId}/groups/${groupId}/enabled`, { enabled })
 }
 
+export async function probeEntryModels(accountId: number): Promise<UpstreamEntryModelProbe> {
+  const { data } = await apiClient.post<UpstreamEntryModelProbe>(`/admin/upstream-entries/${accountId}/probe-models`)
+  return data
+}
+
+export async function setEntryModels(accountId: number, models: string[]): Promise<UpstreamEntry> {
+  const { data } = await apiClient.put<UpstreamEntry>(`/admin/upstream-entries/${accountId}/models`, { models })
+  return data
+}
+
 export async function listGroups(): Promise<UpstreamGroupOption[]> {
   const { data } = await apiClient.get<UpstreamGroupOption[]>('/admin/upstream-groups')
   return data
@@ -136,6 +157,7 @@ export async function listGroups(): Promise<UpstreamGroupOption[]> {
 
 const upstreamHubAPI = {
   listVendors,
+  listAllEntries,
   getVendor,
   createVendor,
   updateVendor,
@@ -147,6 +169,8 @@ const upstreamHubAPI = {
   setEntrySchedulable,
   setEntryGroups,
   setEntryGroupEnabled,
+  probeEntryModels,
+  setEntryModels,
   listGroups
 }
 

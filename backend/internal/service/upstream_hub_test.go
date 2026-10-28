@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -115,7 +116,7 @@ func TestEnrichUpstreamVendorBudgetZeroDisablesLimit(t *testing.T) {
 }
 
 func TestCreateVendorValidation(t *testing.T) {
-	svc := NewUpstreamHubService(&stubUpstreamVendorRepo{}, nil)
+	svc := NewUpstreamHubService(&stubUpstreamVendorRepo{}, nil, nil)
 
 	_, err := svc.CreateVendor(context.Background(), CreateUpstreamVendorInput{Name: "   "})
 	require.Error(t, err)
@@ -134,14 +135,14 @@ func TestDeleteVendorRefusesWithEntries(t *testing.T) {
 		vendors: []UpstreamVendor{{ID: 1, Name: "A"}},
 		entries: map[int64][]UpstreamEntry{1: {{AccountID: 9}}},
 	}
-	svc := NewUpstreamHubService(repo, nil)
+	svc := NewUpstreamHubService(repo, nil, nil)
 	require.ErrorIs(t, svc.DeleteVendor(context.Background(), 1), ErrUpstreamVendorNotEmpty)
 
 	emptyRepo := &stubUpstreamVendorRepo{
 		vendors: []UpstreamVendor{{ID: 2, Name: "B"}},
 		entries: map[int64][]UpstreamEntry{},
 	}
-	svc = NewUpstreamHubService(emptyRepo, nil)
+	svc = NewUpstreamHubService(emptyRepo, nil, nil)
 	require.NoError(t, svc.DeleteVendor(context.Background(), 2))
 	require.Equal(t, int64(2), emptyRepo.deleted)
 }
@@ -151,9 +152,145 @@ func TestGetVendorDetailWarnsOverBudget(t *testing.T) {
 		vendors: []UpstreamVendor{{ID: 3, Name: "C", ConcurrencyBudget: 10}},
 		entries: map[int64][]UpstreamEntry{3: {{AccountID: 1, Concurrency: 8}, {AccountID: 2, Concurrency: 8}}},
 	}
-	svc := NewUpstreamHubService(repo, nil)
+	svc := NewUpstreamHubService(repo, nil, nil)
 	detail, err := svc.GetVendorDetail(context.Background(), 3)
 	require.NoError(t, err)
 	require.True(t, detail.Vendor.OverBudget)
 	require.Len(t, detail.Warnings, 1)
+}
+
+// stubUpstreamAdmin 只实现上游聚合用到的两个方法，其余方法由嵌入的 nil 接口满足。
+type stubUpstreamAdmin struct {
+	AdminService
+	account *Account
+	updated *UpdateAccountInput
+}
+
+func (s *stubUpstreamAdmin) GetAccount(context.Context, int64) (*Account, error) {
+	if s.account == nil {
+		return nil, ErrUpstreamEntryNotFound
+	}
+	return s.account, nil
+}
+
+func (s *stubUpstreamAdmin) UpdateAccount(_ context.Context, _ int64, input *UpdateAccountInput) (*Account, error) {
+	s.updated = input
+	return s.account, nil
+}
+
+type stubUpstreamProber struct {
+	models []string
+	err    error
+	called bool
+}
+
+func (s *stubUpstreamProber) FetchUpstreamSupportedModels(context.Context, *Account) ([]string, error) {
+	s.called = true
+	return s.models, s.err
+}
+
+func TestUpstreamGroupAllowsPlatform(t *testing.T) {
+	tests := []struct {
+		name        string
+		group       string
+		entry       string
+		wantAllowed bool
+	}{
+		{name: "same concrete platform", group: PlatformDeepseek, entry: PlatformDeepseek, wantAllowed: true},
+		{name: "different concrete platform", group: PlatformAnthropic, entry: PlatformDeepseek, wantAllowed: false},
+		{name: "composite accepts CN provider", group: PlatformComposite, entry: PlatformDeepseek, wantAllowed: true},
+		{name: "composite accepts openai", group: PlatformComposite, entry: PlatformOpenAI, wantAllowed: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.wantAllowed, upstreamGroupAllowsPlatform(tc.group, tc.entry))
+		})
+	}
+}
+
+func TestProbeEntryModelsNormalizesAndReportsExisting(t *testing.T) {
+	admin := &stubUpstreamAdmin{account: &Account{
+		ID:    5,
+		Extra: map[string]any{UpstreamVendorIDExtraKey: int64(2)},
+		Credentials: map[string]any{
+			"api_key":       "sk-x",
+			"model_mapping": map[string]any{"deepseek-chat": "deepseek-chat"},
+		},
+	}}
+	prober := &stubUpstreamProber{models: []string{" deepseek-chat ", "deepseek-reasoner", "deepseek-chat", ""}}
+	svc := NewUpstreamHubService(&stubUpstreamVendorRepo{}, admin, prober)
+
+	probe, err := svc.ProbeEntryModels(context.Background(), 5)
+	require.NoError(t, err)
+	require.True(t, prober.called)
+	require.Equal(t, []string{"deepseek-chat", "deepseek-reasoner"}, probe.Models)
+	require.Equal(t, []string{"deepseek-chat"}, probe.Existing)
+}
+
+func TestProbeEntryModelsRejectsNonHubAccount(t *testing.T) {
+	admin := &stubUpstreamAdmin{account: &Account{ID: 6}}
+	svc := NewUpstreamHubService(&stubUpstreamVendorRepo{}, admin, &stubUpstreamProber{})
+
+	_, err := svc.ProbeEntryModels(context.Background(), 6)
+	require.ErrorIs(t, err, ErrUpstreamEntryNotFound)
+}
+
+func TestSetEntryModelsWritesMappingAndKeepsCredentials(t *testing.T) {
+	admin := &stubUpstreamAdmin{account: &Account{
+		ID:   5,
+		Name: "A-OpenAI",
+		// 历史条目（type=upstream）在写模型时应顺带转为 apikey。
+		Type:  AccountTypeUpstream,
+		Extra: map[string]any{UpstreamVendorIDExtraKey: int64(2)},
+		Credentials: map[string]any{
+			"api_key":          "sk-x",
+			"base_url":         "https://api.example.com/v1",
+			"header_overrides": map[string]any{"x": "y"},
+			"model_mapping":    map[string]any{"old": "old"},
+		},
+	}}
+	repo := &stubUpstreamVendorRepo{entries: map[int64][]UpstreamEntry{2: {{AccountID: 5, VendorID: 2}}}}
+	svc := NewUpstreamHubService(repo, admin, nil)
+
+	entry, err := svc.SetEntryModels(context.Background(), 5, []string{"deepseek-reasoner", " deepseek-chat ", "deepseek-chat"})
+	require.NoError(t, err)
+	require.Equal(t, int64(5), entry.AccountID)
+	require.NotNil(t, admin.updated)
+	require.Equal(t, AccountTypeAPIKey, admin.updated.Type)
+	require.Equal(t, "sk-x", admin.updated.Credentials["api_key"])
+	require.Equal(t, "https://api.example.com/v1", admin.updated.Credentials["base_url"])
+	require.Equal(t, map[string]any{"x": "y"}, admin.updated.Credentials["header_overrides"])
+	require.Equal(t, map[string]any{
+		"deepseek-chat":     "deepseek-chat",
+		"deepseek-reasoner": "deepseek-reasoner",
+	}, admin.updated.Credentials["model_mapping"])
+}
+
+func TestSetEntryModelsRejectsTooManyModels(t *testing.T) {
+	admin := &stubUpstreamAdmin{account: &Account{
+		ID:    7,
+		Extra: map[string]any{UpstreamVendorIDExtraKey: int64(3)},
+	}}
+	svc := NewUpstreamHubService(&stubUpstreamVendorRepo{}, admin, nil)
+
+	models := make([]string, maxUpstreamEntryModels+1)
+	for i := range models {
+		models[i] = fmt.Sprintf("model-%d", i)
+	}
+	_, err := svc.SetEntryModels(context.Background(), 7, models)
+	require.Error(t, err)
+	require.Nil(t, admin.updated)
+}
+
+func TestStoredUpstreamEntryModelsSkipsEmptyMappings(t *testing.T) {
+	credentials := map[string]any{
+		"model_mapping": map[string]any{
+			"a": "a",
+			"b": "",
+			"":  "c",
+			"d": 1,
+		},
+	}
+	require.Equal(t, []string{"a"}, storedUpstreamEntryModels(credentials))
+	require.Empty(t, storedUpstreamEntryModels(map[string]any{}))
 }

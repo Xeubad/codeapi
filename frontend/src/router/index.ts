@@ -461,6 +461,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/aggregation',
+    name: 'AdminAggregation',
+    component: () => import('@/views/admin/AggregationView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Aggregation',
+      titleKey: 'admin.aggregation.title',
+      descriptionKey: 'admin.aggregation.description'
+    }
+  },
+  {
     path: '/admin/channels',
     redirect: '/admin/channels/pricing'
   },

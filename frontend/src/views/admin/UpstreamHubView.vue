@@ -146,6 +146,7 @@
                       <th>Base URL</th>
                       <th>{{ t('admin.upstreamHub.concurrency') }}</th>
                       <th>{{ t('admin.upstreamHub.priority') }}</th>
+                      <th>{{ t('admin.upstreamHub.models') }}</th>
                       <th>{{ t('admin.upstreamHub.groups') }}</th>
                       <th>{{ t('admin.upstreamHub.schedulable') }}</th>
                     </tr>
@@ -160,6 +161,18 @@
                       <td class="max-w-[16rem] truncate text-xs" :title="entry.base_url">{{ entry.base_url }}</td>
                       <td>{{ entry.concurrency }}</td>
                       <td>{{ entry.priority }}</td>
+                      <td>
+                        <span
+                          class="text-sm"
+                          :class="
+                            (entry.models?.length || 0) > 0
+                              ? 'text-gray-700 dark:text-gray-300'
+                              : 'text-amber-600 dark:text-amber-400'
+                          "
+                        >
+                          {{ t('admin.upstreamHub.modelsRegistered', { count: entry.models?.length || 0 }) }}
+                        </span>
+                      </td>
                       <td>
                         <span v-if="groupRefs(entry).length === 0" class="text-xs text-gray-400 dark:text-dark-400">
                           {{ t('admin.upstreamHub.ungrouped') }}
@@ -231,6 +244,7 @@
                 <th class="min-w-[10rem] whitespace-nowrap">{{ t('admin.upstreamHub.apiKey') }}</th>
                 <th class="min-w-[6rem] whitespace-nowrap">{{ t('admin.upstreamHub.concurrency') }}</th>
                 <th class="min-w-[8.5rem] whitespace-nowrap">{{ t('admin.upstreamHub.priority') }}</th>
+                <th class="min-w-[9.5rem] whitespace-nowrap">{{ t('admin.upstreamHub.models') }}</th>
                 <th class="min-w-[9rem] whitespace-nowrap">{{ t('admin.upstreamHub.groups') }}</th>
                 <th class="whitespace-nowrap text-right">{{ t('common.actions') }}</th>
               </tr>
@@ -257,6 +271,28 @@
                   </td>
                   <td><input v-model.number="row.concurrency" class="input" type="number" min="1" /></td>
                   <td><input v-model.number="row.priority" class="input" type="number" /></td>
+                  <td>
+                    <button
+                      type="button"
+                      class="flex w-full items-center justify-between gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-left text-sm dark:border-dark-600 dark:bg-dark-800"
+                      :class="row.models.length ? '' : 'text-amber-600 dark:text-amber-400'"
+                      @click="toggleModelPanel(row)"
+                    >
+                      <span class="truncate">
+                        {{ t('admin.upstreamHub.modelsRegistered', { count: row.models.length }) }}
+                      </span>
+                      <svg
+                        class="h-4 w-4 shrink-0 text-gray-400 transition-transform"
+                        :class="row.modelPanelOpen ? 'rotate-180' : ''"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6" />
+                      </svg>
+                    </button>
+                  </td>
                   <td class="relative">
                     <button
                       type="button"
@@ -292,7 +328,10 @@
                           @click="toggleRowGroup(row, group.id)"
                         >
                           <span class="truncate">{{ group.name }}</span>
-                          <span class="badge badge-primary">{{ group.platform }}</span>
+                          <span v-if="group.platform === 'composite'" class="badge badge-primary">
+                            {{ groupPlatformLabel(group) }}
+                          </span>
+                          <span v-else class="badge badge-primary">{{ group.platform }}</span>
                         </div>
                         <div v-if="groupsForRow(row).length === 0" class="px-4 py-2 text-xs text-gray-500">
                           {{ t('admin.upstreamHub.noGroupsForPlatform') }}
@@ -307,6 +346,64 @@
                     <button class="btn btn-sm btn-ghost ml-1 text-red-600" @click="removeRow(row, index)">
                       {{ t('admin.upstreamHub.delete') }}
                     </button>
+                  </td>
+                </tr>
+                <tr v-if="row.modelPanelOpen">
+                  <td colspan="9" class="bg-gray-50 dark:bg-dark-800/40">
+                    <div class="space-y-2">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <button
+                          class="btn btn-secondary btn-sm"
+                          :disabled="row.probeLoading"
+                          @click="probeRowModels(row)"
+                        >
+                          {{ row.probeLoading ? t('admin.upstreamHub.probing') : t('admin.upstreamHub.probeModels') }}
+                        </button>
+                        <span class="text-xs text-gray-500 dark:text-dark-300">
+                          {{ t('admin.upstreamHub.modelsSelected', { count: row.models.length }) }}
+                        </span>
+                        <span v-if="row.probeError" class="text-xs text-red-600 dark:text-red-400">
+                          {{ row.probeError }}
+                        </span>
+                        <span v-else-if="row.probeModels.length" class="text-xs text-gray-500 dark:text-dark-300">
+                          {{ t('admin.upstreamHub.probeFound', { count: row.probeModels.length }) }}
+                        </span>
+                        <div v-if="row.probeModels.length" class="ml-auto flex items-center gap-3">
+                          <button class="text-xs text-primary-600 hover:underline" @click="selectAllProbeModels(row)">
+                            {{ t('admin.upstreamHub.selectAll') }}
+                          </button>
+                          <button class="text-xs text-gray-500 hover:underline" @click="clearRowModels(row)">
+                            {{ t('admin.upstreamHub.clearAll') }}
+                          </button>
+                        </div>
+                      </div>
+                      <div
+                        v-if="row.probeModels.length"
+                        class="max-h-40 overflow-y-auto rounded-lg border border-gray-200 bg-white dark:border-dark-600 dark:bg-dark-800"
+                      >
+                        <div
+                          v-for="model in row.probeModels"
+                          :key="model"
+                          class="flex cursor-pointer items-center gap-2 px-3 py-1 text-sm"
+                          :class="
+                            row.models.includes(model)
+                              ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/20 dark:text-primary-300'
+                              : 'hover:bg-gray-100 dark:hover:bg-dark-700'
+                          "
+                          @click="toggleRowModel(row, model)"
+                        >
+                          <input
+                            type="checkbox"
+                            class="pointer-events-none"
+                            :checked="row.models.includes(model)"
+                          />
+                          <span class="truncate font-mono text-xs">{{ model }}</span>
+                        </div>
+                      </div>
+                      <p v-else class="text-xs text-gray-400 dark:text-dark-400">
+                        {{ t('admin.upstreamHub.probeHint') }}
+                      </p>
+                    </div>
                   </td>
                 </tr>
               </template>
@@ -359,6 +456,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { extractApiErrorMessage } from '@/utils/apiError'
+import { syncUpstreamModelsPreview } from '@/api/admin/accounts'
 import upstreamHubAPI, {
   type UpstreamEntry,
   type UpstreamEntryGroupRef,
@@ -402,6 +500,13 @@ interface EntryRow {
   expanded: boolean
   dropdownTop: number
   dropdownRight: number
+  // 已登记的模型白名单（model_mapping 的键），保存时若有改动才回写
+  models: string[]
+  modelsDirty: boolean
+  modelPanelOpen: boolean
+  probeLoading: boolean
+  probeError: string
+  probeModels: string[]
 }
 const showEntryDialog = ref(false)
 const entryRows = ref<EntryRow[]>([])
@@ -443,7 +548,13 @@ function entryToRow(entry: UpstreamEntry): EntryRow {
     groupEnabled,
     expanded: false,
     dropdownTop: 0,
-    dropdownRight: 0
+    dropdownRight: 0,
+    models: [...(entry.models || [])],
+    modelsDirty: false,
+    modelPanelOpen: false,
+    probeLoading: false,
+    probeError: '',
+    probeModels: []
   }
 }
 
@@ -557,7 +668,13 @@ function blankRow(): EntryRow {
     groupEnabled: {},
     expanded: false,
     dropdownTop: 0,
-    dropdownRight: 0
+    dropdownRight: 0,
+    models: [],
+    modelsDirty: false,
+    modelPanelOpen: false,
+    probeLoading: false,
+    probeError: '',
+    probeModels: []
   }
 }
 
@@ -566,7 +683,14 @@ function addEntryRow() {
 }
 
 function groupsForRow(row: EntryRow): UpstreamGroupOption[] {
-  return groupOptions.value.filter((group) => group.platform === row.platform)
+  // 综合分组天生跨平台，任何条目都可以挂；具体平台分组仍要求平台一致。
+  return groupOptions.value.filter(
+    (group) => group.platform === row.platform || group.platform === 'composite'
+  )
+}
+
+function groupPlatformLabel(group: UpstreamGroupOption): string {
+  return group.platform === 'composite' ? t('admin.upstreamHub.compositeGroup') : group.platform
 }
 
 const anyRowDropdownOpen = computed(() => entryRows.value.some((row) => row.expanded))
@@ -594,6 +718,62 @@ function toggleRowGroup(row: EntryRow, groupId: number) {
   } else {
     row.groupIds.push(groupId)
     row.groupEnabled[groupId] = true
+  }
+}
+
+function toggleModelPanel(row: EntryRow) {
+  row.modelPanelOpen = !row.modelPanelOpen
+}
+
+function toggleRowModel(row: EntryRow, model: string) {
+  const index = row.models.indexOf(model)
+  if (index >= 0) {
+    row.models.splice(index, 1)
+  } else {
+    row.models.push(model)
+  }
+  row.modelsDirty = true
+}
+
+function selectAllProbeModels(row: EntryRow) {
+  row.models = [...new Set([...row.models, ...row.probeModels])].sort()
+  row.modelsDirty = true
+}
+
+function clearRowModels(row: EntryRow) {
+  row.models = []
+  row.modelsDirty = true
+}
+
+async function probeRowModels(row: EntryRow) {
+  row.probeError = ''
+  row.probeLoading = true
+  try {
+    let models: string[] = []
+    if (row.accountId) {
+      const probe = await upstreamHubAPI.probeEntryModels(row.accountId)
+      models = probe.models || []
+    } else {
+      if (!row.base_url.trim() || !row.api_key.trim()) {
+        row.probeError = t('admin.upstreamHub.probeNeedsCredentials')
+        return
+      }
+      const result = await syncUpstreamModelsPreview({
+        platform: row.platform,
+        type: 'apikey',
+        base_url: row.base_url.trim(),
+        api_key: row.api_key.trim()
+      })
+      models = (result.models || []).map((model) => model.trim()).filter(Boolean)
+    }
+    row.probeModels = [...new Set(models)].sort()
+    if (row.probeModels.length === 0) {
+      row.probeError = t('admin.upstreamHub.probeEmpty')
+    }
+  } catch (err) {
+    row.probeError = extractApiErrorMessage(err, t('admin.upstreamHub.probeFailed'))
+  } finally {
+    row.probeLoading = false
   }
 }
 
@@ -654,6 +834,12 @@ async function copyRow(row: EntryRow) {
     name: row.name ? `${row.name}-copy` : row.name,
     groupIds: [...row.groupIds],
     groupEnabled: { ...row.groupEnabled },
+    models: [...row.models],
+    modelsDirty: row.models.length > 0,
+    modelPanelOpen: false,
+    probeLoading: false,
+    probeError: '',
+    probeModels: [],
     expanded: false,
     dropdownTop: 0,
     dropdownRight: 0
@@ -691,6 +877,9 @@ async function saveEntryRows() {
           priority: Number(row.priority) || 50
         })
         await applyRowGroups(row.accountId, row)
+        if (row.modelsDirty) {
+          await upstreamHubAPI.setEntryModels(row.accountId, row.models)
+        }
       } else {
         if (!row.api_key.trim()) {
           throw new Error(t('admin.upstreamHub.fillRequiredFields'))
@@ -704,6 +893,9 @@ async function saveEntryRows() {
           priority: Number(row.priority) || 50
         })
         await applyRowGroups(created.account_id, row)
+        if (row.models.length > 0) {
+          await upstreamHubAPI.setEntryModels(created.account_id, row.models)
+        }
       }
     }
     for (const removed of pendingDeletes.value) {

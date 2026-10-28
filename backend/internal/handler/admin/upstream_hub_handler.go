@@ -52,6 +52,15 @@ func (h *UpstreamHubHandler) ListVendors(c *gin.Context) {
 	response.Success(c, vendors)
 }
 
+func (h *UpstreamHubHandler) ListAllEntries(c *gin.Context) {
+	entries, err := h.svc.ListAllEntries(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, entries)
+}
+
 func (h *UpstreamHubHandler) GetVendor(c *gin.Context) {
 	id, ok := parseIDParam(c, "id")
 	if !ok {
@@ -285,6 +294,45 @@ func (h *UpstreamHubHandler) SetEntryGroupEnabled(c *gin.Context) {
 	response.Success(c, gin.H{"message": "updated"})
 }
 
+type upstreamEntryModelsRequest struct {
+	Models []string `json:"models"`
+}
+
+// ProbeEntryModels 探测条目上游的模型列表（只读，不落库）。
+// POST /api/v1/admin/upstream-entries/:id/probe-models
+func (h *UpstreamHubHandler) ProbeEntryModels(c *gin.Context) {
+	accountID, ok := parseIDParam(c, "id")
+	if !ok {
+		return
+	}
+	probe, err := h.svc.ProbeEntryModels(c.Request.Context(), accountID)
+	if err != nil {
+		writeUpstreamHubError(c, err)
+		return
+	}
+	response.Success(c, probe)
+}
+
+// SetEntryModels 把勾选的模型写成条目的 model_mapping（提交列表即最终白名单）。
+// PUT /api/v1/admin/upstream-entries/:id/models
+func (h *UpstreamHubHandler) SetEntryModels(c *gin.Context) {
+	accountID, ok := parseIDParam(c, "id")
+	if !ok {
+		return
+	}
+	var req upstreamEntryModelsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	entry, err := h.svc.SetEntryModels(c.Request.Context(), accountID, req.Models)
+	if err != nil {
+		writeUpstreamHubError(c, err)
+		return
+	}
+	response.Success(c, entry)
+}
+
 func (h *UpstreamHubHandler) ListGroups(c *gin.Context) {
 	groups, err := h.svc.ListGroups(c.Request.Context())
 	if err != nil {
@@ -295,6 +343,18 @@ func (h *UpstreamHubHandler) ListGroups(c *gin.Context) {
 }
 
 func writeUpstreamHubError(c *gin.Context, err error) {
+	var syncErr *service.UpstreamModelSyncError
+	if errors.As(err, &syncErr) {
+		switch syncErr.Kind {
+		case service.UpstreamModelSyncErrorConfiguration, service.UpstreamModelSyncErrorUnsupported:
+			response.BadRequest(c, syncErr.SafeMessage())
+		case service.UpstreamModelSyncErrorInternal:
+			response.InternalError(c, syncErr.SafeMessage())
+		default:
+			response.Error(c, http.StatusBadGateway, syncErr.SafeMessage())
+		}
+		return
+	}
 	switch {
 	case errors.Is(err, service.ErrUpstreamVendorNotFound),
 		errors.Is(err, service.ErrUpstreamEntryNotFound):

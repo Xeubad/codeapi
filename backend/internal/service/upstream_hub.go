@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 
@@ -49,6 +50,15 @@ type UpstreamEntry struct {
 	Schedulable bool                    `json:"schedulable"`
 	Status      string                  `json:"status"`
 	Groups      []UpstreamEntryGroupRef `json:"groups"`
+	// Models 是 credentials.model_mapping 的键（已登记的对外模型名，排序后）。
+	// 网关的 /v1/models 与 composite 归属解析都只认这份映射，为空即无模型可暴露。
+	Models []string `json:"models"`
+}
+
+// UpstreamEntryModelProbe 是探测上游模型列表的结果（只读，不落库）。
+type UpstreamEntryModelProbe struct {
+	Models   []string `json:"models"`
+	Existing []string `json:"existing"`
 }
 
 type UpstreamGroupOption struct {
@@ -108,15 +118,29 @@ type UpstreamVendorRepository interface {
 	SetEntryGroups(ctx context.Context, accountID int64, groupIDs []int64) error
 }
 
+// upstreamModelProber 是「读取上游真实模型列表」的能力，由 *AccountTestService 实现。
+// 抽成接口只为本包单测可替换，生产装配仍是 AccountTestService。
+type upstreamModelProber interface {
+	FetchUpstreamSupportedModels(ctx context.Context, account *Account) ([]string, error)
+}
+
 // UpstreamHubService 上游聚合：厂家台账 + 透传条目编排。
-// 条目本身是 type=upstream 的 Account，由 AdminService 负责既有校验与生命周期。
+// 条目本身是 type=apikey 的 Account（自定义 base_url 直连上游），由 AdminService
+// 负责既有校验与生命周期；归属只认 extra.upstream_vendor_id。
+// 之所以不用 type=upstream：网关各转发路径按 account.type 分支取凭据，upstream
+// 只有 antigravity relay 有实现，其余平台会直接报 unsupported account type。
 type UpstreamHubService struct {
 	repo  UpstreamVendorRepository
 	admin AdminService
+	probe upstreamModelProber
 }
 
-func NewUpstreamHubService(repo UpstreamVendorRepository, admin AdminService) *UpstreamHubService {
-	return &UpstreamHubService{repo: repo, admin: admin}
+func NewUpstreamHubService(
+	repo UpstreamVendorRepository,
+	admin AdminService,
+	probe upstreamModelProber,
+) *UpstreamHubService {
+	return &UpstreamHubService{repo: repo, admin: admin, probe: probe}
 }
 
 func (s *UpstreamHubService) ListVendors(ctx context.Context) ([]UpstreamVendor, error) {
@@ -132,6 +156,23 @@ func (s *UpstreamHubService) ListVendors(ctx context.Context) ([]UpstreamVendor,
 		enrichUpstreamVendor(&vendors[i], entries)
 	}
 	return vendors, nil
+}
+
+// ListAllEntries 返回全部厂家的条目，供聚合调度页做跨厂家编排。
+func (s *UpstreamHubService) ListAllEntries(ctx context.Context) ([]UpstreamEntry, error) {
+	vendors, err := s.repo.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	entries := make([]UpstreamEntry, 0)
+	for _, vendor := range vendors {
+		vendorEntries, err := s.repo.ListEntries(ctx, vendor.ID)
+		if err != nil {
+			return nil, err
+		}
+		entries = append(entries, vendorEntries...)
+	}
+	return entries, nil
 }
 
 func (s *UpstreamHubService) GetVendorDetail(ctx context.Context, id int64) (*UpstreamVendorDetail, error) {
@@ -215,7 +256,7 @@ func (s *UpstreamHubService) CreateEntry(ctx context.Context, vendorID int64, in
 	account, err := s.admin.CreateAccount(ctx, &CreateAccountInput{
 		Name:     name,
 		Platform: strings.TrimSpace(input.Platform),
-		Type:     AccountTypeUpstream,
+		Type:     AccountTypeAPIKey,
 		Credentials: map[string]any{
 			"api_key":  apiKey,
 			"base_url": baseURL,
@@ -254,16 +295,21 @@ func (s *UpstreamHubService) UpdateEntry(ctx context.Context, accountID int64, i
 	if err != nil {
 		return nil, err
 	}
-	credentials := map[string]any{
-		"api_key":  current.GetCredential("api_key"),
-		"base_url": baseURL,
+	// UpdateAccount 的合并语义是「非敏感键完全由 incoming 决定」
+	// （MergePreservingSensitiveCreds），所以必须以现有 credentials 为底，
+	// 否则探测写入的 model_mapping 会在任意一次编辑后被抹掉。
+	credentials := make(map[string]any, len(current.Credentials)+2)
+	for key, value := range current.Credentials {
+		credentials[key] = value
 	}
+	credentials["api_key"] = current.GetCredential("api_key")
+	credentials["base_url"] = baseURL
 	if apiKey := strings.TrimSpace(input.APIKey); apiKey != "" {
 		credentials["api_key"] = apiKey
 	}
 	update := &UpdateAccountInput{
 		Name:                  name,
-		Type:                  AccountTypeUpstream,
+		Type:                  AccountTypeAPIKey,
 		Credentials:           credentials,
 		Concurrency:           input.Concurrency,
 		Priority:              input.Priority,
@@ -316,14 +362,19 @@ func (s *UpstreamHubService) DuplicateEntry(ctx context.Context, accountID int64
 	if apiKey == "" {
 		return nil, fmt.Errorf("source entry has no api key")
 	}
+	// 复制条目同时带走已登记的模型白名单，否则副本会没有任何可调用模型。
+	credentials := map[string]any{
+		"api_key":  apiKey,
+		"base_url": current.GetCredential("base_url"),
+	}
+	if mapping, ok := current.Credentials["model_mapping"]; ok && mapping != nil {
+		credentials["model_mapping"] = mapping
+	}
 	account, err := s.admin.CreateAccount(ctx, &CreateAccountInput{
-		Name:     name,
-		Platform: platform,
-		Type:     AccountTypeUpstream,
-		Credentials: map[string]any{
-			"api_key":  apiKey,
-			"base_url": current.GetCredential("base_url"),
-		},
+		Name:        name,
+		Platform:    platform,
+		Type:        AccountTypeAPIKey,
+		Credentials: credentials,
 		Extra: map[string]any{
 			UpstreamVendorIDExtraKey: vendorID,
 		},
@@ -373,6 +424,15 @@ func (s *UpstreamHubService) SetEntryGroupEnabled(ctx context.Context, accountID
 	return s.repo.SetEntryGroupEnabled(ctx, accountID, groupID, enabled)
 }
 
+// upstreamGroupAllowsPlatform 判断条目能否挂进该分组：具体平台分组要求平台相等，
+// composite 综合分组可接收任意具体平台条目（对齐平台自身 canCopyAccountsFromGroupPlatform）。
+func upstreamGroupAllowsPlatform(groupPlatform, entryPlatform string) bool {
+	if groupPlatform == PlatformComposite {
+		return true
+	}
+	return groupPlatform == entryPlatform
+}
+
 func (s *UpstreamHubService) SetEntryGroups(ctx context.Context, accountID int64, groupIDs []int64) ([]UpstreamEntryGroupRef, error) {
 	account, err := s.admin.GetAccount(ctx, accountID)
 	if err != nil {
@@ -394,7 +454,10 @@ func (s *UpstreamHubService) SetEntryGroups(ctx context.Context, accountID int64
 		if !ok {
 			return nil, fmt.Errorf("group %d not found", groupID)
 		}
-		if platform != account.Platform {
+		// 综合分组（composite）天生跨平台，可接收任意具体平台条目；
+		// 具体平台分组仍要求与条目平台一致，口径对齐平台自身的
+		// canCopyAccountsFromGroupPlatform（admin_group.go）。
+		if !upstreamGroupAllowsPlatform(platform, account.Platform) {
 			return nil, ErrUpstreamGroupInvalid
 		}
 	}
@@ -410,6 +473,100 @@ func (s *UpstreamHubService) SetEntryGroups(ctx context.Context, accountID int64
 
 func (s *UpstreamHubService) ListGroups(ctx context.Context) ([]UpstreamGroupOption, error) {
 	return s.repo.ListGroups(ctx)
+}
+
+// ProbeEntryModels 读取条目上游的模型列表（只读，不落库）。
+// 复用 AccountTestService 的探测链，覆盖 openai / 国产多协议供应商 / anthropic /
+// gemini / grok；失败原因由 UpstreamModelSyncError 分类，handler 据此映射状态码。
+func (s *UpstreamHubService) ProbeEntryModels(ctx context.Context, accountID int64) (*UpstreamEntryModelProbe, error) {
+	account, err := s.admin.GetAccount(ctx, accountID)
+	if err != nil {
+		return nil, err
+	}
+	if _, ok := upstreamVendorIDFromExtra(account.Extra); !ok {
+		return nil, ErrUpstreamEntryNotFound
+	}
+	if s.probe == nil {
+		return nil, errors.New("upstream model prober is not configured")
+	}
+	models, err := s.probe.FetchUpstreamSupportedModels(ctx, account)
+	if err != nil {
+		return nil, err
+	}
+	return &UpstreamEntryModelProbe{
+		Models:   normalizeUpstreamModelIDs(models),
+		Existing: storedUpstreamEntryModels(account.Credentials),
+	}, nil
+}
+
+// SetEntryModels 把勾选的模型写成条目的 model_mapping（from=to）。
+// 提交列表即最终白名单；空列表表示清空白名单（模型列表回落到平台默认表）。
+func (s *UpstreamHubService) SetEntryModels(ctx context.Context, accountID int64, models []string) (*UpstreamEntry, error) {
+	account, err := s.admin.GetAccount(ctx, accountID)
+	if err != nil {
+		return nil, err
+	}
+	if _, ok := upstreamVendorIDFromExtra(account.Extra); !ok {
+		return nil, ErrUpstreamEntryNotFound
+	}
+	selected := normalizeUpstreamModelIDs(models)
+	if len(selected) > maxUpstreamEntryModels {
+		return nil, fmt.Errorf("too many models: %d exceeds limit %d", len(selected), maxUpstreamEntryModels)
+	}
+	mapping := make(map[string]any, len(selected))
+	for _, model := range selected {
+		mapping[model] = model
+	}
+	credentials := make(map[string]any, len(account.Credentials)+1)
+	for key, value := range account.Credentials {
+		credentials[key] = value
+	}
+	credentials["model_mapping"] = mapping
+	if _, err := s.admin.UpdateAccount(ctx, accountID, &UpdateAccountInput{
+		Name:                  account.Name,
+		Type:                  AccountTypeAPIKey,
+		Credentials:           credentials,
+		SkipMixedChannelCheck: true,
+	}); err != nil {
+		return nil, err
+	}
+	return s.getEntry(ctx, accountID)
+}
+
+// maxUpstreamEntryModels 限制单条目可登记的模型数，避免误提交超大白名单。
+const maxUpstreamEntryModels = 500
+
+func normalizeUpstreamModelIDs(models []string) []string {
+	seen := make(map[string]struct{}, len(models))
+	out := make([]string, 0, len(models))
+	for _, model := range models {
+		model = strings.TrimSpace(model)
+		if model == "" {
+			continue
+		}
+		if _, ok := seen[model]; ok {
+			continue
+		}
+		seen[model] = struct{}{}
+		out = append(out, model)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// storedUpstreamEntryModels 只读 credentials 里真实存储的 model_mapping 键，
+// 不走 Account.GetModelMapping（后者对部分平台会补默认映射，不是管理员登记的口径）。
+func storedUpstreamEntryModels(credentials map[string]any) []string {
+	stored := stringMappingFromRaw(credentials["model_mapping"])
+	keys := make([]string, 0, len(stored))
+	for key, mapped := range stored {
+		if strings.TrimSpace(key) == "" || strings.TrimSpace(mapped) == "" {
+			continue
+		}
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func (s *UpstreamHubService) getEntry(ctx context.Context, accountID int64) (*UpstreamEntry, error) {

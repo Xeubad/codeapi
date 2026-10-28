@@ -761,12 +761,15 @@ func registerUpstreamHubRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	}
 	entries := admin.Group("/upstream-entries")
 	{
+		entries.GET("", h.Admin.UpstreamHub.ListAllEntries)
 		entries.PUT("/:id", h.Admin.UpstreamHub.UpdateEntry)
 		entries.POST("/:id/duplicate", h.Admin.UpstreamHub.DuplicateEntry)
 		entries.DELETE("/:id", h.Admin.UpstreamHub.DeleteEntry)
 		entries.PUT("/:id/schedulable", h.Admin.UpstreamHub.SetEntrySchedulable)
 		entries.PUT("/:id/groups", h.Admin.UpstreamHub.SetEntryGroups)
 		entries.PUT("/:id/groups/:groupId/enabled", h.Admin.UpstreamHub.SetEntryGroupEnabled)
+		entries.POST("/:id/probe-models", h.Admin.UpstreamHub.ProbeEntryModels)
+		entries.PUT("/:id/models", h.Admin.UpstreamHub.SetEntryModels)
 	}
 	admin.GET("/upstream-groups", h.Admin.UpstreamHub.ListGroups)
 }

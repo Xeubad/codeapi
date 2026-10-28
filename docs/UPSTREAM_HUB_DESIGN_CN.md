@@ -10,7 +10,7 @@
 
 **定位**：与「账号管理」同源的功能——账号管理维护的是厂商凭据（订阅账号、OAuth），上游聚合维护的是**上游厂商**（透传 Base URL + Key 的供货渠道）；两者原理相同（凭据存储、健康检查、调度），只是维护对象与引入的聚合技术不同。
 
-**核心结论：网关不重构，功能主体是编排层。** sub2api 已具备全部中转原语（`type=upstream` 账号、composite 分组、模型路由、协议翻译矩阵、failover/冷却），上游聚合 = 现有组件的受控组合 + 一张厂家台账新表。
+**核心结论：网关不重构，功能主体是编排层。** sub2api 已具备全部中转原语（`type=apikey` 自定义 base_url 账号、composite 分组、模型路由、协议翻译矩阵、failover/冷却），上游聚合 = 现有组件的受控组合 + 一张厂家台账新表。
 
 ### 心智模型：一个数据、两个入口、三个视角
 
@@ -22,7 +22,7 @@
 
 | 能力 | 现有原语 | 位置 |
 |---|---|---|
-| 上游透传账号 | `AccountTypeUpstream = "upstream"`（Base URL + API Key 直连上游），完整校验链保留 | `backend/internal/domain/constants.go` |
+| 上游透传账号 | `Account(type=apikey)` + `credentials.base_url`（Base URL + API Key 直连上游），网关全部转发路径都支持；`type=upstream` 仅 antigravity relay 有实现，hub 不使用 | `backend/internal/domain/constants.go` |
 | 统一分组容器 | `Group.platform = "composite"` | `backend/ent/schema/group.go` |
 | 模型归一表 | `CompositeModelRoute`：public_model → target_platform + upstream_model，exact/prefix、endpoint、priority | `backend/ent/schema/composite_model_route.go` |
 | 国产厂商登记 | `PlatformSpec.CNProvider`（Kimi/智谱/DeepSeek/MiniMax），平台清单是单一真相 | `backend/internal/domain/platforms.go` |
@@ -44,9 +44,11 @@
 - `notes`、软删（TimeMixin + SoftDeleteMixin）
 - 删除保护：厂家下仍有条目时拒绝删除（`ErrUpstreamVendorNotEmpty`）
 
-### 条目：`Account(type=upstream)` + `extra.upstream_vendor_id`
+### 条目：`Account(type=apikey)` + `extra.upstream_vendor_id`
 
-一条上游记录 = 一行 Account，不建新实体。归属判定读 `extra.upstream_vendor_id`（兼容 int64/int/float64/string 反序列化）。条目创建复用 `AdminService.CreateAccount` 全套校验，`SkipDefaultGroupBind` 避免自动挂默认组。
+一条上游记录 = 一行 Account，不建新实体。归属判定只读 `extra.upstream_vendor_id`（兼容 int64/int/float64/string 反序列化），**与账号 type 无关**。条目创建复用 `AdminService.CreateAccount` 全套校验，`SkipDefaultGroupBind` 避免自动挂默认组。
+
+> **类型选择（2026-10-28 修正）**：条目最初建成 `type=upstream`，实测不可用——网关凭据解析（`OpenAIGatewayService.GetAccessToken`、`GatewayService.GetAccessToken`）以及全仓 20+ 处 `switch account.Type` 都不认 `upstream`，会落 `default:` 报 `unsupported account type`。改用 `type=apikey` + 自定义 `base_url`：这是平台日常在跑的国产厂商手动 Key 形态，所有转发路径天然支持，且 `GetOpenAIBaseURL`/`GetOpenAIApiKey` 本就对 upstream/apikey 同口径处理。历史条目由迁移 `900_xeu_upstream_entry_type_apikey.sql` 转换（只改带 `extra.upstream_vendor_id` 且未软删的行，不碰 antigravity relay）。
 
 **一 key 一协议**（管理员确认的上游现实）：一条目只对应一种接口类型。协议 → 落库 platform → 网关端点：
 
@@ -77,7 +79,7 @@
 | 层 | 文件 | 职责 |
 |---|---|---|
 | Service | `backend/internal/service/upstream_hub.go` | 厂家 CRUD、条目 CRUD + 复制（服务端拷贝凭据）、预算 enrich（EntryCount / AllocatedConcurrency / OverBudget）、分组绑定（平台匹配校验）、两级开关 |
-| Repo | `backend/internal/repository/upstream_vendor_repo.go` | 厂家持久化；条目查询按 `type=upstream` + extra 归属过滤；分组绑定 tx 内 delete + CreateBulk |
+| Repo | `backend/internal/repository/upstream_vendor_repo.go` | 厂家持久化；条目按 `extra.upstream_vendor_id`（jsonb 谓词，数字/字符串两种形态）过滤，与 type 无关；分组绑定 tx 内 delete + CreateBulk |
 | Handler | `backend/internal/handler/admin/upstream_hub_handler.go` | admin API，NotFound/Conflict 错误映射 |
 | 路由 | `backend/internal/server/routes/admin.go` | 见下表 |
 
@@ -168,7 +170,7 @@ DI 走 google/wire（`cmd/server/wire_gen.go` 手工补丁，本机无 wire CLI 
 | /v1/chat/completions | 原生 | ForwardAsAnthropic | — | 原生端点 | — |
 | /v1beta | — | GeminiMessagesCompat | 原生 | — | — |
 
-**唯一未验证缺口**：翻译路径对 `type=upstream` 账号是否生效（与 apikey 账号大概率同路，但无测试覆盖）——连通性实测的核心问题，也是"能否复刻 magpie/cc-switch"的最终判据。**待真实上游凭据实测。**
+**连通性状态**：2026-10-28 用本地 mock 上游（OpenAI 兼容 `/v1/models` + `/v1/chat/completions`）完成端到端实测：hub 条目 → 探测模型 → 写入 `model_mapping` → 挂入 composite 分组 → 客户 key 调 `/v1/models` 返回上游真实模型、`/v1/chat/completions` 正常转发。**真实第三方上游的协议覆盖仍需管理员用真实 Key 复测**（mock 只证明路由与凭据链路，不证明各家上游的兼容差异）。
 
 ### cc-switch 设计参考
 
@@ -190,24 +192,85 @@ DI 走 google/wire（`cmd/server/wire_gen.go` 手工补丁，本机无 wire CLI 
 
 ## 九、当前状态与已知缺口（截至 2026-10-28）
 
-**已上线可用**：厂家台账（预算/超限硬阻断）、条目增删改复制、并发+优先级、分组绑定与每分组「暂不调用」、全局可调度开关、调度与统计尊重 enabled、`/admin/upstream-hub` 完整界面（zh/en）。
+**已上线可用**（2026-10-28 更新）：厂家台账（预算/超限硬阻断）、条目增删改复制、并发+优先级、分组绑定（含 composite 综合分组）与每分组「暂不调用」、全局可调度开关、调度与统计尊重 enabled、`/admin/upstream-hub` 与 `/admin/aggregation` 两个界面（zh/en）、**上游模型探测 + 勾选落库**（折叠面板）、归一模型表（聚合调度页）。
 
 **已知缺口**：
 
-1. **真实上游连通性测试未跑**——等待真实 Base URL + Key，验证翻译矩阵对 `type=upstream` 的覆盖（§七）。
-2. GroupsView 建组「从上游聚合引用」区块未建（机制已从聚合侧打通）。
+1. **真实第三方上游连通性未复测**——mock 上游已打通全链路（§七），等待真实 Base URL + Key 验证各厂商协议差异。
+2. GroupsView 建组「从上游聚合引用」区块未建（机制已从聚合侧打通，聚合调度页也可挂载）。
 3. 条目平台创建后不可改（弹窗中既有条目平台锁定）。
 4. 复制条目到其它厂家/分组时 enabled 重置为 true。
 5. `/v1/models` 未过滤"本分组暂不调用"的条目。
-6. 账号管理页对聚合条目无只读标记（双头管理护栏未落）。
+6. 账号管理页对聚合条目无只读标记（双头管理护栏未落；条目现在与普通 apikey 账号同型，更需要这个标记）。
 7. 运行期厂家预算槽位与厂家级联动冷却未实现（§七接缝 3）。
 8. 探活三级未实现（§八）。
 9. 意图路由整体待定（见 [PENDING_INTENT_ROUTING_CN.md](./PENDING_INTENT_ROUTING_CN.md)）。
+10. ~~条目无 `model_mapping` → 模型列表链路全断~~ → **已解决**（§十一 P1）：探测 + 勾选写 `model_mapping`，`/v1/models` 与 composite 归属解析随之生效。
+11. ~~hub 的分组平台匹配严于平台自身规则~~ → **已解决**（§十一 P2）：改为「平台相等 或 composite」，前端下拉同步放开。
+12. ~~API 密钥页「API 端点」块随空设置消失~~ → **已解决**（§十一 P0）：前端兜底 `window.location.origin`。
 
-**后续实施顺序**（原规划保留）：连通性实测 → GroupsView 双来源 UI → 探活三级 + 预算槽位接缝 → 意图路由（待定）。
+**后续实施顺序**：真实上游复测 → GroupsView 双来源 UI → 探活三级 + 预算槽位接缝 → 意图路由（待定）。
 
 ## 十、风险
 
-1. `upstream` 类型账号跨协议覆盖面需实测（openai / anthropic / gemini 三协议各连一家真实上游）。
+1. `type=apikey` 的 hub 条目跨协议覆盖面需实测（openai / anthropic / gemini 三协议各连一家真实上游）；mock 上游已证明路由与凭据链路。
 2. `Group.model_routing` 与 `CompositeModelRoute.priority` 的一致性由界面层写入顺序保证（先 routes 后 model_routing），需在测试中覆盖原子性。
 3. 意图路由相关的延迟/计费/时序风险整体移至待定项。
+
+## 十一、实施计划（2026-10-28 定稿）
+
+三个管理员实测问题定位后确定的修复方案。决策已锁定：端点 UI 加前端兜底；探测结果**勾选确认后**再写入（不做一键全量，避免中转商上百个杂模型灌进客户列表）；聚合调度做成**独立新页** `/admin/aggregation`（不扩 GroupsView 的 composite 页签，也不塞回上游聚合页）。
+
+### P0 · API 端点 UI 兜底（独立，先走）
+
+| 改动 | 位置 |
+|---|---|
+| v-if 与传参改为 `api_base_url \|\| window.location.origin`，端点块不再因空设置消失 | `frontend/src/views/user/KeysView.vue:26-29` |
+| 同口径修 `UseKeyModal` 的 `:base-url`（当前传空串） | `frontend/src/views/user/KeysView.vue:1076` |
+| 正式域名仍需在 系统设置 → 站点设置 填写（兜底只保证不空白） | 管理端设置 |
+
+### P1 · 探测上游模型（核心，同时是 P2 的前提）
+
+复用平台已有的探测能力，不新造：`AccountTestService.FetchUpstreamSupportedModels` / `SyncUpstreamModelCatalog`（`internal/service/upstream_models.go`），已覆盖 openai、多协议 API Key 供应商（国产厂商 + 聚合平台）、gemini、anthropic、grok、antigravity（`buildUpstreamModelsRequest:904`）。管理端现成端点：`POST /admin/accounts/models/sync-upstream-preview`（不落库）、`POST /admin/accounts/:id/models/sync-upstream`。
+
+**后端**
+
+1. ~~放宽三处 type 守卫接受 `AccountTypeUpstream`~~ → **实施时改道**：实测发现 `type=upstream` 在网关 20+ 处 `switch account.Type` 都不被识别（`GetAccessToken` 直接报 unsupported），逐个放宽风险过大。改为条目一律 `type=apikey` + 自定义 `base_url`，并迁移历史条目；探测链对 apikey 全平台已内置支持，`upstream_models.go` 零改动。归属仍只认 `extra.upstream_vendor_id`。
+2. hub 新增两个端点：
+   - `POST /admin/upstream-entries/:id/probe-models` → 返回 `{models, warnings}`，**不落库**
+   - `PUT /admin/upstream-entries/:id/models` body `{models:[...]}` → 写 `credentials.model_mapping`（from=to），经 `AdminService.UpdateAccount`；已确认 `admin_account.go:653` 是 `MergePreservingSensitiveCreds` **合并**语义，不会抹掉 `api_key`/`base_url`（仓库已有「Credentials 只含 model_mapping」先例：spark shadow，`admin_account.go:1445`）
+   - 写完调 `InvalidateAvailableModelsCache(groupID, platform)`（`gateway_service.go:1601`），否则短 TTL 缓存仍返回旧列表
+3. 未保存的行复用现成 `sync-upstream-preview`，`type` 传 `upstream`（守卫放宽后是合法值，无需伪装 apikey）。
+4. 单测：三平台 × upstream 类型的守卫放宽；probe 不落库；models 写入是合并非替换。
+
+**前端**（`UpstreamHubView.vue`）
+
+- 每行下方**折叠态**面板，默认收起；行尾显示「已登记 N 个模型」。
+- 展开后：探测按钮 → 模型清单带勾选（默认全不选）→ 全选/反选 → 确认写回该行；保存条目时随 `PUT /:id/models` 落库，新行先建条目再写模型。
+- 探测失败按 `UpstreamModelSyncError.Kind` 显示可读原因（配置错 / 上游 4xx / 不支持），**不阻塞保存**。
+- UI 口味沿用：无展开动画、整行可点勾选、不用圆角药丸。
+
+**收益**：`/v1/models` 返回上游真实模型；composite 归属判据有数据可依 → P2 跨平台路由才真正可用。
+
+### P2 · 综合分组 = 新建 `/admin/aggregation`
+
+1. **放宽平台匹配**：`upstream_hub.go:397` 由严格相等改为 `相等 || group.Platform == composite`（对齐平台自身规则 `admin_group.go:341`，非弱化校验）；前端 `UpstreamHubView.vue:569` 下拉同步放开，composite 分组打「综合」徽章。
+2. **新页面三块**：
+   - 供给汇入：跨平台勾选厂家条目进综合分组，显示平台/并发/优先级/本组启用
+   - 归一模型表：public_model → 目标平台 + 上游模型 + 优先级链，直接读写现有 `CompositeModelRoute`；模型候选来自 P1 探测结果
+   - 链路视图：厂家 → 条目 → 分组 → 客户四列拓扑，实线=启用、虚线灰=暂不调用/未授权
+3. **明确不做**：不新建调度引擎（composite 链路已实现 magpie 式 显式路由 → 账号归属 → 模型名探测 + priority 候选池 + 冷却换号，见 `composite_route_resolver.go:97`）、不改 gateway 核心、不动 GroupsView 的 composite 页签。
+
+### 落地结果（2026-10-28 当日完成）
+
+- **P0**：`KeysView` 端点块改用 `api_base_url || window.location.origin`，`UseKeyModal`、cc-switch 导入同口径。
+- **P1 后端**：条目改 `type=apikey`（迁移 `900_xeu_upstream_entry_type_apikey.sql`）；repo 按 `extra.upstream_vendor_id` 过滤；`GET /admin/upstream-entries`、`POST /:id/probe-models`、`PUT /:id/models`；`UpdateEntry` 以现有 credentials 为底合并，避免编辑抹掉 `model_mapping`；复制条目连带复制白名单。单测覆盖探测归一化、白名单写入、超量拒绝、composite 平台放行。
+- **P1 前端**：条目标题栏「已登记 N 个」+ 折叠面板（探测 → 勾选 → 保存落库）；未保存的行走 `sync-upstream-preview`；分组下拉对 composite 全量开放并打「综合」徽章；详情表新增模型数（0 时琥珀色）。
+- **P2**：新页面 `/admin/aggregation`（供给汇入 / 归一模型表 / 链路视图）+ 路由、侧边栏「聚合调度」、zh/en i18n、组件测试。
+- **实测**：本地 mock 上游跑通「建厂家 → 建条目 → 探测 → 落库 → 挂 composite 组 → 客户 key 调 `/v1/models` 与 `/v1/chat/completions`」；历史条目迁移后类型为 apikey，软删行未受影响。
+- **未在浏览器内实点**：浏览器自动化被安全策略禁止注入登录态，两个页面由组件测试与构建覆盖，需管理员登录后走一遍。
+
+### 验证口径
+
+`gofmt -l` 干净 → `go build ./...` + `go test`（受影响 package）→ `pnpm check:i18n` + `vue-tsc` + `vite build` → `make build-backend`（embed）→ 重启 8080 浏览器实测（探测真实上游、跨平台综合分组调用）→ 按主题拆提交 push `main` → 补 `docs/WORK_LOG_CN.md`。
+

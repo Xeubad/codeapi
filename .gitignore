@@ -151,6 +151,8 @@ docs/*
 !docs/PLUGIN_DEVELOPMENT.md
 !docs/channel-monitor-v2-safe-defaults.md
 !docs/codex-credits.md
+!docs/UPSTREAM_HUB_DESIGN_CN.md
+!docs/PENDING_INTENT_ROUTING_CN.md
 !docs/legal/
 !docs/legal/*.md
 !docs/screenshots/

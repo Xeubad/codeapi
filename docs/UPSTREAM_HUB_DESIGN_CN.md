@@ -41,6 +41,7 @@
 
 - `name`：唯一（软删感知的部分唯一索引 `WHERE deleted_at IS NULL`）
 - `concurrency_budget`：账号级并发预算（上游厂商对本账号的总并发上限，如 50）；0 = 不启用共享限制
+- `base_urls`：厂家的候选接入地址（jsonb 数组，最多 10 个）。条目保存时实测各地址延迟，只把最快的一个写进条目凭证；运行期不再切换。
 - `notes`、软删（TimeMixin + SoftDeleteMixin）
 - 删除保护：厂家下仍有条目时拒绝删除（`ErrUpstreamVendorNotEmpty`）
 
@@ -246,6 +247,7 @@ DI 走 google/wire（`cmd/server/wire_gen.go` 手工补丁，本机无 wire CLI 
 **前端**（`UpstreamHubView.vue`）
 
 - 每行下方**折叠态**面板，默认收起；行尾显示「已登记 N 个模型」。
+- 探测结果为**按钮块**（flex-wrap）：点击即启用/停用（选中=青柠实底），不使用复选框。
 - 展开后：探测按钮 → 模型清单带勾选（默认全不选）→ 全选/反选 → 确认写回该行；保存条目时随 `PUT /:id/models` 落库，新行先建条目再写模型。
 - 结果带**来源徽章**（上游实时 / 公共目录候选）与可读告警；上游无模型接口时支持**手动添加模型 ID**（cc-switch 同款）。
 - 探测失败按 `UpstreamModelSyncError` 展示可读原因（含底层传输错误），**不阻塞保存**。
@@ -280,6 +282,13 @@ DI 走 google/wire（`cmd/server/wire_gen.go` 手工补丁，本机无 wire CLI 
   - 全部失败回退 **models.dev 目录候选**（先按 base_url 匹配供应商，再按平台映射），结果带 `source` 与含底层原因的 `warning`；目录请求自身也重试。
   - 前端显示来源徽章，并支持**手动添加模型 ID**（上游无 `/models` 时的最后兜底）。
 - **聚合调度改为调度单元列表**：单元 = composite 分组。新建单元直接在页面内创建 composite 分组；详情三块为供给汇入（挂载 + 本单元启停）、归一模型表、链路视图；分组管理对 composite 分组新增「聚合调度」入口（`/admin/aggregation?unit=<id>`）。供方编排与需方配置（倍率/RPM/授权/客户 key）彻底分离。
+
+### 第三轮修正（2026-10-29）：多 BaseURL 保存时定稿、模型按钮块
+
+- **厂家多 BaseURL**：`upstream_vendors.base_urls`（jsonb，≤10）。厂家弹窗多行维护。
+- **保存即定稿**：`POST /admin/upstream-base-urls/latency` 并发测各候选地址（拿到任意 HTTP 响应即算可达，401/404 也算；只记传输失败）；`CreateEntry`/`UpdateEntry` 在服务端用同一测量选最快者写入 `credentials.base_url`，全部不可达则 400 阻断保存。**运行期不切换地址**，避免请求途中换线路导致行为漂移。
+- **探测结果按钮块**：模型以按钮块展示，点击切换启用（选中=青柠实底），无复选框；手动添加保留。
+- 账号页的模型同步保持原有 404/405 语义，端点变体只在 hub 探测路径启用（`fetchUpstreamModelList(..., allowEndpointVariants)`）。
 
 ### 验证口径
 

@@ -178,21 +178,21 @@
                           {{ t('admin.upstreamHub.ungrouped') }}
                         </span>
                         <div v-else class="flex flex-col items-stretch gap-1">
-                          <button
+                          <!-- 只读状态：分组挂载在添加/编辑弹窗维护，「本组暂不调用」在聚合调度页维护 -->
+                          <span
                             v-for="group in groupRefs(entry)"
                             :key="group.group_id"
-                            type="button"
-                            class="block w-full cursor-pointer rounded-md px-2 py-0.5 text-left text-xs transition-colors"
+                            class="block rounded-md px-2 py-0.5 text-xs"
                             :class="
                               group.enabled
-                                ? 'bg-primary-50 text-primary-700 hover:bg-primary-100 dark:bg-primary-900/30 dark:text-primary-400'
-                                : 'bg-gray-100 text-gray-500 hover:bg-gray-200 dark:bg-dark-700 dark:text-dark-300 dark:hover:bg-dark-600'
+                                ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400'
+                                : 'bg-gray-100 text-gray-500 dark:bg-dark-700 dark:text-dark-300'
                             "
                             :title="group.enabled ? t('admin.upstreamHub.groupEnabled') : t('admin.upstreamHub.groupDisabled')"
-                            @click="toggleGroupEnabled(entry, group)"
                           >
                             {{ group.group_name }}
-                          </button>
+                            <span v-if="!group.enabled" class="ml-1 opacity-80">· {{ t('admin.upstreamHub.groupDisabled') }}</span>
+                          </span>
                         </div>
                       </td>
                       <td>
@@ -362,6 +362,17 @@
                         <span class="text-xs text-gray-500 dark:text-dark-300">
                           {{ t('admin.upstreamHub.modelsSelected', { count: row.models.length }) }}
                         </span>
+                        <span
+                          v-if="row.probeSource"
+                          class="badge"
+                          :class="row.probeSource === 'models.dev' ? 'badge-gray' : 'badge-primary'"
+                        >
+                          {{
+                            row.probeSource === 'models.dev'
+                              ? t('admin.upstreamHub.probeSourceCatalog')
+                              : t('admin.upstreamHub.probeSourceUpstream')
+                          }}
+                        </span>
                         <span v-if="row.probeError" class="text-xs text-red-600 dark:text-red-400">
                           {{ row.probeError }}
                         </span>
@@ -377,6 +388,9 @@
                           </button>
                         </div>
                       </div>
+                      <p v-if="row.probeWarning" class="rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">
+                        {{ row.probeWarning }}
+                      </p>
                       <div
                         v-if="row.probeModels.length"
                         class="max-h-40 overflow-y-auto rounded-lg border border-gray-200 bg-white dark:border-dark-600 dark:bg-dark-800"
@@ -403,6 +417,22 @@
                       <p v-else class="text-xs text-gray-400 dark:text-dark-400">
                         {{ t('admin.upstreamHub.probeHint') }}
                       </p>
+                      <div class="flex items-center gap-2">
+                        <input
+                          v-model="row.manualModel"
+                          class="input flex-1"
+                          type="text"
+                          :placeholder="t('admin.upstreamHub.manualModelPlaceholder')"
+                          @keyup.enter="addManualModel(row)"
+                        />
+                        <button
+                          class="btn btn-secondary btn-sm"
+                          :disabled="!row.manualModel.trim()"
+                          @click="addManualModel(row)"
+                        >
+                          {{ t('admin.upstreamHub.addModel') }}
+                        </button>
+                      </div>
                     </div>
                   </td>
                 </tr>
@@ -507,6 +537,9 @@ interface EntryRow {
   probeLoading: boolean
   probeError: string
   probeModels: string[]
+  probeSource: string
+  probeWarning: string
+  manualModel: string
 }
 const showEntryDialog = ref(false)
 const entryRows = ref<EntryRow[]>([])
@@ -554,7 +587,10 @@ function entryToRow(entry: UpstreamEntry): EntryRow {
     modelPanelOpen: false,
     probeLoading: false,
     probeError: '',
-    probeModels: []
+    probeModels: [],
+    probeSource: '',
+    probeWarning: '',
+    manualModel: ''
   }
 }
 
@@ -674,7 +710,10 @@ function blankRow(): EntryRow {
     modelPanelOpen: false,
     probeLoading: false,
     probeError: '',
-    probeModels: []
+    probeModels: [],
+    probeSource: '',
+    probeWarning: '',
+    manualModel: ''
   }
 }
 
@@ -747,12 +786,16 @@ function clearRowModels(row: EntryRow) {
 
 async function probeRowModels(row: EntryRow) {
   row.probeError = ''
+  row.probeSource = ''
+  row.probeWarning = ''
   row.probeLoading = true
   try {
     let models: string[] = []
     if (row.accountId) {
       const probe = await upstreamHubAPI.probeEntryModels(row.accountId)
       models = probe.models || []
+      row.probeSource = probe.source || 'upstream'
+      row.probeWarning = probe.warning || ''
     } else {
       if (!row.base_url.trim() || !row.api_key.trim()) {
         row.probeError = t('admin.upstreamHub.probeNeedsCredentials')
@@ -765,6 +808,7 @@ async function probeRowModels(row: EntryRow) {
         api_key: row.api_key.trim()
       })
       models = (result.models || []).map((model) => model.trim()).filter(Boolean)
+      row.probeSource = 'upstream'
     }
     row.probeModels = [...new Set(models)].sort()
     if (row.probeModels.length === 0) {
@@ -775,6 +819,22 @@ async function probeRowModels(row: EntryRow) {
   } finally {
     row.probeLoading = false
   }
+}
+
+// 手动补录：上游没有模型接口或列表缺项时（cc-switch 同款），直接写模型 ID。
+function addManualModel(row: EntryRow) {
+  const value = row.manualModel.trim()
+  if (!value) return
+  if (!row.models.includes(value)) {
+    row.models.push(value)
+    row.models.sort()
+    row.modelsDirty = true
+  }
+  if (!row.probeModels.includes(value)) {
+    row.probeModels.push(value)
+    row.probeModels.sort()
+  }
+  row.manualModel = ''
 }
 
 async function applyRowGroups(accountId: number, row: EntryRow) {
@@ -840,6 +900,9 @@ async function copyRow(row: EntryRow) {
     probeLoading: false,
     probeError: '',
     probeModels: [],
+    probeSource: '',
+    probeWarning: '',
+    manualModel: '',
     expanded: false,
     dropdownTop: 0,
     dropdownRight: 0
@@ -913,15 +976,6 @@ async function saveEntryRows() {
 }
 
 // ---------- entry row actions ----------
-async function toggleGroupEnabled(entry: UpstreamEntry, group: UpstreamEntryGroupRef) {
-  try {
-    await upstreamHubAPI.setEntryGroupEnabled(entry.account_id, group.group_id, !group.enabled)
-    group.enabled = !group.enabled
-  } catch (err) {
-    appStore.showError(errorMessage(err))
-  }
-}
-
 async function toggleSchedulable(entry: UpstreamEntry, value: boolean) {
   try {
     const updated = await upstreamHubAPI.setEntrySchedulable(entry.account_id, value)

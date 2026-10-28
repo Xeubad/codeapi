@@ -56,9 +56,12 @@ type UpstreamEntry struct {
 }
 
 // UpstreamEntryModelProbe 是探测上游模型列表的结果（只读，不落库）。
+// Source: upstream = 上游 /models 实时返回；models.dev = 兜底公共目录候选。
 type UpstreamEntryModelProbe struct {
 	Models   []string `json:"models"`
 	Existing []string `json:"existing"`
+	Source   string   `json:"source"`
+	Warning  string   `json:"warning,omitempty"`
 }
 
 type UpstreamGroupOption struct {
@@ -122,6 +125,7 @@ type UpstreamVendorRepository interface {
 // 抽成接口只为本包单测可替换，生产装配仍是 AccountTestService。
 type upstreamModelProber interface {
 	FetchUpstreamSupportedModels(ctx context.Context, account *Account) ([]string, error)
+	SuggestUpstreamModelsFromCatalog(ctx context.Context, account *Account) ([]string, error)
 }
 
 // UpstreamHubService 上游聚合：厂家台账 + 透传条目编排。
@@ -490,13 +494,43 @@ func (s *UpstreamHubService) ProbeEntryModels(ctx context.Context, accountID int
 		return nil, errors.New("upstream model prober is not configured")
 	}
 	models, err := s.probe.FetchUpstreamSupportedModels(ctx, account)
+	source := "upstream"
+	warning := ""
 	if err != nil {
-		return nil, err
+		// 上游未提供 /models 或网络抖动：回退 models.dev 公共目录候选，由管理员核对勾选。
+		catalog, catalogErr := s.probe.SuggestUpstreamModelsFromCatalog(ctx, account)
+		if catalogErr != nil {
+			// 目录也不可用：把上游的真实失败原因带回前端，便于排障。
+			return nil, &UpstreamModelSyncError{
+				Kind:    UpstreamModelSyncErrorUpstream,
+				Message: upstreamProbeReason(err),
+				Err:     err,
+			}
+		}
+		models = catalog
+		source = "models.dev"
+		warning = "上游未返回模型列表（" + upstreamProbeReason(err) + "），以下为公共目录候选，请核对后再勾选"
 	}
 	return &UpstreamEntryModelProbe{
 		Models:   normalizeUpstreamModelIDs(models),
 		Existing: storedUpstreamEntryModels(account.Credentials),
+		Source:   source,
+		Warning:  warning,
 	}, nil
+}
+
+// upstreamProbeReason 提取可展示的失败原因。管理员排障需要看到底层传输原因
+// （TLS reset、超时、HTTP 状态码），不能只给一句笼统的失败。
+func upstreamProbeReason(err error) string {
+	var syncErr *UpstreamModelSyncError
+	if errors.As(err, &syncErr) {
+		reason := syncErr.SafeMessage()
+		if syncErr.Err != nil && syncErr.Err.Error() != "" {
+			reason += ": " + syncErr.Err.Error()
+		}
+		return reason
+	}
+	return err.Error()
 }
 
 // SetEntryModels 把勾选的模型写成条目的 model_mapping（from=to）。

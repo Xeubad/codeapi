@@ -39,6 +39,9 @@ export interface UpstreamEntry {
 export interface UpstreamEntryModelProbe {
   models: string[]
   existing: string[]
+  /** upstream = 上游实时返回；models.dev = 公共目录兜底候选 */
+  source?: string
+  warning?: string
 }
 
 export interface UpstreamVendorDetail {

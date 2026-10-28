@@ -548,39 +548,60 @@ func (s *AccountTestService) fetchModelsDevRegistry(ctx context.Context, account
 	}
 	s.modelMetadataRegistryMu.Unlock()
 
+	// 目录服务抖动不应把整次探测拖垮：与上游模型列表同样重试。
+	var lastErr error
+	for attempt := 1; attempt <= upstreamModelsMaxAttempts; attempt++ {
+		if attempt > 1 {
+			if err := waitForRetry(ctx, upstreamModelsRetryDelay(attempt-1)); err != nil {
+				return nil, err
+			}
+		}
+		registry, retryable, err := s.fetchModelsDevRegistryOnce(ctx, account)
+		if err == nil {
+			s.modelMetadataRegistryMu.Lock()
+			s.modelMetadataRegistry = registry
+			s.modelMetadataRegistryAt = now
+			s.modelMetadataRegistryMu.Unlock()
+			return registry, nil
+		}
+		lastErr = err
+		if !retryable {
+			break
+		}
+	}
+	return nil, lastErr
+}
+
+func (s *AccountTestService) fetchModelsDevRegistryOnce(ctx context.Context, account *Account) (map[string]modelsDevProvider, bool, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, modelsDevRegistryURL, nil)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	req.Header.Set("Accept", "application/json")
 	resp, err := s.doUpstreamModelsRequest(req, upstreamModelsProxyURL(account), account)
 	if err != nil {
-		return nil, err
+		return nil, true, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return nil, fmt.Errorf("model metadata registry returned HTTP %d", resp.StatusCode)
+		retryable := resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= http.StatusInternalServerError
+		return nil, retryable, fmt.Errorf("model metadata registry returned HTTP %d", resp.StatusCode)
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, upstreamModelsBodyLimit+1))
 	if err != nil {
-		return nil, err
+		return nil, true, err
 	}
 	if int64(len(body)) > upstreamModelsBodyLimit {
-		return nil, fmt.Errorf("model metadata registry response exceeds %d bytes", upstreamModelsBodyLimit)
+		return nil, false, fmt.Errorf("model metadata registry response exceeds %d bytes", upstreamModelsBodyLimit)
 	}
 	var registry map[string]modelsDevProvider
 	if err := json.Unmarshal(body, &registry); err != nil {
-		return nil, fmt.Errorf("parse model metadata registry: %w", err)
+		return nil, false, fmt.Errorf("parse model metadata registry: %w", err)
 	}
 	if len(registry) == 0 {
-		return nil, fmt.Errorf("model metadata registry is empty")
+		return nil, false, fmt.Errorf("model metadata registry is empty")
 	}
-
-	s.modelMetadataRegistryMu.Lock()
-	s.modelMetadataRegistry = registry
-	s.modelMetadataRegistryAt = now
-	s.modelMetadataRegistryMu.Unlock()
-	return registry, nil
+	return registry, false, nil
 }
 
 func upstreamMetadataFromModelsDevModel(modelID string, model modelsDevModel) UpstreamModelMetadata {
@@ -709,6 +730,63 @@ func matchModelsDevProviderByKnownHost(registry map[string]modelsDevProvider, ac
 	return provider, true
 }
 
+// upstreamCatalogProviderIDsByPlatform 把平台映射到 models.dev 的 provider id。
+// 上游不提供 /models（很多中转站只实现 /v1/messages）或探测失败时，用它给出
+// 候选模型清单（magpie 的「目录兜底，picker 永不为空」思路）。
+var upstreamCatalogProviderIDsByPlatform = map[string][]string{
+	PlatformOpenAI:    {"openai"},
+	PlatformAnthropic: {"anthropic"},
+	PlatformDeepseek:  {"deepseek"},
+	PlatformZhipu:     {"zhipuai", "zhipuai-coding-plan"},
+	PlatformKimi:      {"moonshotai", "moonshotai-cn", "kimi-code-plan-global", "kimi-code-plan-cn"},
+	PlatformMiniMax:   {"minimax", "minimax-cn", "minimax-coding-plan", "minimax-cn-coding-plan"},
+}
+
+// SuggestUpstreamModelsFromCatalog 在拿不到上游模型列表时给出 models.dev 目录候选。
+// 先按 base_url 精确匹配供应商，再按平台 id 兜底；结果只是候选，需管理员核对勾选。
+func (s *AccountTestService) SuggestUpstreamModelsFromCatalog(ctx context.Context, account *Account) ([]string, error) {
+	if s == nil || account == nil {
+		return nil, errors.New("account is required")
+	}
+	registry, err := s.fetchModelsDevRegistry(ctx, account)
+	if err != nil {
+		return nil, err
+	}
+	baseURL := account.GetOpenAIFormatBaseURL()
+	if strings.TrimSpace(baseURL) == "" {
+		baseURL = account.GetCredential("base_url")
+	}
+	providers := make([]modelsDevProvider, 0, 2)
+	if provider, ok := matchModelsDevProvider(registry, baseURL); ok {
+		providers = append(providers, provider)
+	}
+	for _, providerID := range upstreamCatalogProviderIDsByPlatform[account.Platform] {
+		if provider, ok := registry[providerID]; ok {
+			providers = append(providers, provider)
+		}
+	}
+	seen := make(map[string]struct{})
+	models := make([]string, 0)
+	for _, provider := range providers {
+		for modelID := range provider.Models {
+			modelID = strings.TrimSpace(modelID)
+			if modelID == "" {
+				continue
+			}
+			if _, ok := seen[modelID]; ok {
+				continue
+			}
+			seen[modelID] = struct{}{}
+			models = append(models, modelID)
+		}
+	}
+	if len(models) == 0 {
+		return nil, fmt.Errorf("no catalog entry for platform %s", account.Platform)
+	}
+	sort.Strings(models)
+	return models, nil
+}
+
 func modelRegistryHostname(raw string) string {
 	normalized := normalizeModelRegistryBaseURL(raw)
 	if normalized == "" {
@@ -759,7 +837,7 @@ func (s *AccountTestService) fetchUpstreamModelList(ctx context.Context, account
 		return nil, nil, err
 	}
 
-	body, err := s.readUpstreamModelsResponse(req, account)
+	body, err := s.readUpstreamModelsResponseWithFallback(req, account)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -779,32 +857,141 @@ func (s *AccountTestService) fetchUpstreamModelList(ctx context.Context, account
 	return models, body, nil
 }
 
-// readUpstreamModelsResponse 发送模型列表请求并读取受限大小的响应体；非 2xx 返回带状态码的同步错误。
-func (s *AccountTestService) readUpstreamModelsResponse(req *http.Request, account *Account) ([]byte, error) {
-	resp, err := s.doUpstreamModelsRequest(req, upstreamModelsProxyURL(account), account)
+// upstreamModelsMaxAttempts 是单次模型列表请求的最大尝试次数。中转站常见
+// TLS reset / 超时 / 5xx 抖动，一次失败不代表上游不可用。
+const upstreamModelsMaxAttempts = 3
+
+func upstreamModelsRetryDelay(attempt int) time.Duration {
+	switch attempt {
+	case 1:
+		return 400 * time.Millisecond
+	default:
+		return 1200 * time.Millisecond
+	}
+}
+
+func waitForRetry(ctx context.Context, delay time.Duration) error {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+// readUpstreamModelsResponseWithFallback 先按平台原生端点请求；上游明确说端点
+// 不存在（404/405）时，再尝试常见变体（/models、去掉 /v1 再拼 /v1/models）。
+func (s *AccountTestService) readUpstreamModelsResponseWithFallback(req *http.Request, account *Account) ([]byte, error) {
+	body, err := s.readUpstreamModelsResponse(req, account)
+	if err == nil || !upstreamModelListEndpointUnsupported(err) {
+		return body, err
+	}
+	for _, candidate := range alternateUpstreamModelsURLs(req.URL.String()) {
+		altReq, buildErr := cloneRequestWithURL(req, candidate)
+		if buildErr != nil {
+			continue
+		}
+		if altBody, altErr := s.readUpstreamModelsResponse(altReq, account); altErr == nil {
+			return altBody, nil
+		}
+	}
+	return body, err
+}
+
+// alternateUpstreamModelsURLs 给出模型列表端点的常见变体（去重、保持顺序）。
+func alternateUpstreamModelsURLs(primary string) []string {
+	parsed, err := url.Parse(primary)
 	if err != nil {
-		return nil, newUpstreamModelSyncUpstreamError("Failed to request upstream model list", err)
+		return nil
+	}
+	root := strings.TrimRight(parsed.Path, "/")
+	switch {
+	case strings.HasSuffix(root, "/v1/models"):
+		root = strings.TrimSuffix(root, "/v1/models")
+	case strings.HasSuffix(root, "/models"):
+		root = strings.TrimSuffix(root, "/models")
+	case strings.HasSuffix(root, "/v1"):
+		root = strings.TrimSuffix(root, "/v1")
+	}
+	candidates := []string{root + "/models", root + "/v1/models"}
+	seen := map[string]struct{}{primary: {}}
+	out := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		parsedCopy := *parsed
+		parsedCopy.Path = candidate
+		parsedCopy.RawPath = ""
+		parsedCopy.Fragment = ""
+		raw := parsedCopy.String()
+		if _, ok := seen[raw]; ok {
+			continue
+		}
+		seen[raw] = struct{}{}
+		out = append(out, raw)
+	}
+	return out
+}
+
+func cloneRequestWithURL(req *http.Request, rawURL string) (*http.Request, error) {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, err
+	}
+	clone := req.Clone(req.Context())
+	clone.URL = parsed
+	clone.Host = ""
+	return clone, nil
+}
+
+// readUpstreamModelsResponse 发送模型列表请求并读取受限大小的响应体；非 2xx 返回带状态码的同步错误。
+// 传输错误、429 与 5xx 按指数退避重试，最多 upstreamModelsMaxAttempts 次。
+func (s *AccountTestService) readUpstreamModelsResponse(req *http.Request, account *Account) ([]byte, error) {
+	var lastErr error
+	for attempt := 1; attempt <= upstreamModelsMaxAttempts; attempt++ {
+		if attempt > 1 {
+			if err := waitForRetry(req.Context(), upstreamModelsRetryDelay(attempt-1)); err != nil {
+				return nil, newUpstreamModelSyncUpstreamError("Failed to request upstream model list", err)
+			}
+		}
+		body, retryable, err := s.readUpstreamModelsResponseOnce(req, account)
+		if err == nil {
+			return body, nil
+		}
+		lastErr = err
+		if !retryable {
+			return nil, err
+		}
+	}
+	return nil, lastErr
+}
+
+func (s *AccountTestService) readUpstreamModelsResponseOnce(req *http.Request, account *Account) ([]byte, bool, error) {
+	resp, err := s.doUpstreamModelsRequest(req.Clone(req.Context()), upstreamModelsProxyURL(account), account)
+	if err != nil {
+		return nil, true, newUpstreamModelSyncUpstreamError("Failed to request upstream model list", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	bodyLimit := resolveModelsListReadLimit(s.cfg)
 	body, err := io.ReadAll(io.LimitReader(resp.Body, bodyLimit+1))
 	if err != nil {
-		return nil, newUpstreamModelSyncUpstreamError("Failed to read upstream model list", err)
+		return nil, true, newUpstreamModelSyncUpstreamError("Failed to read upstream model list", err)
 	}
 	if int64(len(body)) > bodyLimit {
-		return nil, newUpstreamModelSyncUpstreamError("Upstream model list response is too large", fmt.Errorf("response exceeds %d bytes", bodyLimit))
+		return nil, false, newUpstreamModelSyncUpstreamError("Upstream model list response is too large", fmt.Errorf("response exceeds %d bytes", bodyLimit))
 	}
 
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return nil, &UpstreamModelSyncError{
+		retryable := resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= http.StatusInternalServerError
+		return nil, retryable, &UpstreamModelSyncError{
 			Kind:       UpstreamModelSyncErrorUpstream,
 			Message:    fmt.Sprintf("Upstream model list request failed with HTTP %d", resp.StatusCode),
 			StatusCode: resp.StatusCode,
 			Err:        fmt.Errorf("upstream model list returned HTTP %d", resp.StatusCode),
 		}
 	}
-	return body, nil
+	return body, false, nil
 }
 
 // fetchVertexGeminiUpstreamModels 按账号默认区域读取 Vertex 上可用的 Gemini 模型。列表接口不接受 API Key。

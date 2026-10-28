@@ -2,12 +2,15 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 )
+
+var errUpstreamTestCatalogUnavailable = errors.New("catalog unavailable")
 
 type stubUpstreamVendorRepo struct {
 	vendors []UpstreamVendor
@@ -182,11 +185,20 @@ type stubUpstreamProber struct {
 	models []string
 	err    error
 	called bool
+
+	catalog      []string
+	catalogErr   error
+	catalogCalls int
 }
 
 func (s *stubUpstreamProber) FetchUpstreamSupportedModels(context.Context, *Account) ([]string, error) {
 	s.called = true
 	return s.models, s.err
+}
+
+func (s *stubUpstreamProber) SuggestUpstreamModelsFromCatalog(context.Context, *Account) ([]string, error) {
+	s.catalogCalls++
+	return s.catalog, s.catalogErr
 }
 
 func TestUpstreamGroupAllowsPlatform(t *testing.T) {
@@ -233,6 +245,71 @@ func TestProbeEntryModelsRejectsNonHubAccount(t *testing.T) {
 
 	_, err := svc.ProbeEntryModels(context.Background(), 6)
 	require.ErrorIs(t, err, ErrUpstreamEntryNotFound)
+}
+
+func TestProbeEntryModelsFallsBackToCatalog(t *testing.T) {
+	admin := &stubUpstreamAdmin{account: &Account{
+		ID:          5,
+		Platform:    PlatformDeepseek,
+		Extra:       map[string]any{UpstreamVendorIDExtraKey: int64(2)},
+		Credentials: map[string]any{"api_key": "sk-x", "base_url": "https://relay.example.com"},
+	}}
+	prober := &stubUpstreamProber{
+		err:     &UpstreamModelSyncError{Kind: UpstreamModelSyncErrorUpstream, Message: "HTTP 404", StatusCode: 404},
+		catalog: []string{"deepseek-reasoner", "deepseek-chat"},
+	}
+	svc := NewUpstreamHubService(&stubUpstreamVendorRepo{}, admin, prober)
+
+	probe, err := svc.ProbeEntryModels(context.Background(), 5)
+	require.NoError(t, err)
+	require.Equal(t, 1, prober.catalogCalls)
+	require.Equal(t, "models.dev", probe.Source)
+	require.NotEmpty(t, probe.Warning)
+	require.Equal(t, []string{"deepseek-chat", "deepseek-reasoner"}, probe.Models)
+}
+
+func TestProbeEntryModelsKeepsLiveErrorWhenCatalogUnavailable(t *testing.T) {
+	admin := &stubUpstreamAdmin{account: &Account{
+		ID:          5,
+		Platform:    PlatformDeepseek,
+		Extra:       map[string]any{UpstreamVendorIDExtraKey: int64(2)},
+		Credentials: map[string]any{"api_key": "sk-x"},
+	}}
+	liveErr := &UpstreamModelSyncError{Kind: UpstreamModelSyncErrorUpstream, Message: "HTTP 500", StatusCode: 500}
+	prober := &stubUpstreamProber{err: liveErr, catalogErr: errUpstreamTestCatalogUnavailable}
+	svc := NewUpstreamHubService(&stubUpstreamVendorRepo{}, admin, prober)
+
+	_, err := svc.ProbeEntryModels(context.Background(), 5)
+	require.ErrorIs(t, err, liveErr)
+}
+
+func TestAlternateUpstreamModelsURLs(t *testing.T) {
+	tests := []struct {
+		name    string
+		primary string
+		want    []string
+	}{
+		{
+			name:    "versioned models path falls back to bare models",
+			primary: "https://relay.example.com/v1/models",
+			want:    []string{"https://relay.example.com/models"},
+		},
+		{
+			name:    "bare models path falls back to versioned",
+			primary: "https://relay.example.com/models",
+			want:    []string{"https://relay.example.com/v1/models"},
+		},
+		{
+			name:    "prefix path is preserved",
+			primary: "https://relay.example.com/api/v1/models",
+			want:    []string{"https://relay.example.com/api/models"},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, alternateUpstreamModelsURLs(tc.primary))
+		})
+	}
 }
 
 func TestSetEntryModelsWritesMappingAndKeepsCredentials(t *testing.T) {

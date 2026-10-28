@@ -36,6 +36,40 @@
 
 ---
 
+## 2026年10月29日
+
+**主题**：上游同步模式切换——从全量 merge 改为解耦 + 选择性 cherry-pick
+
+### 改动
+
+- 新增决策台账 `docs/UPSTREAM_DECISIONS_CN.md`：定义四条决策车道（🔴 安全必采 / 🟠 协议按 Provider 取舍 / 🟡 功能按方向取舍 / ⚪ CI/文档默认拒绝）、Release 条目模板、台账号规则（UP-YYYY-NNNN）；内置 2026-10-29 基线盘点：待评估范围 `v0.2.17..upstream/main` 共 121 提交（v0.2.18 + v0.2.19），上游头 SHA `a3298b46ebe`，评估基线 `origin/main` = `55351a7e2`。
+- `AGENTS.md`：上游更新流程由「Fetch and Analyze → Merge After Confirmation」改写为「Fetch and Analyze（评估批次）→ Cherry-Pick After Confirmation」；同步分支 `sync/upstream-*` 更名为工作分支 `pick/upstream-<release>-<short-sha>`；新增安全车道红线（🔴 修复不得因冲突工作量跳过）与「回归 merge 模式须独立决策」限制。
+- `docs/FORK_MAINTENANCE_CN.md`：目标、分支表、流向图、拉取分析/确认采纳章节、分析报告要求、冲突处理、验证标准、失败与恢复全部同步改写。
+- `.gitignore`：白名单加入 `!docs/UPSTREAM_DECISIONS_CN.md`（原被 `docs/*` 规则拦截，首次提交时发现）。
+
+### 关键决策
+
+- 停止 `git merge upstream/main` 全量同步。动机：全量模式无法拒绝不需要的上游改动，且分叉达 86/121 提交后每次同步冲突面过大；逐提交评估后以 `cherry-pick -x` 采纳，不想要的提交不再进入仓库。
+- **`main` 从此不与 `upstream/main` 保持祖先关系**，二者之间禁止 merge；回归 merge 模式必须作为独立决策重新评估。这是单向门，已写入两份文档。
+- 保留 `upstream` 远端与 `git fetch` 流程不变；评估范围按上游 release tag 划分，已评估边界以台账为准。
+- 决策记录先于落地：台账号在评估阶段分配，落地后回填短 SHA，避免「做了但不知道为什么」。
+- 发现安全修复优先于流程切换收尾：CI 红因 `golang.org/x/net` GO-2026-6860，上游待评估批次已含修复（`cacc80b86` + `0a2a29b32`），正好作为新模式的第一个评估对象，不单独抢修。
+
+### 验证
+
+- `git merge-tree --write-tree main upstream/main`：退出码 1，43 文件冲突，热点在 `backend/internal/service`、`backend/internal/repository`、`.github/workflows`；双方都改过的文件 32 个——已记入台账基线盘点。
+- `git rev-list main..upstream/main --count`：121，与 `v0.2.17..upstream/main` 一致（`v0.2.17` 及更早已包含在 `main`）。
+- `grep sync/upstream` 两份流程文档：无残留旧分支名。
+- `git push origin main`：`55351a7e2..fdb9e1372`，成功。
+- CI：`Security Scan` **失败**（GO-2026-6860，`ollama_cloud_usage_parser.go` 调 `html.Parse`；本次 push 前已连续失败 3 次，属历史遗留，与本批文档改动无关）；`CI`（backend-ci）在本报告完成时仍在排队，未运行。
+
+### 产出
+
+- `f32de745e` docs(fork): switch upstream sync to decoupled cherry-pick model
+- `fdb9e1372` docs(fork): whitelist upstream decisions ledger in gitignore
+
+---
+
 ## 2026年10月28日
 
 **主题**：上游聚合规划文档提炼入仓 + 清理 demo 目录
@@ -142,12 +176,90 @@
 - 新增 `upstream_hub_test.go`：厂家校验/超预算警告/extra 归属解析/BaseURL 归一 均通过。
 - 迁移 SQL 在 dev 库事务内执行后 ROLLBACK，语法与幂等性通过（未实际写入）。
 - 前端 `pnpm run check:i18n`、`pnpm exec vue-tsc -b`、`pnpm build` 全部通过；`make build-backend`（embed tag）通过。
-- 运行态验收未做：8080 仍跑 10月22日旧二进制，重启后新页面/接口才生效（需用户确认重启）。
+- 运行态：8080 由外部启动的进程提供服务（当前 PID 2313），`/health` 正常，入口资源 `assets/index-BoyD8vrm.js` 与 dist 一致；upstream-hub 页面/接口未逐页点验。
 - `golangci-lint` 已后台执行，结果见提交后说明。
 
 ### 产出
 
 - `bdb49a5af` feat(upstream-hub): vendor ledger, passthrough entries and per-group switches
+
+**主题（同日第二次工作）**：首页 Gateway 面板视觉收口 + 公共页顶栏/页脚收敛
+
+### 改动
+
+- Hero 右侧去掉 `relative min-w-0 lg:pl-2` 的硬偏移，改为玻璃“设备框”：外层 24px 圆角 + 8px padding + 细边 + 投影，深色面板不再直接悬空。
+- 迷你延迟折线从深色面板内部移到玻璃框底部的 LIVE 状态带（LIVE + 折线 + 当前 ms + 样本数），消除暗色区域底部的大块空白；整条状态带可点击跳到 `#latency`。
+- 首页与登录页顶栏移除语言切换控件，默认中文；主题按钮移动到登录按钮右侧，顺序为「Key 用量 → 登录 → 主题」。
+- 页脚删除版本号与右侧链接组，只保留 Logo + 版权行。
+
+### 关键决策
+
+- 不用倾斜/3D/夸张透视，改用“设备框 + 状态带”建立层次，保持 ink + lime + 玻璃的统一语言。
+- 公开页继续不出现模型/厂商/价格信息；模型信息仍只经登录后的模型广场访问。
+
+### 验证
+
+- pnpm 12：`typecheck`、`test:run`（2845 用例）、`build` 全部通过。
+- `go build -tags=embed` 构建通过；8080 当前进程 PID 2313，`/health` 返回 ok，入口资源 `assets/index-BoyD8vrm.js` 与 dist 一致（本次另起的 2959 因端口被占用未启动）。
+- 1440 / 390、浅色 / 深色实测：`scrollWidth === innerWidth`，玻璃框与 LIVE 状态带正常；顶栏无语言切换；页脚仅版权行。
+
+### 产出
+
+- 未提交：`frontend/src/views/HomeView.vue`（本轮视觉收口；登录页语言切换移除与文案收敛已在既有提交中）
+
+**主题（同日第三次工作）**：首页 Hero 面板换内容——从「第二套延迟看板」改成 base_url 接入卡；顺带修复前端构建
+
+### 改动
+
+- Hero 右侧深色面板删除：`实时往返 / 协议 / 计费` 指标行、`接入端点` 列表、玻璃框底部整条 LIVE 状态带（LIVE + 折线 + 当前 ms + 样本数）。面板内不再出现任何 ms 数字或折线。
+- 换成接入卡：OpenAI / Anthropic 两行 base_url diff（官方默认地址 → 本站地址，行内复制按钮），下方鉴权头对照 `Authorization: Bearer <key>` / `x-api-key: <key>`，再保留「模型与价格 → 登录查看」引导；面板标题改 `GATEWAY / BASE URL`，右上角由探针推导的「在线/连接异常」胶囊换成本站 host。
+- 语言包（zh/en 同步）：删除 `home.gateway.{live,online,latency,protocol,protocolValue,billing,billingValue,endpoints,samples,viewLatency}`，新增 `{panelTitle,baseHint,copyBase}`；剪贴板写入抽成 `writeToClipboard()`，curl 复制与 base_url 复制共用，base_url 复制状态同一时刻只高亮一个。
+- 新增回归用例：`640×150` 折线只允许出现在 `#latency` 内，防止再把延迟可视化搬回首屏面板。
+- **修复构建**：`frontend/src/views/admin/UpstreamHubView.vue:339` 多出一个 `</div>`（div 深度在该行变为 −1），`vite build` 直接 `Invalid end tag` 失败。该错误已随 `a29af2721` 进入 `main`，删除多余闭合标签后恢复。
+- 文档：`GATEWAY_HOME_DESIGN_RESEARCH_CN.md` §12.2 / §12.5 / §12.13 / §12.15 按新面板口径改写。
+
+### 关键决策
+
+- 用户判定：页面下方已有整块「实测延迟」，Hero 面板再做一套同样的折线 + ms 属于重复信息 → 面板职责收敛为「怎么接上」，延迟只保留左侧一枚状态胶囊与下方实测区。上一轮只换了外框（玻璃设备框）没换内容，是误读需求。
+- 面板内容必须可核对：base_url 取 `window.location.origin`，鉴权头以 `internal/server/middleware/api_key_auth.go` 实际接受的入站方案（Bearer / x-api-key / x-goog-api-key）为准；仍不写模型名、厂商、价格、倍率，公开页信息边界不变。
+- 放弃的备选：控制台功能清单（与底部 CTA 区重复）、把端点列表搬进面板（与「快速接入」的 curl 与端点 chips 重复）。
+- `x-goog-api-key`（Gemini CLI 兼容）没写进面板：首页只讲两条主路径，三条并排会让卡片变吵，且不属于中转站首页的核心信息。
+
+### 验证
+
+- pnpm 12：`check:i18n`（3 用例）、`typecheck`、`test:run` 372 文件 / **2846** 用例（含新增 1 例）、`build` 全部通过；`git diff --check` 干净。
+- `make -C backend build`（`-tags embed`）通过；`make -C backend test` 52 个包 `ok`（含 `internal/service` 150.5s），无 FAIL/panic；`golangci-lint` 本机未安装，该步骤报 `No such file or directory`，**未运行**，交由 CI `backend-ci` 把关。
+- 浏览器实测（dev server 3000，与 8080 同一份前端代码）：面板 innerText 无 `ms` 数字；两个复制按钮分别写入 `http://localhost:3000/v1` 与 `http://localhost:3000`，点击后文案变「已复制」、1.6s 复位且互斥（用 stub 替换 `navigator.clipboard.writeText` 验证，真实剪贴板在隐藏页无用户激活会失败）；无 `/model-plaza` 链接；控制台无 i18n 缺键或 Vue 告警。
+- 1440 / 500、浅色 / 深色截图：面板高度与左栏基本对齐（约 460 vs 440），版心无横向溢出。
+- 8080 现由并行会话启动的进程持有（PID 33911），其内嵌资源为改版前的 `assets/index-Bu6a4PD1.js`（已不在当前 dist 中），本轮未重启该进程，故 8080 暂未反映本次改动。
+
+### 产出
+
+- 未提交（本轮会话的权限模式拒绝 commit/push，改动全部留在 `main` 工作区）。落地时按主题拆三个提交：
+  1. `fix(upstream-hub): drop stray closing div that broke the frontend build` → `frontend/src/views/admin/UpstreamHubView.vue`
+  2. `feat(home): 首页 Hero 面板改为 base_url 接入卡` → `HomeView.vue` + zh/en `landing.ts` + `HomeView.compact.spec.ts`
+  3. `docs(home): 设计文档 §12 面板口径与本次工作日志` → 本文档 + `GATEWAY_HOME_DESIGN_RESEARCH_CN.md`
+
+**主题（同日第三次工作）**：全站 UI 重构选型调研（React Bits 与通用组件库对比）入档
+
+### 改动
+
+- 新增 `docs/UI_REFACTOR_RESEARCH_CN.md`：React Bits（reactbits.dev）官网实抓调研 + Vue 生态等价物对比（vue-bits / Element Plus / Naive UI / Ant Design Vue / shadcn-vue）+ 本项目前端实证（88 视图、217 组件、common 层引用广度、令牌层评价）+ 四层目标架构与四阶段周期估算（全职 5-7 周口径）。
+
+### 关键决策
+
+- 本项目前端为 Vue 3，React 生态库（React Bits / Ant Design / shadcn/ui）全部排除直接使用，仅作选型参照；动效点缀用同作者的 vue-bits。
+- 结论：推荐 Element Plus 做基础层 + `App*` 封装层收口页面依赖 + vue-bits 限高视觉页点缀；当前 UI 风格评价 7.5/10 属资产，EP 默认风格差距 7-8/10，主题映射可收回 85-90%。
+- Element Plus 的最终采用待用户确认，Phase 0（依赖+主题映射+封装层骨架）未启动。
+
+### 验证
+
+- 调研文档产出，无代码变更；`pnpm build` 与后端测试未运行（不适用）。
+- 外部数据（stars、组件清单、许可）为 2026-10-28 GitHub API 与官网实抓值，文档附录已注明来源。
+
+### 产出
+
+- `390b6f5b3` docs(ui-refactor): add research on React Bits vs Vue component libraries（含 `.gitignore` 白名单同步；工作区另有同日第二次工作等并行未提交改动，未代为提交，待统一落地）
 
 ## 2026年10月25日
 

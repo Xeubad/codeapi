@@ -1,6 +1,6 @@
 # Sub2API Fork Agent Rules
 
-本仓库是 `Wei-Shaw/sub2api` 的长期二次开发 fork。Agent 的目标是在保留私有改动的同时，持续、安全地吸收上游更新。
+本仓库是 `Wei-Shaw/sub2api` 的长期二次开发 fork。Agent 的目标是在保留私有改动的同时，按需、安全地吸收上游更新。
 
 详细流程见 `docs/FORK_MAINTENANCE_CN.md`。本文是执行规则；发生冲突时，本文优先。
 
@@ -13,10 +13,11 @@
 - 二开发布产物：镜像名跟随仓库名 → `ghcr.io/xeubad/codeapi`；二进制名、systemd 服务名、`INSTALL_DIR` 仍为 `sub2api` / `/opt/sub2api`
 - 应用内检查更新的仓库：`Xeubad/codeapi`（禁止指回上游，否则会用官方二进制覆盖本地改动）
 - 上游基线：`upstream/main`
+- **上游更新模式（2026-10-29 起）：解耦 + 选择性采纳。** `git fetch upstream` 只更新只读引用，`main` 不与 `upstream/main` 保持祖先关系，不执行 `git merge upstream/main`。更新通过 `git cherry-pick -x <sha>` 逐提交采纳，每个评估过的上游提交必须记入 `docs/UPSTREAM_DECISIONS_CN.md`（决策台账）
 - 二开主干：`main`，唯一长期分支，同时承担集成与生产。本 fork 单人维护、无预发环境，因此不设 `develop`
 - **`origin/main` 是唯一真相**：本地 `main` 紧跟 `origin/main`，改动提交后立即推送，不长期停留本地分叉
 - 常规二开工作直接在 `main` 上提交并推送（见「提交与推送流程」），不建功能分支。确需隔离的临时改动才建 `feature/custom-*` 分支，事后删除本地与远端分支
-- 上游同步分支：`sync/upstream-YYYYMMDD-<short-sha>`，一次性，合并进 `main` 后直接推送；分支本身保留作审计，不删除
+- 上游采纳批次工作分支：`pick/upstream-<release>-<short-sha>`，一次性，验证通过后合并进 `main` 并推送，保留作审计，不删除
 - 锚点分支：`anchor/<日期>-<用途>`，在做 reset、对齐、历史重写等高风险动作前指向当时的 tip，事后保留而不是删掉
 
 不要修改 Go module path `github.com/Wei-Shaw/sub2api`，除非用户明确要求并接受全仓导入路径迁移。
@@ -29,7 +30,7 @@
 - 不做 rebase、不强推（含 `main` 与 `sync/*`）。
 - 移动或推送 tag、发布、部署仍需用户明确授权。常规 `git push origin main` 属于交付动作，按「提交与推送流程」执行。
 - 不使用 `git reset --hard`、`git checkout -- <file>`、`git clean` 等破坏性命令处理冲突。确需执行时，先建 `anchor/*` 锚点分支并确认锚点可达，再动手。
-- 合并冲突必须理解双方语义。无法确定业务意图时保留同步分支并询问用户。
+- 上游提交的冲突必须理解双方语义。无法确定业务意图时保留工作现场并询问用户；不得为规避冲突跳过安全车道修复。
 - 上游可复用的修复与私有业务改动分开提交，避免一个提交混合两类目的。
 - 未完成也提交：切换任务或结束会话前，工作区不得留下未提交改动；半成品用 `wip(<scope>): …` 提交并推送 `main`。
 
@@ -95,20 +96,20 @@ git diff --stat origin/main main                        # 内容差异，逐文�
 
 收到上述请求后，直接执行本文的 Fetch and Analyze 阶段，不需要先询问是否允许 fetch。分析结束后给出合并计划，并等待一次明确确认。
 
-以下回复视为对刚刚报告的、SHA 未变化的合并计划授权：
+以下回复视为对刚刚报告的、SHA 未变化的评估批次授权：
 
 - “确认”
 - “继续”
-- “合并”
+- “采纳”
 - “按方案执行”
 
-该确认授权创建同步分支、合并、解决确定性冲突、运行验证，并把结果合并进 `main` 并推送 `origin main`。它不授权：打 tag、发布或部署。
+该确认授权创建 `pick/upstream-*` 工作分支、执行方案中列出的 cherry-pick、解决确定性冲突、运行验证，并把结果合并进 `main` 并推送 `origin main`。它不授权：打 tag、发布或部署。方案中未列出的上游提交不得顺手采纳；用户对单个提交的取舍有最终决定权。
 
-如果用户一开始明确说“拉取、分析并确认后合并”，仍必须在分析报告后停在确认门，不得把最初请求当作提前确认。
+如果用户一开始明确说“拉取、分析并确认后采纳”，仍必须在分析报告后停在确认门，不得把最初请求当作提前确认。
 
-## Fetch and Analyze
+## Fetch and Analyze（评估批次）
 
-当用户要求拉取或同步上游时，按以下顺序执行：
+评估范围按上游 release 划分，固定为「已评估到的 tag .. upstream/main」。当用户要求拉取或同步上游时，按以下顺序执行：
 
 1. 读取工作区状态、当前分支、所有远端及分支跟踪关系。
 2. 若 `upstream` 不存在，确认官方地址后执行：
@@ -117,41 +118,39 @@ git diff --stat origin/main main                        # 内容差异，逐文�
 4. 验证 `origin`。若与当前 fork 地址不同，不自动覆盖。
 5. 执行 `git fetch --prune upstream`。需要了解 fork 状态时再执行 `git fetch --prune origin`。
 6. 二开基线固定为 `origin/main`。先 `git fetch --prune origin`；若本地 `main` 与 `origin/main` 分叉，先按「提交与推送流程」第 5 步打锚点并把本地 `main` 对齐远端，再规划。
-7. 记录待合并的完整 `upstream/main` SHA。后续确认只对该 SHA 有效。
-8. 分析并汇报：
-   - 二开基线与上游各自 ahead/behind 数量；
-   - 上游新增提交，按功能、修复、安全、依赖、CI/部署、数据库迁移分类；
-   - 变更文件和受影响模块；
-   - 本地二开提交与高冲突区域；
-   - 潜在文本冲突，可使用 `git merge-tree` 预检；
-   - 新增或修改的迁移、Ent schema/生成代码、`go.mod/go.sum`、`package.json/pnpm-lock.yaml`、Docker/CI/配置样例；
-   - 建议验证命令、预计风险和回滚点。
-9. 输出明确的拟执行计划：基线分支、同步分支名、上游 SHA、预计冲突、测试范围。
-10. 停止并请求用户确认。此阶段不得 merge、rebase、切换/创建同步分支或改代码。
+7. 从决策台账读出已评估边界 tag，确定待评估范围（例如 `v0.2.17..upstream/main`），记录该范围的完整头 SHA。后续确认只对该 SHA 有效。
+8. 逐提交分析并按四条决策车道分类初判：
+   - 🔴 安全：鉴权、密钥、SSRF、注入、越权等修复——默认必采；
+   - 🟠 协议/Provider：OAuth、流式、模型列表、计费一致性修复——按实际使用的 Provider 决定；
+   - 🟡 新功能：按产品方向与二开范围决定；
+   - ⚪ 其他：CI、文档、重构、版本号 chore——默认拒绝。
+   同时汇报：提交清单与分类、变更文件和受影响模块、依赖变化（`go.mod/go.sum`、`package.json/pnpm-lock.yaml`）、数据库迁移、CI/部署配置、按提交预估的冲突风险（可用 `git merge-tree` 干跑佐证）。
+9. 输出明确的拟执行计划：基线分支、工作分支名（`pick/upstream-<release>-<short-sha>`）、批次范围与固定 SHA、拟采纳清单（含 cherry-pick 顺序与依赖关系）、拟拒绝清单（含风险说明）、测试范围、回滚点。
+10. 停止并请求用户确认。此阶段不得 merge、cherry-pick、切换/创建工作分支或改代码。
 
-工作区不干净时仍可 fetch 和做只读分析，但报告中必须列出受影响文件。不得进入合并阶段，也不得自动 stash：先按「未完成也提交」把改动落成 `wip` 提交并推送 `main`，再进入合并阶段。
+工作区不干净时仍可 fetch 和做只读分析，但报告中必须列出受影响文件。不得进入采纳阶段，也不得自动 stash：先按「未完成也提交」把改动落成 `wip` 提交并推送 `main`，再进入采纳阶段。
 
-## Merge After Confirmation
+## Cherry-Pick After Confirmation
 
-用户确认刚刚的计划后：
+用户确认刚刚的评估方案后：
 
-1. 重新检查工作区、本地 `main`、`origin/main` 和 `upstream/main` SHA。
-2. 若工作区变脏或上游 SHA 已变化，停止并重新分析；旧确认失效。
-3. 从 `origin/main` 创建计划中的 `sync/upstream-*` 分支。
-4. 执行 `git merge --no-ff upstream/main`。不得用 rebase 改写二开历史。
-5. 解决确定性冲突，完成合并提交，并记录每个冲突采用上游、本地或组合方案的原因。
-6. 特别检查迁移文件名冲突、已发布迁移被修改、Ent 生成代码、锁文件、配置默认值与前端嵌入产物。
-7. 运行与变更匹配的验证。上游同步默认运行完整验证：
+1. 重新检查工作区、本地 `main`、`origin/main` 和批次固定 SHA。若工作区变脏或上游 SHA 已变化，停止并重新分析；旧确认失效。
+2. 从 `origin/main` 创建 `pick/upstream-<release>-<short-sha>` 工作分支。
+3. 按方案顺序逐个执行 `git cherry-pick -x <sha>`，保持原提交信息；冲突必须理解双方语义后解决，禁止整文件 `ours/theirs` 覆盖。放弃某个已列出的提交必须停下说明原因，经用户同意后更新台账。
+4. 上游提交触及其不存在的上下文（cherry-pick 失败且无对应代码）时，在台账标 ⏭️ 并说明，不强行搬运。
+5. **安全车道红线：🔴 车道修复不得因冲突工作量跳过。** 确实无法采纳时，必须停下列出「不采纳的具体风险、受影响面、补偿措施」，由用户书面确认并在台账留痕。
+6. 特别检查：迁移文件名与 SHA、Ent schema/生成代码、锁文件、配置默认值与前端嵌入产物；依赖变化用 `go mod tidy` / `pnpm install` 重建后核对 diff。
+7. 运行与变更匹配的验证；上游采纳批次默认完整验证：
    - `git diff --check`
    - `make test`
    - `make build`
-8. 若验证失败，保留同步分支和现场，报告失败原因；不得推送。
-9. 若验证通过，把同步分支合并进 `main` 并推送 `origin main`，等 CI 全绿。
-10. 汇报同步分支短 SHA、冲突决策、测试结果、未验证风险和建议的下一步；合并后收口，并把冲突决策写进当天工作日志。
+8. 若验证失败，保留工作分支和现场，报告失败原因；不得推送。
+9. 若验证通过，把工作分支合并进 `main` 并推送 `origin main`，等 CI 全绿。
+10. 汇报工作分支短 SHA、采纳/拒绝/延后统计、冲突决策、测试结果、未验证风险和建议的下一步；当天把决策写入 `docs/UPSTREAM_DECISIONS_CN.md` 台账并更新 WORK_LOG。
 
-不要自动删除同步分支。推送前先展示将推送的远端、分支和提交范围，再执行普通 push；禁止 force push。
+不要自动删除工作分支。推送前先展示将推送的远端、分支和提交范围，再执行普通 push；禁止 force push。
 
-若 `origin/main` 恰好是 `upstream/main` 的祖先（领先 0、落后 N），不要先合功能改动再同步：先做一次纯快进的同步（零冲突）推送 `main`，再做功能改动。这样大批量上游提交不进入三方合并，冲突只在功能改动那一侧出现一次。
+**⚠️ 注意：cherry-pick 模式下 `main` 与 `upstream/main` 无祖先关系，二者之间不能再执行 merge。** 若未来用户决定回归 merge 模式，必须作为独立决策重新评估（工作量≈一次全量同步），不得在 cherry-pick 批次中顺手进行。
 
 ## Release and Rollback
 
@@ -159,7 +158,7 @@ git diff --stat origin/main main                        # 内容差异，逐文�
 - 发布即从 `origin/main` 上已合并且 CI 全绿的 HEAD 打 tag，版本号形如 `v0.2.17-custom.1`；不给只存在于本地工作副本的提交打 tag。
 - 数字段必须严格递增：`update_service.go` 的 `parseVersion` 丢弃 `-custom.N` 后缀，更新判定只比较三段数字，同版本号的二开 tag 永远显示"无更新"。
 - 创建或推送标签、触发 Release workflow、部署前必须得到明确授权。
-- 回滚用新的前向提交完成：对同步合并执行 `git revert -m 1 <merge-commit>` 并推送 `main`；已应用的数据库迁移不可回退，必须新增前向修正迁移。
+- 回滚用新的前向提交完成：对上游采纳批次中的 cherry-pick 提交执行 `git revert <sha>` 并推送 `main`；已应用的数据库迁移不可回退，必须新增前向修正迁移。
 
 ## Work Log
 

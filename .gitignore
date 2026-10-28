@@ -153,6 +153,7 @@ docs/*
 !docs/codex-credits.md
 !docs/UPSTREAM_HUB_DESIGN_CN.md
 !docs/PENDING_INTENT_ROUTING_CN.md
+!docs/UI_REFACTOR_RESEARCH_CN.md
 !docs/legal/
 !docs/legal/*.md
 !docs/screenshots/

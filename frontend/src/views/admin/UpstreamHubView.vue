@@ -118,9 +118,15 @@
                   }) }}
                 </p>
               </div>
-              <button class="btn btn-primary btn-sm" @click="openEntriesDialog">
-                {{ t('admin.upstreamHub.addOrEdit') }}
-              </button>
+              <div class="flex items-center gap-2">
+                <button class="btn btn-secondary btn-sm" @click="openBaseURLDialog">
+                  {{ t('admin.upstreamHub.manageBaseURLs') }}
+                  <span class="badge badge-gray ml-1">{{ vendorBaseURLs.length }}</span>
+                </button>
+                <button class="btn btn-primary btn-sm" @click="openEntriesDialog">
+                  {{ t('admin.upstreamHub.addOrEdit') }}
+                </button>
+              </div>
             </div>
             <div class="p-6">
               <div
@@ -234,16 +240,6 @@
     <BaseDialog :show="showEntryDialog" :title="t('admin.upstreamHub.addOrEdit')" width="max" @close="closeEntriesDialog">
       <div v-if="anyRowDropdownOpen" class="fixed inset-0 z-30" @click="closeAllDropdowns"></div>
       <div class="space-y-3">
-        <div class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-200 px-3 py-2 dark:border-dark-600">
-          <div class="flex items-center gap-2">
-            <span class="text-sm text-gray-700 dark:text-gray-300">{{ t('admin.upstreamHub.baseURLPool') }}</span>
-            <span class="badge badge-gray">{{ vendorBaseURLs.length }}</span>
-            <button class="btn btn-secondary btn-sm" @click="openBaseURLDialog">
-              {{ t('admin.upstreamHub.manageBaseURLs') }}
-            </button>
-          </div>
-          <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.upstreamHub.baseURLPoolHint') }}</span>
-        </div>
         <div class="table-container">
           <table class="table">
             <thead>
@@ -485,6 +481,11 @@
     >
       <div class="space-y-3">
         <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.upstreamHub.baseURLDialogHint') }}</p>
+        <div>
+          <label class="input-label">{{ t('admin.upstreamHub.measureProxy') }}</label>
+          <Select v-model="baseURLForm.proxyId" :options="proxyOptions" />
+          <p class="input-hint">{{ t('admin.upstreamHub.measureProxyHint') }}</p>
+        </div>
         <div class="space-y-2">
           <div v-for="(_, index) in baseURLForm.urls" :key="index" class="flex items-center gap-2">
             <input v-model="baseURLForm.urls[index]" class="input flex-1" type="text" placeholder="https://api.example.com/v1" />
@@ -995,7 +996,7 @@ function removeRow(row: EntryRow, index: number) {
 
 // ---------- 接入地址池（厂家级，添加/编辑页内维护） ----------
 const showBaseURLDialog = ref(false)
-const baseURLForm = reactive({ urls: [] as string[] })
+const baseURLForm = reactive({ urls: [] as string[], proxyId: 0 })
 const baseURLTesting = ref(false)
 const baseURLSaving = ref(false)
 const baseURLTestResults = ref<UpstreamBaseURLLatency[]>([])
@@ -1003,18 +1004,25 @@ const baseURLTestError = ref('')
 
 const cleanBaseURLs = computed(() => baseURLForm.urls.map((url) => url.trim()).filter(Boolean))
 
-function openBaseURLDialog() {
+async function openBaseURLDialog() {
   baseURLForm.urls = vendorBaseURLs.value.length ? [...vendorBaseURLs.value] : ['']
+  // 测速出口默认沿用第一条条目的代理，没有条目时用直连。
+  baseURLForm.proxyId = detail.value?.entries[0]?.proxy_id ?? 0
   baseURLTestResults.value = []
   baseURLTestError.value = ''
   showBaseURLDialog.value = true
+  if (proxies.value.length === 0) {
+    try {
+      proxies.value = await proxiesAPI.getAll()
+    } catch (err) {
+      appStore.showError(extractApiErrorMessage(err, t('admin.upstreamHub.loadFailed')))
+    }
+  }
 }
 
 // 基础连通性检查：只需要出口（代理或直连），不需要 key 与平台。
 function baseURLTestTarget() {
-  const row = entryRows.value.find((item) => item.accountId) || entryRows.value[0]
-  if (row?.accountId) return { account_id: row.accountId }
-  return { proxy_id: row?.proxyId ?? 0 }
+  return { proxy_id: baseURLForm.proxyId }
 }
 
 async function testBaseURLs() {

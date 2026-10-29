@@ -25,6 +25,8 @@ export default {
     baseURLsEmptyTitle: 'No base URL configured',
     baseURLsEmptyDesc: 'Entries cannot be saved without a base URL. Add the vendor-provided URL first.',
     baseURLsMissingBanner: 'This vendor has no base URL yet; saving entries is blocked',
+    currentBaseURL: 'Current URL',
+    notConfigured: 'Not configured',
     measureBaseURLs: 'Measure',
     measuring: 'Measuring…',
     fastestBaseURL: 'Fastest {host} · {ms}ms',

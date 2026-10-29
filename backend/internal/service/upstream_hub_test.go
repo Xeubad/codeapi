@@ -509,6 +509,33 @@ func TestCreateEntryUsesSingleVendorBaseURL(t *testing.T) {
 	require.Equal(t, "https://only.example.com", admin.created.Credentials["base_url"])
 }
 
+func TestUpdateVendorSyncsPrimaryBaseURLToEntries(t *testing.T) {
+	admin := &stubUpstreamAdmin{account: &Account{
+		ID:       5,
+		Name:     "A",
+		Platform: PlatformDeepseek,
+		Extra:    map[string]any{UpstreamVendorIDExtraKey: int64(2)},
+		Credentials: map[string]any{
+			"api_key":  "sk-x",
+			"base_url": "https://old.example.com",
+		},
+	}}
+	repo := &stubUpstreamVendorRepo{
+		vendors: []UpstreamVendor{{ID: 2, Name: "A"}},
+		entries: map[int64][]UpstreamEntry{2: {{AccountID: 5, VendorID: 2, Name: "A"}}},
+	}
+	svc := NewUpstreamHubService(repo, admin, nil)
+
+	_, err := svc.UpdateVendor(context.Background(), 2, CreateUpstreamVendorInput{
+		Name:     "A",
+		BaseURLs: []string{"https://new.example.com"},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, admin.updated)
+	require.Equal(t, "https://new.example.com", admin.updated.Credentials["base_url"])
+	require.Equal(t, "sk-x", admin.updated.Credentials["api_key"])
+}
+
 func TestMeasureBaseURLsUsesTestOnlyProxy(t *testing.T) {
 	// 代理仅用于本次测速，不落库；这里断言它确实被带进了测量账号。
 	admin := &stubUpstreamAdmin{}

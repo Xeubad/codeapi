@@ -277,7 +277,53 @@ func (s *UpstreamHubService) UpdateVendor(ctx context.Context, id int64, input C
 	if err != nil {
 		return nil, err
 	}
-	return s.repo.Update(ctx, id, name, input.ConcurrencyBudget, trimNotes(input.Notes), baseURLs)
+	vendor, err := s.repo.Update(ctx, id, name, input.ConcurrencyBudget, trimNotes(input.Notes), baseURLs)
+	if err != nil {
+		return nil, err
+	}
+	// 厂家地址池是唯一来源：首个地址变化时同步到该厂家下所有条目，
+	// 避免出现"池子改了、key 还在用旧地址"的不一致。
+	if len(baseURLs) > 0 {
+		if err := s.syncVendorEntriesBaseURL(ctx, id, baseURLs[0]); err != nil {
+			return nil, err
+		}
+	}
+	return vendor, nil
+}
+
+// syncVendorEntriesBaseURL 把厂家的首选地址写到其全部条目的 credentials.base_url。
+func (s *UpstreamHubService) syncVendorEntriesBaseURL(ctx context.Context, vendorID int64, primary string) error {
+	primary = strings.TrimSpace(primary)
+	if primary == "" {
+		return nil
+	}
+	entries, err := s.repo.ListEntries(ctx, vendorID)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		account, err := s.admin.GetAccount(ctx, entry.AccountID)
+		if err != nil {
+			return err
+		}
+		if strings.TrimSpace(account.GetCredential("base_url")) == primary {
+			continue
+		}
+		credentials := make(map[string]any, len(account.Credentials)+1)
+		for key, value := range account.Credentials {
+			credentials[key] = value
+		}
+		credentials["base_url"] = primary
+		if _, err := s.admin.UpdateAccount(ctx, entry.AccountID, &UpdateAccountInput{
+			Name:                  account.Name,
+			Type:                  AccountTypeAPIKey,
+			Credentials:           credentials,
+			SkipMixedChannelCheck: true,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *UpstreamHubService) DeleteVendor(ctx context.Context, id int64) error {

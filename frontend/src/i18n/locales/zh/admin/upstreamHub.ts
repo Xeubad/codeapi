@@ -25,6 +25,8 @@ export default {
     baseURLsEmptyTitle: '还没有接入地址',
     baseURLsEmptyDesc: '未配置时无法保存条目；先填写厂家提供的 Base URL。',
     baseURLsMissingBanner: '该厂家还没有配置接入地址，保存条目会被阻断',
+    currentBaseURL: '当前地址',
+    notConfigured: '未配置',
     measureBaseURLs: '测速',
     measuring: '测速中…',
     fastestBaseURL: '最快 {host} · {ms}ms',

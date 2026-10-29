@@ -117,6 +117,10 @@
                     total: detail.vendor.concurrency_budget || '∞'
                   }) }}
                 </p>
+                <p class="mt-0.5 max-w-[36rem] truncate font-mono text-xs text-gray-500 dark:text-gray-400" :title="vendorBaseURLs[0] || ''">
+                  {{ t('admin.upstreamHub.currentBaseURL') }}：
+                  {{ vendorBaseURLs[0] || t('admin.upstreamHub.notConfigured') }}
+                </p>
               </div>
               <div class="flex items-center gap-2">
                 <button class="btn btn-secondary btn-sm" @click="openBaseURLDialog">
@@ -268,9 +272,6 @@
                 <tr>
                   <td>
                     <input v-model="row.name" class="input" type="text" :placeholder="t('admin.upstreamHub.entryNamePlaceholder')" />
-                    <div v-if="row.base_url" class="mt-0.5 truncate text-xs text-gray-500 dark:text-gray-400" :title="row.base_url">
-                      {{ row.base_url }}
-                    </div>
                   </td>
                   <td>
                     <Select v-model="row.platform" :options="platformOptions" :disabled="!!row.accountId" />

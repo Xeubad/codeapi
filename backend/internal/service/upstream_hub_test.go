@@ -459,7 +459,7 @@ func TestMeasureBaseURLsWorksWithoutAPIKey(t *testing.T) {
 	require.True(t, results[0].OK)
 }
 
-func TestCreateEntryPicksFastestVendorBaseURL(t *testing.T) {
+func TestCreateEntryUsesPrimaryVendorBaseURL(t *testing.T) {
 	admin := &stubUpstreamAdmin{account: &Account{
 		ID:    99,
 		Name:  "A",
@@ -526,7 +526,7 @@ func TestMeasureBaseURLsUsesTestOnlyProxy(t *testing.T) {
 	require.Equal(t, proxyID, prober.lastAccount.Proxy.ID)
 }
 
-func TestCreateEntryFallsBackToFirstBaseURLWhenAllUnreachable(t *testing.T) {
+func TestCreateEntryUsesPrimaryEvenWhenUnmeasured(t *testing.T) {
 	admin := &stubUpstreamAdmin{account: &Account{
 		ID:    99,
 		Name:  "A",
@@ -551,7 +551,7 @@ func TestCreateEntryFallsBackToFirstBaseURLWhenAllUnreachable(t *testing.T) {
 	require.Equal(t, "https://a.example.com", admin.created.Credentials["base_url"])
 }
 
-func TestUpdateEntryPicksFastestVendorBaseURL(t *testing.T) {
+func TestUpdateEntryUsesPrimaryVendorBaseURL(t *testing.T) {
 	admin := &stubUpstreamAdmin{account: &Account{
 		ID:          5,
 		Name:        "A",

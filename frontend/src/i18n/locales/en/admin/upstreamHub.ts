@@ -13,7 +13,7 @@ export default {
     notesPlaceholder: 'Contact / expiry, optional',
     manageBaseURLs: 'Manage URLs',
     baseURLDialogTitle: 'Vendor base URLs',
-    baseURLDialogHint: 'Add mirror/region URLs. Measuring is a basic connectivity check: an unauthenticated request from the current egress (direct or bound proxy) is timed until the response headers arrive — no key, no quota. Entries are measured and pinned to the fastest on save; if none is reachable, saving is blocked.',
+    baseURLDialogHint: 'Measuring only records latency (no key, no quota). After a test the list is sorted fastest-first and the fastest is selected; click a row to change the primary. The first address is what entries use after saving.',
     saveBaseURLs: 'Save URLs',
     baseURLsSaved: 'Base URLs saved',
     baseURLTestNeedsKey: 'Fill in one entry’s API key before measuring',

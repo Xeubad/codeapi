@@ -13,7 +13,7 @@ export default {
     notesPlaceholder: '联系方式 / 到期时间等（可选）',
     manageBaseURLs: '管理地址',
     baseURLDialogTitle: '厂家接入地址',
-    baseURLDialogHint: '可配置多个镜像/区域地址。测速是最基础的连通性检查：从当前出口（直连或绑定的代理）发一个不带 key 的请求，只看到响应头为止，不消耗上游额度。保存条目时会自动测速并固化最快的一个；全部不可达会阻止保存。',
+    baseURLDialogHint: '测速只统计延迟（不带 key、不消耗额度）。测速后按延迟升序排列并默认选中最快的一个；点击地址行可改选首选。保存后第一个地址即条目使用的地址。',
     saveBaseURLs: '保存地址',
     baseURLsSaved: '接入地址已保存',
     baseURLTestNeedsKey: '先填一个条目的 API Key 才能测速',

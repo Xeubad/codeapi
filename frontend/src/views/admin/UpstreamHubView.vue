@@ -504,18 +504,35 @@
           <div
             v-for="(_, index) in baseURLForm.urls"
             :key="index"
-            class="flex items-center gap-2 rounded-lg border px-2 py-1.5"
+            class="flex cursor-pointer items-center gap-2 rounded-lg border px-2 py-1.5"
             :class="
               isInvalidBaseURLRow(baseURLForm.urls[index])
                 ? 'border-red-300 dark:border-red-700'
-                : 'border-gray-200 dark:border-dark-600'
+                : isSelectedBaseURL(baseURLForm.urls[index])
+                  ? 'border-primary-400 bg-primary-50/50 dark:border-primary-700 dark:bg-primary-900/10'
+                  : 'border-gray-200 dark:border-dark-600'
             "
+            @click="selectBaseURL(baseURLForm.urls[index])"
           >
+            <span
+              class="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border"
+              :class="
+                isSelectedBaseURL(baseURLForm.urls[index])
+                  ? 'border-primary-500'
+                  : 'border-gray-300 dark:border-dark-500'
+              "
+            >
+              <span
+                v-if="isSelectedBaseURL(baseURLForm.urls[index])"
+                class="h-2 w-2 rounded-full bg-primary-500"
+              />
+            </span>
             <input
               v-model="baseURLForm.urls[index]"
               class="input flex-1 font-mono text-xs"
               type="text"
               placeholder="https://api.example.com/v1"
+              @click.stop
             />
             <span
               v-if="isInvalidBaseURLRow(baseURLForm.urls[index])"
@@ -542,7 +559,10 @@
               }}
             </span>
             <span v-else class="w-28 shrink-0" />
-            <button class="btn btn-sm btn-ghost shrink-0 text-red-600" @click="removeBaseURLRow(index)">
+            <button
+              class="btn btn-sm btn-ghost shrink-0 text-red-600"
+              @click.stop="removeBaseURLRow(index)"
+            >
               {{ t('admin.upstreamHub.delete') }}
             </button>
           </div>
@@ -1036,7 +1056,7 @@ function removeRow(row: EntryRow, index: number) {
 
 // ---------- 接入地址池（厂家级，添加/编辑页内维护） ----------
 const showBaseURLDialog = ref(false)
-const baseURLForm = reactive({ urls: [] as string[], proxyId: 0 })
+const baseURLForm = reactive({ urls: [] as string[], proxyId: 0, selectedUrl: '' })
 const baseURLTesting = ref(false)
 const baseURLSaving = ref(false)
 const baseURLTestResults = ref<UpstreamBaseURLLatency[]>([])
@@ -1047,6 +1067,7 @@ const cleanBaseURLs = computed(() => baseURLForm.urls.map((url) => url.trim()).f
 async function openBaseURLDialog() {
   baseURLForm.urls = vendorBaseURLs.value.length ? [...vendorBaseURLs.value] : []
   baseURLForm.proxyId = 0
+  baseURLForm.selectedUrl = vendorBaseURLs.value[0] || ''
   baseURLTestResults.value = []
   baseURLTestError.value = ''
   showBaseURLDialog.value = true
@@ -1099,7 +1120,7 @@ function baseURLResultFor(raw: string): UpstreamBaseURLLatency | undefined {
   return baseURLTestResults.value.find((item) => normalizeURLForCompare(item.url) === target)
 }
 
-// 测速后按延迟升序排列：可达的在前（快→慢），不可达的排最后。
+// 测速后按延迟升序排列：可达的在前（快→慢），不可达的排最后；并默认选中第一个可达地址。
 function sortBaseURLsByLatency() {
   const rank = (url: string) => {
     const result = baseURLResultFor(url)
@@ -1107,6 +1128,28 @@ function sortBaseURLsByLatency() {
     return result.ok ? result.latency_ms : Number.MAX_SAFE_INTEGER - 1
   }
   baseURLForm.urls = [...baseURLForm.urls].sort((a, b) => rank(a) - rank(b))
+  const fastest = baseURLForm.urls.find((url) => baseURLResultFor(url)?.ok)
+  baseURLForm.selectedUrl = (fastest || baseURLForm.urls[0] || '').trim()
+}
+
+function isSelectedBaseURL(raw: string): boolean {
+  const selected = normalizeURLForCompare(baseURLForm.selectedUrl)
+  return selected !== '' && normalizeURLForCompare(raw) === selected
+}
+
+function selectBaseURL(raw: string) {
+  if (!isValidBaseURL(raw)) return
+  baseURLForm.selectedUrl = raw.trim()
+}
+
+// 保存时把「首选地址」放到第一位，顺序即优先级。
+function orderedBaseURLs(): string[] {
+  const urls = cleanBaseURLs.value
+  const selectedKey = normalizeURLForCompare(baseURLForm.selectedUrl)
+  if (!selectedKey) return urls
+  const primary = urls.filter((url) => normalizeURLForCompare(url) === selectedKey)
+  const rest = urls.filter((url) => normalizeURLForCompare(url) !== selectedKey)
+  return [...primary, ...rest]
 }
 
 async function testBaseURLs() {
@@ -1130,7 +1173,7 @@ async function testBaseURLs() {
 async function saveBaseURLs() {
   if (!detail.value) return
   if (!canSaveBaseURLs.value) return
-  const urls = cleanBaseURLs.value
+  const urls = orderedBaseURLs()
   baseURLSaving.value = true
   try {
     await upstreamHubAPI.updateVendor(detail.value.vendor.id, {

@@ -320,14 +320,9 @@ func (s *UpstreamHubService) CreateEntry(ctx context.Context, vendorID int64, in
 		return nil, fmt.Errorf("concurrency must be >= 1")
 	}
 	platform := strings.TrimSpace(input.Platform)
-	// 厂家配了多个地址：保存前实测，只固化最快的一个；全不可达则拒绝保存。
+	// 厂家地址池的第一个地址即首选（在地址弹窗里测速排序后选定）。
 	if len(input.BaseURLs) >= 1 {
-		measureAccount := &Account{
-			Platform:    platform,
-			Type:        AccountTypeAPIKey,
-			Credentials: map[string]any{"api_key": apiKey},
-		}
-		chosen, pickErr := s.pickSaveBaseURL(ctx, measureAccount, baseURL, input.BaseURLs)
+		chosen, pickErr := pickSaveBaseURL(baseURL, input.BaseURLs)
 		if pickErr != nil {
 			return nil, pickErr
 		}
@@ -385,7 +380,7 @@ func (s *UpstreamHubService) UpdateEntry(ctx context.Context, accountID int64, i
 		return nil, fmt.Errorf("base url is required")
 	}
 	if len(input.BaseURLs) >= 1 {
-		chosen, pickErr := s.pickSaveBaseURL(ctx, current, baseURL, input.BaseURLs)
+		chosen, pickErr := pickSaveBaseURL(baseURL, input.BaseURLs)
 		if pickErr != nil {
 			return nil, pickErr
 		}
@@ -484,39 +479,17 @@ func (s *UpstreamHubService) DuplicateEntry(ctx context.Context, accountID int64
 	return s.getEntry(ctx, account.ID)
 }
 
-// pickSaveBaseURL 在保存时实测厂家候选地址并返回最快的一个（只选一次、写入条目）。
-// 运行期不再切换地址，避免请求途中换线路带来的行为漂移。
-func (s *UpstreamHubService) pickSaveBaseURL(ctx context.Context, account *Account, fallback string, candidates []string) (string, error) {
+// pickSaveBaseURL 按地址池顺序定稿：管理员在地址弹窗里测速、排序并选中首选，
+// 保存后顺序即优先级，第一个就是写入条目的地址。运行期不再切换。
+func pickSaveBaseURL(fallback string, candidates []string) (string, error) {
 	urls, err := normalizeVendorBaseURLs(candidates)
 	if err != nil {
 		return "", err
 	}
-	if len(urls) == 1 {
-		return urls[0], nil
-	}
 	if len(urls) == 0 {
 		return fallback, nil
 	}
-	if s.probe == nil {
-		return "", errors.New("upstream model prober is not configured")
-	}
-	results := s.probe.MeasureBaseURLLatencies(ctx, account, urls)
-	var fastest *UpstreamBaseURLLatency
-	for i := range results {
-		item := &results[i]
-		if !item.OK {
-			continue
-		}
-		if fastest == nil || item.LatencyMS < fastest.LatencyMS {
-			fastest = item
-		}
-	}
-	if fastest == nil {
-		// 全部不可达时仍按第一个地址保存：代理可能由平台 IP 管理绑在账号上，
-		// hub 侧不做代理探测，避免把「本机直连不通」误判成不可保存。
-		return urls[0], nil
-	}
-	return fastest.URL, nil
+	return urls[0], nil
 }
 
 func (s *UpstreamHubService) DeleteEntry(ctx context.Context, accountID int64) error {

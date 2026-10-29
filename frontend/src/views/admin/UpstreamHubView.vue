@@ -121,7 +121,10 @@
               <div class="flex items-center gap-2">
                 <button class="btn btn-secondary btn-sm" @click="openBaseURLDialog">
                   {{ t('admin.upstreamHub.manageBaseURLs') }}
-                  <span class="badge badge-gray ml-1">{{ vendorBaseURLs.length }}</span>
+                  <span
+                    class="badge ml-1"
+                    :class="vendorBaseURLs.length ? 'badge-primary' : 'badge-gray text-amber-600 dark:text-amber-400'"
+                  >{{ vendorBaseURLs.length }}</span>
                 </button>
                 <button class="btn btn-primary btn-sm" @click="openEntriesDialog">
                   {{ t('admin.upstreamHub.addOrEdit') }}
@@ -129,6 +132,12 @@
               </div>
             </div>
             <div class="p-6">
+              <div
+                v-if="vendorBaseURLs.length === 0"
+                class="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300"
+              >
+                {{ t('admin.upstreamHub.baseURLsMissingBanner') }}
+              </div>
               <div
                 v-for="warning in detail.warnings"
                 :key="warning"
@@ -457,7 +466,7 @@
 
 
 
-    <!-- Base URL pool dialog：只维护地址与连通性，不涉及代理/模型 -->
+    <!-- Base URL pool dialog：只维护地址与连通性，不涉及模型 -->
     <BaseDialog
       :show="showBaseURLDialog"
       :title="t('admin.upstreamHub.baseURLDialogTitle')"
@@ -468,21 +477,39 @@
           <button class="btn btn-primary btn-sm" @click="addBaseURLRow">
             {{ t('admin.upstreamHub.addBaseURL') }}
           </button>
+          <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.upstreamHub.measureProxy') }}</span>
+          <Select v-model="baseURLForm.proxyId" :options="proxyOptions" class="w-44" />
           <button
             class="btn btn-primary btn-sm"
-            :disabled="baseURLTesting || cleanBaseURLs.length === 0"
+            :disabled="baseURLTesting || !canMeasureBaseURLs"
             @click="testBaseURLs"
           >
             {{ baseURLTesting ? t('admin.upstreamHub.measuring') : t('admin.upstreamHub.measureBaseURLs') }}
           </button>
-          <span v-if="baseURLTestError" class="text-xs text-red-600 dark:text-red-400">{{ baseURLTestError }}</span>
+          <span v-if="baseURLTestError" class="whitespace-normal break-all text-xs text-red-600 dark:text-red-400">
+            {{ baseURLTestError }}
+          </span>
         </div>
         <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.upstreamHub.baseURLDialogHint') }}</p>
-        <div class="space-y-2">
+        <p class="text-xs text-gray-400 dark:text-dark-400">{{ t('admin.upstreamHub.measureProxyHint') }}</p>
+
+        <div
+          v-if="baseURLForm.urls.length === 0"
+          class="rounded-lg border border-dashed border-gray-300 p-6 text-center dark:border-dark-600"
+        >
+          <p class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t('admin.upstreamHub.baseURLsEmptyTitle') }}</p>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('admin.upstreamHub.baseURLsEmptyDesc') }}</p>
+        </div>
+        <div v-else class="space-y-2">
           <div
             v-for="(_, index) in baseURLForm.urls"
             :key="index"
-            class="rounded-lg border border-gray-200 p-2 dark:border-dark-600"
+            class="rounded-lg border p-2"
+            :class="
+              isInvalidBaseURLRow(baseURLForm.urls[index])
+                ? 'border-red-300 dark:border-red-700'
+                : 'border-gray-200 dark:border-dark-600'
+            "
           >
             <div class="flex items-center gap-2">
               <input
@@ -491,15 +518,18 @@
                 type="text"
                 placeholder="https://api.example.com/v1"
               />
-              <button
-                class="btn btn-sm btn-ghost shrink-0 text-red-600"
-                @click="removeBaseURLRow(index)"
-              >
+              <button class="btn btn-sm btn-ghost shrink-0 text-red-600" @click="removeBaseURLRow(index)">
                 {{ t('admin.upstreamHub.delete') }}
               </button>
             </div>
             <p
-              v-if="baseURLResultFor(baseURLForm.urls[index])"
+              v-if="isInvalidBaseURLRow(baseURLForm.urls[index])"
+              class="mt-1 whitespace-normal break-all text-xs text-red-600 dark:text-red-400"
+            >
+              {{ t('admin.upstreamHub.baseURLInvalid') }}
+            </p>
+            <p
+              v-else-if="baseURLResultFor(baseURLForm.urls[index])"
               class="mt-1 whitespace-normal break-all text-xs"
               :class="baseURLResultFor(baseURLForm.urls[index])?.ok ? 'text-primary-600 dark:text-primary-400' : 'text-red-600 dark:text-red-400'"
             >
@@ -512,14 +542,11 @@
               </template>
             </p>
           </div>
-          <p v-if="baseURLForm.urls.length === 0" class="text-xs text-gray-500 dark:text-gray-400">
-            {{ t('admin.upstreamHub.noBaseURLs') }}
-          </p>
         </div>
       </div>
       <template #footer>
         <button class="btn btn-secondary" @click="showBaseURLDialog = false">{{ t('admin.upstreamHub.cancel') }}</button>
-        <button class="btn btn-primary" :disabled="baseURLSaving || cleanBaseURLs.length === 0" @click="saveBaseURLs">
+        <button class="btn btn-primary" :disabled="baseURLSaving || !canSaveBaseURLs" @click="saveBaseURLs">
           {{ t('admin.upstreamHub.saveBaseURLs') }}
         </button>
       </template>
@@ -544,6 +571,8 @@ import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { extractApiErrorMessage } from '@/utils/apiError'
 import { syncUpstreamModelsPreview } from '@/api/admin/accounts'
+import proxiesAPI from '@/api/admin/proxies'
+import type { Proxy } from '@/types'
 import upstreamHubAPI, {
   type UpstreamBaseURLLatency,
   type UpstreamEntry,
@@ -605,6 +634,11 @@ const showEntryDialog = ref(false)
 const entryRows = ref<EntryRow[]>([])
 const pendingDeletes = ref<Array<{ accountId: number; concurrency: number }>>([])
 const groupOptions = ref<UpstreamGroupOption[]>([])
+const proxies = ref<Proxy[]>([])
+const proxyOptions = computed(() => [
+  { label: t('admin.upstreamHub.proxyDirect'), value: 0 },
+  ...proxies.value.map((proxy) => ({ label: proxy.name, value: proxy.id }))
+])
 
 const showDeleteConfirm = ref(false)
 const deleteTarget = ref<{ type: 'vendor'; id: number; name: string } | null>(null)
@@ -998,7 +1032,7 @@ function removeRow(row: EntryRow, index: number) {
 
 // ---------- 接入地址池（厂家级，添加/编辑页内维护） ----------
 const showBaseURLDialog = ref(false)
-const baseURLForm = reactive({ urls: [] as string[] })
+const baseURLForm = reactive({ urls: [] as string[], proxyId: 0 })
 const baseURLTesting = ref(false)
 const baseURLSaving = ref(false)
 const baseURLTestResults = ref<UpstreamBaseURLLatency[]>([])
@@ -1006,12 +1040,41 @@ const baseURLTestError = ref('')
 
 const cleanBaseURLs = computed(() => baseURLForm.urls.map((url) => url.trim()).filter(Boolean))
 
-function openBaseURLDialog() {
-  baseURLForm.urls = vendorBaseURLs.value.length ? [...vendorBaseURLs.value] : ['']
+async function openBaseURLDialog() {
+  baseURLForm.urls = vendorBaseURLs.value.length ? [...vendorBaseURLs.value] : []
+  baseURLForm.proxyId = 0
   baseURLTestResults.value = []
   baseURLTestError.value = ''
   showBaseURLDialog.value = true
+  if (proxies.value.length === 0) {
+    try {
+      proxies.value = await proxiesAPI.getAll()
+    } catch (err) {
+      appStore.showError(extractApiErrorMessage(err, t('admin.upstreamHub.loadFailed')))
+    }
+  }
 }
+
+function isValidBaseURL(raw: string): boolean {
+  const value = raw.trim()
+  if (!value) return false
+  try {
+    const parsed = new URL(value)
+    return (parsed.protocol === 'http:' || parsed.protocol === 'https:') && parsed.host !== ''
+  } catch {
+    return false
+  }
+}
+
+// 非空但格式非法的行才报错；空行忽略。
+function isInvalidBaseURLRow(raw: string): boolean {
+  return raw.trim() !== '' && !isValidBaseURL(raw)
+}
+
+const dirtyBaseURLs = computed(() => baseURLForm.urls.map((url) => url.trim()).filter(Boolean))
+const hasInvalidBaseURLs = computed(() => dirtyBaseURLs.value.some((url) => !isValidBaseURL(url)))
+const canMeasureBaseURLs = computed(() => dirtyBaseURLs.value.length > 0 && !hasInvalidBaseURLs.value)
+const canSaveBaseURLs = computed(() => canMeasureBaseURLs.value)
 
 function addBaseURLRow() {
   baseURLForm.urls.push('')
@@ -1038,7 +1101,10 @@ async function testBaseURLs() {
   baseURLTesting.value = true
   baseURLTestError.value = ''
   try {
-    baseURLTestResults.value = await upstreamHubAPI.measureBaseURLs({ base_urls: urls })
+    baseURLTestResults.value = await upstreamHubAPI.measureBaseURLs({
+      base_urls: urls,
+      proxy_id: baseURLForm.proxyId || undefined
+    })
   } catch (err) {
     baseURLTestError.value = extractApiErrorMessage(err, t('admin.upstreamHub.measureFailed'))
   } finally {
@@ -1048,8 +1114,8 @@ async function testBaseURLs() {
 
 async function saveBaseURLs() {
   if (!detail.value) return
+  if (!canSaveBaseURLs.value) return
   const urls = cleanBaseURLs.value
-  if (urls.length === 0) return
   baseURLSaving.value = true
   try {
     await upstreamHubAPI.updateVendor(detail.value.vendor.id, {

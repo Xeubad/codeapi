@@ -141,6 +141,8 @@ type MeasureUpstreamBaseURLsInput struct {
 	Platform  string
 	APIKey    string
 	BaseURLs  []string
+	// ProxyID 仅用于本次测速（来自 IP 管理，选择已有代理）；不落库、不写条目。
+	ProxyID *int64
 }
 
 // MeasureBaseURLs 并发测厂家候选地址的延迟，供保存前挑选最快者。只测不改数据。
@@ -165,8 +167,15 @@ func (s *UpstreamHubService) MeasureBaseURLs(ctx context.Context, input MeasureU
 			return nil, ErrUpstreamEntryNotFound
 		}
 	} else {
-		// 基础连通性检查不需要 key 与平台。
-		account = &Account{Type: AccountTypeAPIKey}
+		// 基础连通性检查不需要 key 与平台；代理仅用于本次测速。
+		account = &Account{Type: AccountTypeAPIKey, ProxyID: input.ProxyID}
+		if input.ProxyID != nil && *input.ProxyID > 0 {
+			proxy, proxyErr := s.admin.GetProxy(ctx, *input.ProxyID)
+			if proxyErr != nil {
+				return nil, proxyErr
+			}
+			account.Proxy = proxy
+		}
 	}
 	return s.probe.MeasureBaseURLLatencies(ctx, account, urls), nil
 }

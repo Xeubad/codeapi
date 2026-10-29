@@ -182,6 +182,10 @@ func (s *stubUpstreamAdmin) UpdateAccount(_ context.Context, _ int64, input *Upd
 	return s.account, nil
 }
 
+func (s *stubUpstreamAdmin) GetProxy(context.Context, int64) (*Proxy, error) {
+	return &Proxy{ID: 3, Name: "ip-mgmt-proxy"}, nil
+}
+
 func (s *stubUpstreamAdmin) CreateAccount(_ context.Context, input *CreateAccountInput) (*Account, error) {
 	s.created = input
 	return &Account{
@@ -203,6 +207,7 @@ type stubUpstreamProber struct {
 	catalogCalls int
 
 	measureFail bool
+	lastAccount *Account
 }
 
 func (s *stubUpstreamProber) FetchUpstreamSupportedModels(context.Context, *Account) ([]string, error) {
@@ -215,7 +220,8 @@ func (s *stubUpstreamProber) SuggestUpstreamModelsFromCatalog(context.Context, *
 	return s.catalog, s.catalogErr
 }
 
-func (s *stubUpstreamProber) MeasureBaseURLLatencies(_ context.Context, _ *Account, urls []string) []UpstreamBaseURLLatency {
+func (s *stubUpstreamProber) MeasureBaseURLLatencies(_ context.Context, account *Account, urls []string) []UpstreamBaseURLLatency {
+	s.lastAccount = account
 	out := make([]UpstreamBaseURLLatency, 0, len(urls))
 	for index, url := range urls {
 		if s.measureFail {
@@ -501,6 +507,23 @@ func TestCreateEntryUsesSingleVendorBaseURL(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, "https://only.example.com", admin.created.Credentials["base_url"])
+}
+
+func TestMeasureBaseURLsUsesTestOnlyProxy(t *testing.T) {
+	// 代理仅用于本次测速，不落库；这里断言它确实被带进了测量账号。
+	admin := &stubUpstreamAdmin{}
+	prober := &stubUpstreamProber{}
+	svc := NewUpstreamHubService(&stubUpstreamVendorRepo{}, admin, prober)
+	proxyID := int64(3)
+
+	_, err := svc.MeasureBaseURLs(context.Background(), MeasureUpstreamBaseURLsInput{
+		BaseURLs: []string{"https://a.example.com"},
+		ProxyID:  &proxyID,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, prober.lastAccount)
+	require.NotNil(t, prober.lastAccount.Proxy)
+	require.Equal(t, proxyID, prober.lastAccount.Proxy.ID)
 }
 
 func TestCreateEntryFallsBackToFirstBaseURLWhenAllUnreachable(t *testing.T) {

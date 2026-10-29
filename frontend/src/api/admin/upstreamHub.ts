@@ -170,6 +170,8 @@ export interface MeasureBaseURLsRequest {
   platform?: string
   api_key?: string
   base_urls: string[]
+  /** 本次测速的出口（来自 IP 管理的已有代理），不落库 */
+  proxy_id?: number
 }
 
 export async function measureBaseURLs(payload: MeasureBaseURLsRequest): Promise<UpstreamBaseURLLatency[]> {

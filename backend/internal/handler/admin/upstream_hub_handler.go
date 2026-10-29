@@ -344,6 +344,8 @@ type upstreamBaseURLLatencyRequest struct {
 	Platform  string   `json:"platform"`
 	APIKey    string   `json:"api_key"`
 	BaseURLs  []string `json:"base_urls"`
+	// ProxyID 是本次测速的出口（来自 IP 管理的已有代理），仅用于该请求。
+	ProxyID *int64 `json:"proxy_id"`
 }
 
 // MeasureBaseURLs 并发测候选接入地址的延迟（只读），供保存前挑选最快者。
@@ -359,6 +361,7 @@ func (h *UpstreamHubHandler) MeasureBaseURLs(c *gin.Context) {
 		Platform:  req.Platform,
 		APIKey:    req.APIKey,
 		BaseURLs:  req.BaseURLs,
+		ProxyID:   req.ProxyID,
 	})
 	if err != nil {
 		writeUpstreamHubError(c, err)

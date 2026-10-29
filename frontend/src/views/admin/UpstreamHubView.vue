@@ -504,48 +504,47 @@
           <div
             v-for="(_, index) in baseURLForm.urls"
             :key="index"
-            class="rounded-lg border p-2"
+            class="flex items-center gap-2 rounded-lg border px-2 py-1.5"
             :class="
               isInvalidBaseURLRow(baseURLForm.urls[index])
                 ? 'border-red-300 dark:border-red-700'
                 : 'border-gray-200 dark:border-dark-600'
             "
           >
-            <div class="flex items-center gap-2">
-              <input
-                v-model="baseURLForm.urls[index]"
-                class="input flex-1 font-mono text-xs"
-                type="text"
-                placeholder="https://api.example.com/v1"
-              />
-              <button class="btn btn-sm btn-ghost shrink-0 text-red-600" @click="removeBaseURLRow(index)">
-                {{ t('admin.upstreamHub.delete') }}
-              </button>
-            </div>
-            <p
+            <input
+              v-model="baseURLForm.urls[index]"
+              class="input flex-1 font-mono text-xs"
+              type="text"
+              placeholder="https://api.example.com/v1"
+            />
+            <span
               v-if="isInvalidBaseURLRow(baseURLForm.urls[index])"
-              class="mt-1 whitespace-normal break-all text-xs text-red-600 dark:text-red-400"
+              class="w-28 shrink-0 text-right text-xs text-red-600 dark:text-red-400"
             >
-              {{ t('admin.upstreamHub.baseURLInvalid') }}
-            </p>
-            <p
+              {{ t('admin.upstreamHub.baseURLInvalidShort') }}
+            </span>
+            <span
               v-else-if="baseURLResultFor(baseURLForm.urls[index])"
-              class="mt-1 whitespace-normal break-all text-xs"
-              :class="baseURLResultFor(baseURLForm.urls[index])?.ok ? 'text-primary-600 dark:text-primary-400' : 'text-red-600 dark:text-red-400'"
+              class="w-28 shrink-0 cursor-default text-right text-xs"
+              :class="
+                baseURLResultFor(baseURLForm.urls[index])?.ok
+                  ? 'text-primary-600 dark:text-primary-400'
+                  : 'text-red-600 dark:text-red-400'
+              "
+              :title="baseURLResultFor(baseURLForm.urls[index])?.error || baseURLResultFor(baseURLForm.urls[index])?.url"
             >
-              <template v-if="baseURLResultFor(baseURLForm.urls[index])?.ok">
-                {{ baseURLResultFor(baseURLForm.urls[index])?.latency_ms }}ms ·
-                HTTP {{ baseURLResultFor(baseURLForm.urls[index])?.status_code }}
-              </template>
-              <template v-else-if="baseURLResultFor(baseURLForm.urls[index])?.status_code">
-                {{ baseURLResultFor(baseURLForm.urls[index])?.latency_ms }}ms ·
-                HTTP {{ baseURLResultFor(baseURLForm.urls[index])?.status_code }} ·
-                {{ t('admin.upstreamHub.baseURLPathMissing') }}
-              </template>
-              <template v-else>
-                {{ baseURLResultFor(baseURLForm.urls[index])?.error || t('admin.upstreamHub.allBaseURLsUnreachable') }}
-              </template>
-            </p>
+              {{
+                baseURLResultFor(baseURLForm.urls[index])?.ok
+                  ? `${baseURLResultFor(baseURLForm.urls[index])?.latency_ms}ms`
+                  : (baseURLResultFor(baseURLForm.urls[index])?.status_code
+                      ? `HTTP ${baseURLResultFor(baseURLForm.urls[index])?.status_code}`
+                      : t('admin.upstreamHub.probeFailed'))
+              }}
+            </span>
+            <span v-else class="w-28 shrink-0" />
+            <button class="btn btn-sm btn-ghost shrink-0 text-red-600" @click="removeBaseURLRow(index)">
+              {{ t('admin.upstreamHub.delete') }}
+            </button>
           </div>
         </div>
       </div>
@@ -1100,6 +1099,16 @@ function baseURLResultFor(raw: string): UpstreamBaseURLLatency | undefined {
   return baseURLTestResults.value.find((item) => normalizeURLForCompare(item.url) === target)
 }
 
+// 测速后按延迟升序排列：可达的在前（快→慢），不可达的排最后。
+function sortBaseURLsByLatency() {
+  const rank = (url: string) => {
+    const result = baseURLResultFor(url)
+    if (!result) return Number.MAX_SAFE_INTEGER
+    return result.ok ? result.latency_ms : Number.MAX_SAFE_INTEGER - 1
+  }
+  baseURLForm.urls = [...baseURLForm.urls].sort((a, b) => rank(a) - rank(b))
+}
+
 async function testBaseURLs() {
   const urls = cleanBaseURLs.value
   if (urls.length === 0) return
@@ -1110,6 +1119,7 @@ async function testBaseURLs() {
       base_urls: urls,
       proxy_id: baseURLForm.proxyId || undefined
     })
+    sortBaseURLsByLatency()
   } catch (err) {
     baseURLTestError.value = extractApiErrorMessage(err, t('admin.upstreamHub.measureFailed'))
   } finally {

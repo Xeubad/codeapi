@@ -807,10 +807,9 @@ func (s *AccountTestService) MeasureBaseURLLatencies(ctx context.Context, accoun
 	return results
 }
 
-// measureBaseURLLatency 是最基础的连通性检查：通过条目出口（代理或直连）向
-// {base}/v1/models 发一个**不带鉴权**的 GET，只等响应头到达。计时覆盖 DNS + TCP +
-// TLS + 首包；401/403 等说明主机与接口路径都在（只是缺 key），404/405 单独判为
-// 路径不对。不消耗配额、不需要 key。
+// measureBaseURLLatency 只测延迟：通过条目出口（代理或直连）向 {base}/v1/models
+// 发一个**不带鉴权**的 GET，等到响应头就断开。计时覆盖 DNS + TCP + TLS + 首包；
+// 拿到任何 HTTP 响应都算可达。不消耗配额、不需要 key、不判断状态码。
 func (s *AccountTestService) measureBaseURLLatency(ctx context.Context, account *Account, rawURL string) UpstreamBaseURLLatency {
 	result := UpstreamBaseURLLatency{URL: rawURL}
 
@@ -834,11 +833,7 @@ func (s *AccountTestService) measureBaseURLLatency(ctx context.Context, account 
 	}
 	_ = resp.Body.Close()
 	result.StatusCode = resp.StatusCode
-	// 404/405 说明主机通了但 Base URL 路径不对，单独报出来；其余状态都算可达。
-	if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusMethodNotAllowed {
-		result.Error = "endpoint path not found"
-		return result
-	}
+	// 这里只测延迟：拿到任何 HTTP 响应都算可达，状态码不参与判定。
 	result.OK = true
 	return result
 }

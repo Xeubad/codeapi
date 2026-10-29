@@ -48,6 +48,7 @@
 - 供给汇入：按厂家折叠；勾选即汇入；每行展示平台/并发/优先级/模型数，停用、不可调度、未登记模型给出徽章或琥珀提示；「本单元启用」开关常驻（未汇入禁用）；单元无任何挂载时默认展开全部厂家。
 - 链路视图：弃用 mock 的 `groups/:id/stats`，改读 `groups/:id/api-keys`；客户列展示 key（`maskApiKey`）/属主/状态，统计卡显示在用与总数；条目列只列已挂载条目。
 - 归一模型：补匹配方式、接口端点、备注与行内编辑；上游模型候选来自所选平台已挂载条目（datalist，可自由输入）；平台下拉标注供给数，无供给给出不阻塞提示；重复路由返回可读提示；删除「同模型按优先级降级」错误文案。
+- 迁移排序：新增 `900_xeu_upstream_vendor_0_bootstrap.sql`，在 `*_base_urls.sql` 之前幂等建出 `upstream_vendors`，修复全新数据库上「先 ALTER 后建表」导致 CI 集成测试失败的问题。
 
 ### 关键决策
 
@@ -56,18 +57,21 @@
 - 链路客户数据复用现有 admin 接口（返回完整 key，前端打码），不新增聚合专用端点。
 - 跨平台优先级回退链本轮不做：唯一索引 `(group_id, endpoint, match_type, public_model)` 限制一模型一路由，resolver 也只取单条；`priority` 继续落库但 UI 不暴露，避免承诺不存在的能力。
 - `/admin/groups/:id/stats` 的 mock 实现保留（上游代码），聚合页不再依赖它。
+- 迁移顺序问题没有重命名已应用的 `900_xeu_upstream_vendor_base_urls.sql`，而是用前置 bootstrap 补丁修排序：重命名会破坏「已应用迁移不可改名」的约束；bootstrap 是纯增量、幂等，已在本地库与全新库都验证为无副作用。
 
 ### 验证
 
 - 后端：`gofmt -l` 干净；`go build ./...`；`go test ./internal/repository/ ./internal/service/`（149.5s，全绿）。
 - 实测（本地 8080 新二进制）：把条目在 group 4 的 enabled 置 false，再保存相同分组集合 `[2,4]`，enabled 仍为 false（旧实现会重置为 true）；测试后已恢复原状态。
 - 前端：`pnpm check:i18n`、`vue-tsc --noEmit`、`vite build` 通过；`pnpm test:run` 375 文件 / 2861 用例全绿。
+- 迁移实测：在全新临时库 `sub2api_migtest` 上跑完整迁移成功，`upstream_vendors.base_urls` 列存在；验证后已删库。
 - 未做浏览器实点：浏览器自动化被安全策略拦截（登录页导航也被拒），聚合页由 8 条组件测试与构建覆盖，需管理员登录后目视走查。
 
 ### 产出
 
 - `e0514ba22` feat(aggregation): manage units in a dialog and fix the first-round issues
-- 本次 docs 提交（设计文档第四轮 + 本日志）
+- `95674a743` docs(aggregation): record the dialog layout and first-round fixes
+- 本次 fix 提交（迁移排序补丁 + 日志补充）
 
 ## 2026年10月29日
 

@@ -126,6 +126,7 @@ type UpstreamVendorRepository interface {
 	ListGroups(ctx context.Context) ([]UpstreamGroupOption, error)
 	SetEntryGroupEnabled(ctx context.Context, accountID, groupID int64, enabled bool) error
 	SetEntryGroups(ctx context.Context, accountID int64, groupIDs []int64) error
+	CountCompositeRoutesByGroup(ctx context.Context) (map[int64]int, error)
 }
 
 // upstreamModelProber 是「读取上游真实模型列表」的能力，由 *AccountTestService 实现。
@@ -231,6 +232,55 @@ func (s *UpstreamHubService) ListAllEntries(ctx context.Context) ([]UpstreamEntr
 		entries = append(entries, vendorEntries...)
 	}
 	return entries, nil
+}
+
+// AggregationUnit 是聚合调度列表的一行：单元=composite 分组，附带已挂载条目与路由数。
+type AggregationUnit struct {
+	ID          int64  `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Status      string `json:"status"`
+	RPMLimit    int    `json:"rpm_limit"`
+	EntryCount  int    `json:"entry_count"`
+	RouteCount  int    `json:"route_count"`
+}
+
+// ListAggregationUnits 返回全部 composite 分组及供给/路由计数，供列表页一次加载。
+func (s *UpstreamHubService) ListAggregationUnits(ctx context.Context) ([]AggregationUnit, error) {
+	groups, err := s.admin.GetAllGroupsIncludingInactive(ctx)
+	if err != nil {
+		return nil, err
+	}
+	entries, err := s.ListAllEntries(ctx)
+	if err != nil {
+		return nil, err
+	}
+	routeCounts, err := s.repo.CountCompositeRoutesByGroup(ctx)
+	if err != nil {
+		return nil, err
+	}
+	entryCounts := make(map[int64]int)
+	for _, entry := range entries {
+		for _, ref := range entry.Groups {
+			entryCounts[ref.GroupID]++
+		}
+	}
+	units := make([]AggregationUnit, 0, len(groups))
+	for _, group := range groups {
+		if group.Platform != PlatformComposite {
+			continue
+		}
+		units = append(units, AggregationUnit{
+			ID:          group.ID,
+			Name:        group.Name,
+			Description: group.Description,
+			Status:      group.Status,
+			RPMLimit:    group.RPMLimit,
+			EntryCount:  entryCounts[group.ID],
+			RouteCount:  routeCounts[group.ID],
+		})
+	}
+	return units, nil
 }
 
 func (s *UpstreamHubService) GetVendorDetail(ctx context.Context, id int64) (*UpstreamVendorDetail, error) {

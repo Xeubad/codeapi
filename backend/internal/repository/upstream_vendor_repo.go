@@ -12,6 +12,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent"
 	dbaccount "github.com/Wei-Shaw/sub2api/ent/account"
 	dbaccountgroup "github.com/Wei-Shaw/sub2api/ent/accountgroup"
+	"github.com/Wei-Shaw/sub2api/ent/compositemodelroute"
 	dbgroup "github.com/Wei-Shaw/sub2api/ent/group"
 	dbupstreamvendor "github.com/Wei-Shaw/sub2api/ent/upstreamvendor"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -200,6 +201,28 @@ func (r *upstreamVendorRepository) ListGroups(ctx context.Context) ([]service.Up
 		})
 	}
 	return out, nil
+}
+
+// CountCompositeRoutesByGroup 汇总各分组的归一模型路由数（排除软删），
+// 供聚合单元列表一次取全，避免前端按单元逐个请求。
+func (r *upstreamVendorRepository) CountCompositeRoutesByGroup(ctx context.Context) (map[int64]int, error) {
+	var rows []struct {
+		GroupID int64 `json:"group_id"`
+		Count   int   `json:"count"`
+	}
+	err := r.client.CompositeModelRoute.Query().
+		Where(compositemodelroute.DeletedAtIsNil()).
+		GroupBy(compositemodelroute.FieldGroupID).
+		Aggregate(ent.Count()).
+		Scan(ctx, &rows)
+	if err != nil {
+		return nil, err
+	}
+	counts := make(map[int64]int, len(rows))
+	for _, row := range rows {
+		counts[row.GroupID] = row.Count
+	}
+	return counts, nil
 }
 
 func (r *upstreamVendorRepository) SetEntryGroupEnabled(ctx context.Context, accountID, groupID int64, enabled bool) error {

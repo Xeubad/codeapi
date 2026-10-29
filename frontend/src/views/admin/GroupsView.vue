@@ -621,6 +621,13 @@
           </select>
           <p class="input-hint">{{ t("admin.groups.copyAccounts.hint") }}</p>
         </div>
+        <GroupHubEntriesField
+          v-if="!authStore.isSimpleMode"
+          v-model="createHubEntryIds"
+          :platform="createForm.platform"
+          :vendors="hubVendors"
+          :entries="hubEntries"
+        />
         <template v-if="!authStore.isSimpleMode">
         <div>
           <label class="input-label">{{
@@ -2261,6 +2268,13 @@
             {{ t("admin.groups.copyAccounts.hintEdit") }}
           </p>
         </div>
+        <GroupHubEntriesField
+          v-if="!authStore.isSimpleMode"
+          v-model="editHubEntryIds"
+          :platform="editForm.platform"
+          :vendors="hubVendors"
+          :entries="hubEntries"
+        />
         <div>
           <label class="input-label">{{
             t("admin.groups.form.rateMultiplier")
@@ -4281,6 +4295,8 @@ import { useI18n } from "vue-i18n";
 import { useAppStore } from "@/stores/app";
 import { useAuthStore } from "@/stores/auth";
 import { adminAPI } from "@/api/admin";
+import upstreamHubAPI, { type UpstreamEntry, type UpstreamVendor } from "@/api/admin/upstreamHub";
+import GroupHubEntriesField from "@/components/admin/group/GroupHubEntriesField.vue";
 import type {
   AdminGroup,
   CodexModelsManifestConfig,
@@ -4913,6 +4929,46 @@ const createCodexManifestDefaults = (): CodexModelsManifestConfig => ({
 });
 const editCodexManifestConfig = ref<CodexModelsManifestConfig>(createCodexManifestDefaults());
 const editCodexManifestAccountNames = ref<Record<number, string>>({});
+const hubEntries = ref<UpstreamEntry[]>([]);
+const hubVendors = ref<UpstreamVendor[]>([]);
+const createHubEntryIds = ref<number[]>([]);
+const editHubEntryIds = ref<number[]>([]);
+
+async function loadHubReferenceData() {
+  try {
+    const [vendors, entries] = await Promise.all([
+      upstreamHubAPI.listVendors(),
+      upstreamHubAPI.listAllEntries(),
+    ]);
+    hubVendors.value = vendors;
+    hubEntries.value = entries;
+  } catch {
+    hubVendors.value = [];
+    hubEntries.value = [];
+  }
+}
+
+async function applyHubReference(groupId: number, selectedIds: number[]) {
+  const selected = new Set(selectedIds);
+  let failed = 0;
+  for (const entry of hubEntries.value) {
+    const attached = (entry.groups || []).some((ref) => ref.group_id === groupId);
+    const shouldAttach = selected.has(entry.account_id);
+    if (attached === shouldAttach) continue;
+    const otherGroupIds = (entry.groups || [])
+      .map((ref) => ref.group_id)
+      .filter((id) => id !== groupId);
+    const next = shouldAttach ? [...otherGroupIds, groupId] : otherGroupIds;
+    try {
+      await upstreamHubAPI.setEntryGroups(entry.account_id, next);
+    } catch {
+      failed += 1;
+    }
+  }
+  if (failed > 0) {
+    appStore.showError(t("admin.groups.hubRef.partialFailed", { count: failed }));
+  }
+}
 const modelAllowlistCandidatesTracker = createModelAllowlistCandidatesTracker();
 const createModelAllowlistSelectedCount = computed(
   () => createModelAllowlistState.items.filter((item) => item.selected).length,
@@ -5769,6 +5825,8 @@ const handleSort = (key: string, order: 'asc' | 'desc') => {
 };
 
 const openCreateModal = () => {
+  createHubEntryIds.value = [];
+  void loadHubReferenceData();
   showCreateModal.value = true;
   loadModelAllowlistCandidates("create", 0, createForm.platform);
 };
@@ -6041,7 +6099,9 @@ const handleCreateGroup = async () => {
           platform: createForm.platform,
         }
       : requestData;
-    await adminAPI.groups.create(payload);
+    const created = await adminAPI.groups.create(payload);
+    await applyHubReference(created.id, createHubEntryIds.value);
+    createHubEntryIds.value = [];
     appStore.showSuccess(t("admin.groups.groupCreated"));
     closeCreateModal();
     loadGroups();
@@ -6180,6 +6240,15 @@ const handleEdit = async (group: AdminGroup) => {
     group.model_routing,
   );
   loadModelAllowlistCandidates("edit", group.id, group.platform);
+  editHubEntryIds.value = [];
+  void loadHubReferenceData().then(() => {
+    if (editingGroup.value?.id !== group.id) return;
+    editHubEntryIds.value = hubEntries.value
+      .filter((entry) =>
+        (entry.groups || []).some((ref) => ref.group_id === group.id),
+      )
+      .map((entry) => entry.account_id);
+  });
   showEditModal.value = true;
 };
 
@@ -6196,6 +6265,7 @@ const closeEditModal = () => {
   editReasoningEffortPolicyRef.value?.resetValidation();
   editModelRoutingRules.value = [];
   editForm.copy_accounts_from_group_ids = [];
+  editHubEntryIds.value = [];
   editForm.peak_rate_enabled = false;
   editForm.peak_start = "";
   editForm.peak_end = "";
@@ -6395,6 +6465,7 @@ const handleUpdateGroup = async () => {
         }
       : payload;
     await adminAPI.groups.update(editingGroup.value.id, requestData);
+    await applyHubReference(editingGroup.value.id, editHubEntryIds.value);
     appStore.showSuccess(t("admin.groups.groupUpdated"));
     closeEditModal();
     loadGroups();

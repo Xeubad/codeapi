@@ -1291,6 +1291,13 @@ export default {
         hint: 'Multiple groups can be selected, accounts will be deduplicated',
         hintEdit: '⚠️ Warning: This will replace all existing account bindings'
       },
+      hubRef: {
+        title: 'Reference from Upstream Hub',
+        hint: 'Checked entries are attached when the group is saved; only platform-matching entries are listed',
+        models: '{count} models',
+        unschedulable: 'Not schedulable',
+        partialFailed: '{count} entries failed to attach; retry in Upstream Hub'
+      },
       modelRouting: {
         title: 'Model Routing',
         tooltip: 'Configure specific model requests to be routed to designated accounts. Supports wildcard matching, e.g., claude-opus-* matches all opus models.',

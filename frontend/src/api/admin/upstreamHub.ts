@@ -72,6 +72,22 @@ export interface UpstreamBaseURLLatency {
   error?: string
 }
 
+export interface AggregationUnit {
+  id: number
+  name: string
+  description: string
+  status: string
+  rpm_limit: number
+  entry_count: number
+  route_count: number
+}
+
+/** 聚合调度列表：composite 单元 + 已挂载条目数/路由数，一次取全。 */
+export async function listAggregationUnits(): Promise<AggregationUnit[]> {
+  const { data } = await apiClient.get<AggregationUnit[]>('/admin/aggregation/units')
+  return data
+}
+
 export interface UpstreamEntryRequest {
   name: string
   platform?: string
@@ -210,7 +226,8 @@ const upstreamHubAPI = {
   probeEntryModels,
   setEntryModels,
   measureBaseURLs,
-  listGroups
+  listGroups,
+  listAggregationUnits
 }
 
 export default upstreamHubAPI

@@ -53,8 +53,8 @@
                   {{ unit.description }}
                 </div>
               </td>
-              <td>{{ attachedCountFor(unit.id) }}</td>
-              <td>{{ routesCountByGroup[unit.id] ?? '—' }}</td>
+              <td>{{ unit.entry_count }}</td>
+              <td>{{ unit.route_count }}</td>
               <td>{{ unit.rpm_limit || '∞' }}</td>
               <td>
                 <span class="badge" :class="unit.status === 'active' ? 'badge-primary' : 'badge-gray'">
@@ -99,11 +99,17 @@
             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('admin.aggregation.unitDesc') }}</p>
           </div>
           <div class="flex flex-wrap items-center gap-2">
+            <button class="btn btn-secondary btn-sm" @click="openRenameUnit">
+              {{ t('admin.aggregation.renameUnit') }}
+            </button>
             <button class="btn btn-secondary btn-sm" @click="goToGroups">
               {{ t('admin.aggregation.configureInGroups') }}
             </button>
             <button class="btn btn-secondary btn-sm" :disabled="loading" @click="loadAll">
               {{ t('admin.aggregation.refresh') }}
+            </button>
+            <button class="btn btn-ghost btn-sm text-red-600 dark:text-red-400" @click="askDeleteUnit">
+              {{ t('admin.aggregation.deleteUnit') }}
             </button>
           </div>
         </div>
@@ -534,6 +540,35 @@
     </BaseDialog>
 
     <BaseDialog
+      :show="showRenameDialog"
+      :title="t('admin.aggregation.renameUnit')"
+      width="normal"
+      @close="showRenameDialog = false"
+    >
+      <div>
+        <label class="input-label">{{ t('admin.aggregation.unitName') }}</label>
+        <input v-model="renameValue" data-testid="rename-unit-input" class="input" type="text" @keyup.enter="confirmRenameUnit" />
+      </div>
+      <template #footer>
+        <button class="btn btn-secondary" @click="showRenameDialog = false">{{ t('admin.aggregation.cancel') }}</button>
+        <button class="btn btn-primary" :disabled="renaming || !renameValue.trim()" @click="confirmRenameUnit">
+          {{ t('admin.aggregation.save') }}
+        </button>
+      </template>
+    </BaseDialog>
+
+    <ConfirmDialog
+      :show="showDeleteUnitConfirm"
+      :title="t('admin.aggregation.deleteUnit')"
+      :message="t('admin.aggregation.deleteUnitConfirm', { name: selectedUnit?.name || '' })"
+      :confirm-text="t('admin.aggregation.deleteUnit')"
+      :cancel-text="t('admin.aggregation.cancel')"
+      danger
+      @confirm="confirmDeleteUnit"
+      @cancel="showDeleteUnitConfirm = false"
+    />
+
+    <BaseDialog
       :show="showCreateDialog"
       :title="t('admin.aggregation.createUnit')"
       width="normal"
@@ -572,12 +607,11 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import { extractApiErrorMessage } from '@/utils/apiError'
 import { maskApiKey } from '@/utils/maskApiKey'
-import upstreamHubAPI, { type UpstreamEntry, type UpstreamVendor } from '@/api/admin/upstreamHub'
+import upstreamHubAPI, { type AggregationUnit, type UpstreamEntry, type UpstreamVendor } from '@/api/admin/upstreamHub'
 import groupsAPI, { type GroupAPIKey } from '@/api/admin/groups'
 import { CONCRETE_PLATFORM_OPTIONS } from '@/constants/platforms'
 import { platformDisplayName } from '@/constants/platformCatalog'
 import type {
-  AdminGroup,
   CompositeModelRoute,
   CompositeModelRouteInput,
   CompositeRouteEndpoint,
@@ -586,6 +620,7 @@ import type {
 import AppLayout from '@/components/layout/AppLayout.vue'
 import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import Select from '@/components/common/Select.vue'
 import Toggle from '@/components/common/Toggle.vue'
@@ -605,13 +640,17 @@ const router = useRouter()
 const loading = ref(false)
 const saving = ref(false)
 const creating = ref(false)
-const groups = ref<AdminGroup[]>([])
+const renaming = ref(false)
+const deletingUnit = ref(false)
+const showRenameDialog = ref(false)
+const showDeleteUnitConfirm = ref(false)
+const renameValue = ref('')
+const units = ref<AggregationUnit[]>([])
 const vendors = ref<UpstreamVendor[]>([])
 const entries = ref<UpstreamEntry[]>([])
 const routes = ref<CompositeModelRoute[]>([])
 const keys = ref<GroupAPIKey[]>([])
 const keysTotal = ref(0)
-const routesCountByGroup = ref<Record<number, number>>({})
 const selectedUnitId = ref<number | null>(null)
 const showUnitDialog = ref(false)
 const detailTab = ref<'supply' | 'routes' | 'chain'>('supply')
@@ -630,7 +669,6 @@ const routeForm = reactive<CompositeModelRouteInput>({
   notes: ''
 })
 
-const units = computed(() => groups.value.filter((group) => group.platform === 'composite'))
 const filteredUnits = computed(() => {
   const keyword = unitSearch.value.trim().toLowerCase()
   if (!keyword) return units.value
@@ -640,7 +678,7 @@ const filteredUnits = computed(() => {
       (unit.description || '').toLowerCase().includes(keyword)
   )
 })
-const selectedUnit = computed(() => units.value.find((group) => group.id === selectedUnitId.value) || null)
+const selectedUnit = computed(() => units.value.find((unit) => unit.id === selectedUnitId.value) || null)
 const vendorGroups = computed<VendorGroup[]>(() =>
   vendors.value.map((vendor) => ({
     ...vendor,
@@ -677,10 +715,6 @@ const upstreamModelCandidates = computed(() => {
 
 function platformLabel(platform: string): string {
   return platformDisplayName(platform) || platform
-}
-
-function attachedCountFor(groupId: number): number {
-  return entries.value.filter((entry) => (entry.groups || []).some((group) => group.group_id === groupId)).length
 }
 
 function groupRef(entry: UpstreamEntry) {
@@ -729,18 +763,7 @@ function errorMessage(err: unknown): string {
 }
 
 async function loadUnits() {
-  groups.value = await groupsAPI.getAllIncludingInactive()
-  const counts: Record<number, number> = {}
-  await Promise.all(
-    units.value.map(async (unit) => {
-      try {
-        counts[unit.id] = (await groupsAPI.listCompositeRoutes(unit.id)).length
-      } catch {
-        counts[unit.id] = 0
-      }
-    })
-  )
-  routesCountByGroup.value = counts
+  units.value = await upstreamHubAPI.listAggregationUnits()
 }
 
 async function loadUnitData() {
@@ -815,6 +838,50 @@ function goToGroups() {
   void router.push('/admin/groups')
 }
 
+function openRenameUnit() {
+  if (!selectedUnit.value) return
+  renameValue.value = selectedUnit.value.name
+  showRenameDialog.value = true
+}
+
+async function confirmRenameUnit() {
+  const unit = selectedUnit.value
+  const name = renameValue.value.trim()
+  if (!unit || !name) return
+  renaming.value = true
+  try {
+    await groupsAPI.update(unit.id, { name })
+    showRenameDialog.value = false
+    appStore.showSuccess(t('admin.aggregation.unitRenamed'))
+    await loadUnits()
+  } catch (err) {
+    appStore.showError(errorMessage(err))
+  } finally {
+    renaming.value = false
+  }
+}
+
+function askDeleteUnit() {
+  if (selectedUnit.value) showDeleteUnitConfirm.value = true
+}
+
+async function confirmDeleteUnit() {
+  const unit = selectedUnit.value
+  if (!unit) return
+  deletingUnit.value = true
+  try {
+    await groupsAPI.delete(unit.id)
+    appStore.showSuccess(t('admin.aggregation.unitDeleted'))
+    showDeleteUnitConfirm.value = false
+    closeUnit()
+    await loadAll()
+  } catch (err) {
+    appStore.showError(errorMessage(err))
+  } finally {
+    deletingUnit.value = false
+  }
+}
+
 // ---------- 新建单元 ----------
 const showCreateDialog = ref(false)
 const createForm = reactive({ name: '', description: '' })
@@ -858,6 +925,7 @@ async function toggleAttach(entry: UpstreamEntry) {
     await upstreamHubAPI.setEntryGroups(entry.account_id, nextGroupIds)
     expandedVendors.value = { ...expandedVendors.value, [entry.vendor_id]: true }
     await refreshEntries()
+    await loadUnits()
   } catch (err) {
     appStore.showError(errorMessage(err))
     await refreshEntries().catch(() => {})

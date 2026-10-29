@@ -13,11 +13,12 @@ import (
 var errUpstreamTestCatalogUnavailable = errors.New("catalog unavailable")
 
 type stubUpstreamVendorRepo struct {
-	vendors []UpstreamVendor
-	entries map[int64][]UpstreamEntry
-	created *UpstreamVendor
-	updated *UpstreamVendor
-	deleted int64
+	vendors     []UpstreamVendor
+	entries     map[int64][]UpstreamEntry
+	created     *UpstreamVendor
+	updated     *UpstreamVendor
+	deleted     int64
+	routeCounts map[int64]int
 }
 
 func (s *stubUpstreamVendorRepo) List(context.Context) ([]UpstreamVendor, error) {
@@ -63,6 +64,10 @@ func (s *stubUpstreamVendorRepo) SetEntryGroupEnabled(context.Context, int64, in
 
 func (s *stubUpstreamVendorRepo) SetEntryGroups(context.Context, int64, []int64) error {
 	return nil
+}
+
+func (s *stubUpstreamVendorRepo) CountCompositeRoutesByGroup(context.Context) (map[int64]int, error) {
+	return s.routeCounts, nil
 }
 
 func TestUpstreamVendorIDFromExtra(t *testing.T) {
@@ -169,6 +174,11 @@ type stubUpstreamAdmin struct {
 	updated      *UpdateAccountInput
 	created      *CreateAccountInput
 	extraUpdates map[string]any
+	groups       []Group
+}
+
+func (s *stubUpstreamAdmin) GetAllGroupsIncludingInactive(context.Context) ([]Group, error) {
+	return s.groups, nil
 }
 
 func (s *stubUpstreamAdmin) GetAccount(context.Context, int64) (*Account, error) {
@@ -692,4 +702,30 @@ func TestImportAccountToVendorRejectsIneligible(t *testing.T) {
 			require.Nil(t, admin.extraUpdates)
 		})
 	}
+}
+
+func TestListAggregationUnitsCountsAttachedEntriesAndRoutes(t *testing.T) {
+	repo := &stubUpstreamVendorRepo{
+		vendors: []UpstreamVendor{{ID: 1, Name: "relay"}},
+		entries: map[int64][]UpstreamEntry{
+			1: {
+				{AccountID: 10, VendorID: 1, Name: "a", Groups: []UpstreamEntryGroupRef{{GroupID: 5}, {GroupID: 2}}},
+				{AccountID: 11, VendorID: 1, Name: "b", Groups: []UpstreamEntryGroupRef{{GroupID: 5}}},
+			},
+		},
+		routeCounts: map[int64]int{5: 3},
+	}
+	admin := &stubUpstreamAdmin{groups: []Group{
+		{ID: 5, Name: "unit", Platform: PlatformComposite, Status: StatusActive, RPMLimit: 60},
+		{ID: 2, Name: "plain", Platform: PlatformAnthropic, Status: StatusActive},
+	}}
+	svc := NewUpstreamHubService(repo, admin, nil)
+
+	units, err := svc.ListAggregationUnits(context.Background())
+	require.NoError(t, err)
+	require.Len(t, units, 1)
+	require.Equal(t, int64(5), units[0].ID)
+	require.Equal(t, 2, units[0].EntryCount)
+	require.Equal(t, 3, units[0].RouteCount)
+	require.Equal(t, 60, units[0].RPMLimit)
 }

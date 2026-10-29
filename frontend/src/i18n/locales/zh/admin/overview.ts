@@ -1289,6 +1289,13 @@ export default {
         hint: '可选多个分组，账号会自动去重',
         hintEdit: '⚠️ 注意：这会替换当前分组的所有账号绑定'
       },
+      hubRef: {
+        title: '从上游聚合引用',
+        hint: '勾选后随分组保存一起挂载；只列出平台匹配的上游条目',
+        models: '{count} 个模型',
+        unschedulable: '不可调度',
+        partialFailed: '{count} 个条目挂载失败，请到上游聚合重试'
+      },
       modelRouting: {
         title: '模型路由配置',
         tooltip:

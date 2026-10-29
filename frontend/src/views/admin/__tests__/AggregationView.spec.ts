@@ -9,6 +9,9 @@ const {
   setEntryGroups,
   setEntryGroupEnabled,
   getAllIncludingInactive,
+  listAggregationUnits,
+  updateGroup,
+  deleteGroup,
   listCompositeRoutes,
   createCompositeRoute,
   updateCompositeRoute,
@@ -21,6 +24,9 @@ const {
   setEntryGroups: vi.fn(),
   setEntryGroupEnabled: vi.fn(),
   getAllIncludingInactive: vi.fn(),
+  listAggregationUnits: vi.fn(),
+  updateGroup: vi.fn(),
+  deleteGroup: vi.fn(),
   listCompositeRoutes: vi.fn(),
   createCompositeRoute: vi.fn(),
   updateCompositeRoute: vi.fn(),
@@ -33,6 +39,7 @@ vi.mock('@/api/admin/upstreamHub', () => ({
   default: {
     listVendors,
     listAllEntries,
+    listAggregationUnits,
     setEntryGroups,
     setEntryGroupEnabled
   }
@@ -41,6 +48,8 @@ vi.mock('@/api/admin/upstreamHub', () => ({
 vi.mock('@/api/admin/groups', () => ({
   default: {
     getAllIncludingInactive,
+    update: updateGroup,
+    delete: deleteGroup,
     listCompositeRoutes,
     createCompositeRoute,
     updateCompositeRoute,
@@ -86,6 +95,11 @@ const mountView = () =>
           props: ['show', 'title', 'width'],
           template: '<div v-if="show" class="dialog-stub"><slot /><slot name="footer" /></div>'
         },
+        ConfirmDialog: {
+          props: ['show', 'title', 'message'],
+          emits: ['confirm', 'cancel'],
+          template: '<button v-if="show" class="confirm-stub" @click="$emit(\'confirm\')">confirm</button>'
+        },
         Select: {
           props: ['modelValue', 'options'],
           emits: ['update:modelValue'],
@@ -118,9 +132,16 @@ const activeRoute = {
 }
 
 function fixtures() {
-  getAllIncludingInactive.mockResolvedValue([
-    { id: 3, name: 'mock-composite', platform: 'composite', rpm_limit: 60, status: 'active', description: '' },
-    { id: 4, name: 'plain-group', platform: 'openai', rpm_limit: 0, status: 'active', description: '' }
+  listAggregationUnits.mockResolvedValue([
+    {
+      id: 3,
+      name: 'mock-composite',
+      description: '',
+      status: 'active',
+      rpm_limit: 60,
+      entry_count: 1,
+      route_count: 1
+    }
   ])
   listVendors.mockResolvedValue([
     { id: 2, name: 'MockVendor', concurrency_budget: 10, allocated_concurrency: 5, base_urls: ['https://mock.example'], over_budget: false }
@@ -179,6 +200,8 @@ function fixtures() {
   updateCompositeRoute.mockResolvedValue(activeRoute)
   deleteCompositeRoute.mockResolvedValue({ message: 'ok' })
   createGroup.mockResolvedValue({ id: 7, name: 'new-unit', platform: 'composite' })
+  updateGroup.mockResolvedValue({ id: 3, name: 'renamed-unit' })
+  deleteGroup.mockResolvedValue({ message: 'ok' })
 }
 
 async function openUnit(wrapper: ReturnType<typeof mountView>) {
@@ -207,7 +230,7 @@ describe('AggregationView', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('mock-composite')
-    expect(wrapper.text()).not.toContain('plain-group')
+    expect(listAggregationUnits).toHaveBeenCalled()
   })
 
   it('manages a unit in a dialog and detaches an attached entry', async () => {
@@ -312,6 +335,41 @@ describe('AggregationView', () => {
     await flushPromises()
 
     expect(wrapper.find('.dialog-stub').exists()).toBe(true)
+  })
+
+  it('renames the current unit through the groups API', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    await openUnit(wrapper)
+
+    const renameButton = wrapper.findAll('button').find((button) => button.text() === 'admin.aggregation.renameUnit')
+    await renameButton!.trigger('click')
+    await flushPromises()
+
+    const input = wrapper.find('[data-testid="rename-unit-input"]')
+    await input.setValue('renamed-unit')
+    const saveButton = wrapper.findAll('button').find((button) => button.text() === 'admin.aggregation.save')
+    await saveButton!.trigger('click')
+    await flushPromises()
+
+    expect(updateGroup).toHaveBeenCalledWith(3, { name: 'renamed-unit' })
+  })
+
+  it('deletes the current unit after confirmation', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    await openUnit(wrapper)
+
+    const deleteButton = wrapper.findAll('button').find((button) => button.text() === 'admin.aggregation.deleteUnit')
+    await deleteButton!.trigger('click')
+    await flushPromises()
+
+    const confirmButton = wrapper.find('.confirm-stub')
+    expect(confirmButton.exists()).toBe(true)
+    await confirmButton.trigger('click')
+    await flushPromises()
+
+    expect(deleteGroup).toHaveBeenCalledWith(3)
   })
 
   it('creates a scheduling unit as a composite group', async () => {

@@ -773,6 +773,7 @@ func registerUpstreamHubRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		entries.PUT("/:id/models", h.Admin.UpstreamHub.SetEntryModels)
 	}
 	admin.GET("/upstream-groups", h.Admin.UpstreamHub.ListGroups)
+	admin.GET("/aggregation/units", h.Admin.UpstreamHub.ListAggregationUnits)
 	baseURLs := admin.Group("/upstream-base-urls")
 	{
 		baseURLs.POST("/latency", h.Admin.UpstreamHub.MeasureBaseURLs)

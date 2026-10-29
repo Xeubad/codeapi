@@ -398,6 +398,17 @@ func (h *UpstreamHubHandler) MeasureBaseURLs(c *gin.Context) {
 	response.Success(c, results)
 }
 
+// ListAggregationUnits 返回 composite 单元及其供给/路由计数（聚合调度列表）。
+// GET /api/v1/admin/aggregation/units
+func (h *UpstreamHubHandler) ListAggregationUnits(c *gin.Context) {
+	units, err := h.svc.ListAggregationUnits(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, units)
+}
+
 func (h *UpstreamHubHandler) ListGroups(c *gin.Context) {
 	groups, err := h.svc.ListGroups(c.Request.Context())
 	if err != nil {

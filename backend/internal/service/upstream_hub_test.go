@@ -182,6 +182,10 @@ func (s *stubUpstreamAdmin) UpdateAccount(_ context.Context, _ int64, input *Upd
 	return s.account, nil
 }
 
+func (s *stubUpstreamAdmin) GetProxy(context.Context, int64) (*Proxy, error) {
+	return &Proxy{ID: 7, Name: "stub-proxy"}, nil
+}
+
 func (s *stubUpstreamAdmin) CreateAccount(_ context.Context, input *CreateAccountInput) (*Account, error) {
 	s.created = input
 	return &Account{
@@ -499,6 +503,34 @@ func TestCreateEntryUsesSingleVendorBaseURL(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, "https://only.example.com", admin.created.Credentials["base_url"])
+}
+
+func TestCreateEntryPassesProxyID(t *testing.T) {
+	admin := &stubUpstreamAdmin{account: &Account{
+		ID:    99,
+		Name:  "A",
+		Extra: map[string]any{UpstreamVendorIDExtraKey: int64(2)},
+	}}
+	repo := &stubUpstreamVendorRepo{
+		vendors: []UpstreamVendor{{ID: 2, Name: "A"}},
+		entries: map[int64][]UpstreamEntry{2: {{AccountID: 99, VendorID: 2, Name: "A"}}},
+	}
+	svc := NewUpstreamHubService(repo, admin, &stubUpstreamProber{})
+	proxyID := int64(7)
+
+	_, err := svc.CreateEntry(context.Background(), 2, CreateUpstreamEntryInput{
+		Name:        "A",
+		Platform:    PlatformDeepseek,
+		APIKey:      "sk-x",
+		Concurrency: 1,
+		Priority:    50,
+		BaseURLs:    []string{"https://a.example.com"},
+		ProxyID:     &proxyID,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, admin.created)
+	require.NotNil(t, admin.created.ProxyID)
+	require.Equal(t, proxyID, *admin.created.ProxyID)
 }
 
 func TestCreateEntryBlocksWhenAllVendorBaseURLsUnreachable(t *testing.T) {

@@ -253,6 +253,7 @@
                 <th class="min-w-[10rem] whitespace-nowrap">{{ t('admin.upstreamHub.apiKey') }}</th>
                 <th class="min-w-[6rem] whitespace-nowrap">{{ t('admin.upstreamHub.concurrency') }}</th>
                 <th class="min-w-[8.5rem] whitespace-nowrap">{{ t('admin.upstreamHub.priority') }}</th>
+                <th class="min-w-[7rem] whitespace-nowrap">{{ t('admin.upstreamHub.proxy') }}</th>
                 <th class="min-w-[9.5rem] whitespace-nowrap">{{ t('admin.upstreamHub.models') }}</th>
                 <th class="min-w-[9rem] whitespace-nowrap">{{ t('admin.upstreamHub.groups') }}</th>
                 <th class="whitespace-nowrap text-right">{{ t('common.actions') }}</th>
@@ -280,6 +281,9 @@
                   </td>
                   <td><input v-model.number="row.concurrency" class="input" type="number" min="1" /></td>
                   <td><input v-model.number="row.priority" class="input" type="number" /></td>
+                  <td>
+                    <Select v-model="row.proxyId" :options="proxyOptions" />
+                  </td>
                   <td>
                     <button
                       type="button"
@@ -358,7 +362,7 @@
                   </td>
                 </tr>
                 <tr v-if="row.modelPanelOpen">
-                  <td colspan="8" class="bg-gray-50 dark:bg-dark-800/40">
+                  <td colspan="9" class="bg-gray-50 dark:bg-dark-800/40">
                     <div class="space-y-2">
                       <div class="flex flex-wrap items-center gap-2">
                         <button
@@ -542,6 +546,8 @@ import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { extractApiErrorMessage } from '@/utils/apiError'
 import { syncUpstreamModelsPreview } from '@/api/admin/accounts'
+import proxiesAPI from '@/api/admin/proxies'
+import type { Proxy } from '@/types'
 import upstreamHubAPI, {
   type UpstreamBaseURLLatency,
   type UpstreamEntry,
@@ -589,6 +595,7 @@ interface EntryRow {
   // 已登记的模型白名单（model_mapping 的键），保存时若有改动才回写
   models: string[]
   modelsDirty: boolean
+  proxyId: number
   modelPanelOpen: boolean
   probeLoading: boolean
   probeError: string
@@ -601,6 +608,11 @@ const showEntryDialog = ref(false)
 const entryRows = ref<EntryRow[]>([])
 const pendingDeletes = ref<Array<{ accountId: number; concurrency: number }>>([])
 const groupOptions = ref<UpstreamGroupOption[]>([])
+const proxies = ref<Proxy[]>([])
+const proxyOptions = computed(() => [
+  { label: t('admin.upstreamHub.proxyDirect'), value: 0 },
+  ...proxies.value.map((proxy) => ({ label: proxy.name, value: proxy.id }))
+])
 
 const showDeleteConfirm = ref(false)
 const deleteTarget = ref<{ type: 'vendor'; id: number; name: string } | null>(null)
@@ -641,6 +653,7 @@ function entryToRow(entry: UpstreamEntry): EntryRow {
     dropdownRight: 0,
     models: [...(entry.models || [])],
     modelsDirty: false,
+    proxyId: entry.proxy_id ?? 0,
     modelPanelOpen: false,
     probeLoading: false,
     probeError: '',
@@ -764,6 +777,7 @@ function blankRow(): EntryRow {
     dropdownRight: 0,
     models: [],
     modelsDirty: false,
+    proxyId: 0,
     modelPanelOpen: false,
     probeLoading: false,
     probeError: '',
@@ -910,6 +924,7 @@ async function openEntriesDialog() {
   if (entryRows.value.length === 0) addEntryRow()
   try {
     groupOptions.value = await upstreamHubAPI.listGroups()
+    proxies.value = await proxiesAPI.getAll()
   } catch (err) {
     appStore.showError(extractApiErrorMessage(err, t('admin.upstreamHub.loadFailed')))
   }
@@ -921,6 +936,7 @@ function closeEntriesDialog() {
   entryRows.value = []
   pendingDeletes.value = []
   groupOptions.value = []
+  proxies.value = []
 }
 
 async function copyRow(row: EntryRow) {
@@ -994,7 +1010,7 @@ function baseURLTestTarget() {
   const row = entryRows.value.find((item) => item.accountId) || entryRows.value[0]
   if (!row) return null
   if (row.accountId) return { account_id: row.accountId }
-  if (row.api_key.trim()) return { platform: row.platform, api_key: row.api_key.trim() }
+  if (row.api_key.trim()) return { platform: row.platform, api_key: row.api_key.trim(), proxy_id: row.proxyId }
   return null
 }
 
@@ -1067,7 +1083,8 @@ async function saveEntryRows() {
           api_key: row.api_key,
           concurrency: Number(row.concurrency) || 1,
           priority: Number(row.priority) || 50,
-          base_urls: baseURLs
+          base_urls: baseURLs,
+          proxy_id: row.proxyId
         })
         await applyRowGroups(row.accountId, row)
         if (row.modelsDirty) {
@@ -1084,7 +1101,8 @@ async function saveEntryRows() {
           api_key: row.api_key,
           concurrency: Number(row.concurrency) || 1,
           priority: Number(row.priority) || 50,
-          base_urls: baseURLs
+          base_urls: baseURLs,
+          proxy_id: row.proxyId
         })
         await applyRowGroups(created.account_id, row)
         if (row.models.length > 0) {

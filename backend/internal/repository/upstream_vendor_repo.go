@@ -150,6 +150,7 @@ func (r *upstreamVendorRepository) ListEntries(ctx context.Context, vendorID int
 			Priority:    row.Priority,
 			Schedulable: row.Schedulable,
 			Status:      row.Status,
+			ProxyID:     row.ProxyID,
 			Models:      storedModelMappingKeys(row.Credentials),
 		}
 		byAccountID[row.ID] = len(entries)

@@ -49,6 +49,8 @@ export default {
     apiKeyHint: '加密存储；编辑时留空表示保持不变',
     concurrency: '并发上限',
     priority: '优先级（小者优先）',
+    proxy: '代理',
+    proxyDirect: '直连',
     models: '模型',
     modelsRegistered: '已登记 {count} 个',
     modelsSelected: '已选 {count} 个模型',

@@ -776,7 +776,7 @@ type UpstreamBaseURLLatency struct {
 }
 
 const (
-	upstreamBaseURLMeasureTimeout = 6 * time.Second
+	upstreamBaseURLMeasureTimeout = 10 * time.Second
 	upstreamBaseURLMeasureLimit   = 10
 )
 

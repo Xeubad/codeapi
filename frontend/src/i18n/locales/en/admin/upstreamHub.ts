@@ -49,6 +49,8 @@ export default {
     apiKeyHint: 'Stored encrypted; leave blank on edit to keep the current key',
     concurrency: 'Concurrency',
     priority: 'Priority (lower first)',
+    proxy: 'Proxy',
+    proxyDirect: 'Direct',
     models: 'Models',
     modelsRegistered: '{count} registered',
     modelsSelected: '{count} models selected',

@@ -635,7 +635,6 @@ interface EntryRow {
   concurrency: number
   priority: number
   groupIds: number[]
-  groupEnabled: Record<number, boolean>
   expanded: boolean
   dropdownTop: number
   dropdownRight: number
@@ -682,10 +681,6 @@ function groupRefs(entry: UpstreamEntry): UpstreamEntryGroupRef[] {
 }
 
 function entryToRow(entry: UpstreamEntry): EntryRow {
-  const groupEnabled: Record<number, boolean> = {}
-  for (const group of groupRefs(entry)) {
-    groupEnabled[group.group_id] = group.enabled
-  }
   return {
     accountId: entry.account_id,
     name: entry.name,
@@ -695,7 +690,6 @@ function entryToRow(entry: UpstreamEntry): EntryRow {
     concurrency: entry.concurrency,
     priority: entry.priority,
     groupIds: groupRefs(entry).map((group) => group.group_id),
-    groupEnabled,
     expanded: false,
     dropdownTop: 0,
     dropdownRight: 0,
@@ -820,7 +814,6 @@ function blankRow(): EntryRow {
     concurrency: 1,
     priority: 50,
     groupIds: [],
-    groupEnabled: {},
     expanded: false,
     dropdownTop: 0,
     dropdownRight: 0,
@@ -879,10 +872,8 @@ function toggleRowGroup(row: EntryRow, groupId: number) {
   const index = row.groupIds.indexOf(groupId)
   if (index >= 0) {
     row.groupIds.splice(index, 1)
-    delete row.groupEnabled[groupId]
   } else {
     row.groupIds.push(groupId)
-    row.groupEnabled[groupId] = true
   }
 }
 
@@ -973,11 +964,6 @@ function addManualModel(row: EntryRow) {
 
 async function applyRowGroups(accountId: number, row: EntryRow) {
   await upstreamHubAPI.setEntryGroups(accountId, row.groupIds)
-  for (const groupId of row.groupIds) {
-    if (row.groupEnabled[groupId] === false) {
-      await upstreamHubAPI.setEntryGroupEnabled(accountId, groupId, false)
-    }
-  }
 }
 
 async function openEntriesDialog() {
@@ -1014,7 +1000,6 @@ async function copyRow(row: EntryRow) {
       copied.dropdownTop = 0
       copied.dropdownRight = 0
       copied.groupIds = [...row.groupIds]
-      copied.groupEnabled = { ...row.groupEnabled }
       entryRows.value.push(copied)
       appStore.showSuccess(t('admin.upstreamHub.duplicateSuccess'))
     } catch (err) {
@@ -1027,7 +1012,6 @@ async function copyRow(row: EntryRow) {
     accountId: undefined,
     name: row.name ? `${row.name}-copy` : row.name,
     groupIds: [...row.groupIds],
-    groupEnabled: { ...row.groupEnabled },
     models: [...row.models],
     modelsDirty: row.models.length > 0,
     modelDropdownOpen: false,

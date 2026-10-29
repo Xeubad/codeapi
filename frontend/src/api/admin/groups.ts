@@ -261,6 +261,23 @@ export async function getStats(id: number): Promise<{
 }
 
 /**
+ * API key bound to a group, as returned by GET /admin/groups/:id/api-keys.
+ */
+export interface GroupAPIKey {
+  id: number
+  user_id: number
+  key: string
+  name: string
+  status: string
+  last_used_at: string | null
+  user?: {
+    id: number
+    email: string
+    username?: string
+  }
+}
+
+/**
  * Get API keys in a group
  * @param id - Group ID
  * @param page - Page number
@@ -271,8 +288,8 @@ export async function getGroupApiKeys(
   id: number,
   page: number = 1,
   pageSize: number = 20
-): Promise<PaginatedResponse<any>> {
-  const { data } = await apiClient.get<PaginatedResponse<any>>(`/admin/groups/${id}/api-keys`, {
+): Promise<PaginatedResponse<GroupAPIKey>> {
+  const { data } = await apiClient.get<PaginatedResponse<GroupAPIKey>>(`/admin/groups/${id}/api-keys`, {
     params: { page, page_size: pageSize }
   })
   return data

@@ -219,20 +219,40 @@ func (r *upstreamVendorRepository) SetEntryGroupEnabled(ctx context.Context, acc
 	return nil
 }
 
+// SetEntryGroups 按增量同步账号的分组绑定：只删除被移除的分组、只新增缺失的分组，
+// 未变更的行原样保留，避免把 per-group 的 enabled（本组暂不调用）与 priority 打回默认。
 func (r *upstreamVendorRepository) SetEntryGroups(ctx context.Context, accountID int64, groupIDs []int64) error {
 	tx, err := r.client.Tx(ctx)
 	if err != nil {
 		return err
 	}
-	if _, err := tx.AccountGroup.Delete().
+	existing, err := tx.AccountGroup.Query().
 		Where(dbaccountgroup.AccountIDEQ(accountID)).
-		Exec(ctx); err != nil {
+		Select(dbaccountgroup.FieldGroupID).
+		All(ctx)
+	if err != nil {
 		_ = tx.Rollback()
 		return err
 	}
-	if len(groupIDs) > 0 {
-		builders := make([]*ent.AccountGroupCreate, 0, len(groupIDs))
-		for _, groupID := range groupIDs {
+	existingIDs := make([]int64, 0, len(existing))
+	for _, link := range existing {
+		existingIDs = append(existingIDs, link.GroupID)
+	}
+	add, remove := diffAccountGroupIDs(existingIDs, groupIDs)
+	if len(remove) > 0 {
+		if _, err := tx.AccountGroup.Delete().
+			Where(
+				dbaccountgroup.AccountIDEQ(accountID),
+				dbaccountgroup.GroupIDIn(remove...),
+			).
+			Exec(ctx); err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+	}
+	if len(add) > 0 {
+		builders := make([]*ent.AccountGroupCreate, 0, len(add))
+		for _, groupID := range add {
 			builders = append(builders, tx.AccountGroup.Create().
 				SetAccountID(accountID).
 				SetGroupID(groupID))
@@ -243,6 +263,34 @@ func (r *upstreamVendorRepository) SetEntryGroups(ctx context.Context, accountID
 		}
 	}
 	return tx.Commit()
+}
+
+// diffAccountGroupIDs 计算需要新增与删除的分组 ID。非正数与重复项被忽略，
+// 顺序沿用入参，便于断言与稳定写入。
+func diffAccountGroupIDs(existing, desired []int64) (add, remove []int64) {
+	have := make(map[int64]struct{}, len(existing))
+	for _, id := range existing {
+		have[id] = struct{}{}
+	}
+	want := make(map[int64]struct{}, len(desired))
+	for _, id := range desired {
+		if id <= 0 {
+			continue
+		}
+		if _, seen := want[id]; seen {
+			continue
+		}
+		want[id] = struct{}{}
+		if _, ok := have[id]; !ok {
+			add = append(add, id)
+		}
+	}
+	for _, id := range existing {
+		if _, ok := want[id]; !ok {
+			remove = append(remove, id)
+		}
+	}
+	return add, remove
 }
 
 func toServiceUpstreamVendor(row *ent.UpstreamVendor) service.UpstreamVendor {

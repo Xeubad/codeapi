@@ -446,13 +446,15 @@ func TestMeasureBaseURLsForDraftRow(t *testing.T) {
 	require.True(t, results[0].OK)
 }
 
-func TestMeasureBaseURLsRequiresKeyForDraft(t *testing.T) {
+func TestMeasureBaseURLsWorksWithoutAPIKey(t *testing.T) {
+	// 基础连通性检查不需要 key：草稿行只靠出口（直连或代理）即可测。
 	svc := NewUpstreamHubService(&stubUpstreamVendorRepo{}, nil, &stubUpstreamProber{})
-	_, err := svc.MeasureBaseURLs(context.Background(), MeasureUpstreamBaseURLsInput{
-		Platform: PlatformDeepseek,
+	results, err := svc.MeasureBaseURLs(context.Background(), MeasureUpstreamBaseURLsInput{
 		BaseURLs: []string{"https://a.example.com"},
 	})
-	require.Error(t, err)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	require.True(t, results[0].OK)
 }
 
 func TestCreateEntryPicksFastestVendorBaseURL(t *testing.T) {

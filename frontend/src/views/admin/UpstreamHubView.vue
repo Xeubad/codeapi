@@ -510,7 +510,11 @@
           >
             <span class="truncate font-mono">{{ item.url }}</span>
             <span :class="item.ok ? 'text-primary-600 dark:text-primary-400' : 'text-red-600 dark:text-red-400'">
-              {{ item.ok ? `${item.latency_ms}ms` : item.error || t('admin.upstreamHub.allBaseURLsUnreachable') }}
+              {{
+                item.ok
+                  ? `${item.latency_ms}ms · HTTP ${item.status_code}`
+                  : item.error || t('admin.upstreamHub.allBaseURLsUnreachable')
+              }}
             </span>
           </div>
         </div>
@@ -1006,22 +1010,17 @@ function openBaseURLDialog() {
   showBaseURLDialog.value = true
 }
 
+// 基础连通性检查：只需要出口（代理或直连），不需要 key 与平台。
 function baseURLTestTarget() {
   const row = entryRows.value.find((item) => item.accountId) || entryRows.value[0]
-  if (!row) return null
-  if (row.accountId) return { account_id: row.accountId }
-  if (row.api_key.trim()) return { platform: row.platform, api_key: row.api_key.trim(), proxy_id: row.proxyId }
-  return null
+  if (row?.accountId) return { account_id: row.accountId }
+  return { proxy_id: row?.proxyId ?? 0 }
 }
 
 async function testBaseURLs() {
   const urls = cleanBaseURLs.value
   if (urls.length === 0) return
   const target = baseURLTestTarget()
-  if (!target) {
-    baseURLTestError.value = t('admin.upstreamHub.baseURLTestNeedsKey')
-    return
-  }
   baseURLTesting.value = true
   baseURLTestError.value = ''
   try {

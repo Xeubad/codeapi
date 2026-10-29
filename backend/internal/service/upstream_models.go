@@ -769,10 +769,11 @@ func (s *AccountTestService) SuggestUpstreamModelsFromCatalog(ctx context.Contex
 
 // UpstreamBaseURLLatency 是一个候选接入地址的测速结果。
 type UpstreamBaseURLLatency struct {
-	URL       string `json:"url"`
-	OK        bool   `json:"ok"`
-	LatencyMS int64  `json:"latency_ms"`
-	Error     string `json:"error,omitempty"`
+	URL        string `json:"url"`
+	OK         bool   `json:"ok"`
+	LatencyMS  int64  `json:"latency_ms"`
+	StatusCode int    `json:"status_code,omitempty"`
+	Error      string `json:"error,omitempty"`
 }
 
 const (
@@ -806,29 +807,23 @@ func (s *AccountTestService) MeasureBaseURLLatencies(ctx context.Context, accoun
 	return results
 }
 
+// measureBaseURLLatency 是最基础的连通性检查：通过条目出口（代理或直连）向该地址
+// 发一个**不带鉴权**的 GET，只等响应头到达。计时覆盖 DNS + TCP + TLS + 首个响应头，
+// 任何 HTTP 状态都算可达（401/404 说明网络与端点都在）；不消耗配额、不需要 key。
 func (s *AccountTestService) measureBaseURLLatency(ctx context.Context, account *Account, rawURL string) UpstreamBaseURLLatency {
 	result := UpstreamBaseURLLatency{URL: rawURL}
 
-	probeAccount := *account
-	probeAccount.ID = 0
-	probeAccount.Concurrency = 0
-	probeAccount.Credentials = map[string]any{}
-	for key, value := range account.Credentials {
-		probeAccount.Credentials[key] = value
-	}
-	probeAccount.Credentials["base_url"] = rawURL
-	probeAccount.Credentials["api_key"] = account.GetCredential("api_key")
-
 	requestCtx, cancel := context.WithTimeout(ctx, upstreamBaseURLMeasureTimeout)
 	defer cancel()
-	req, err := s.buildUpstreamModelsRequest(requestCtx, &probeAccount)
+	req, err := http.NewRequestWithContext(requestCtx, http.MethodGet, rawURL, nil)
 	if err != nil {
-		result.Error = "unsupported platform"
+		result.Error = "invalid url"
 		return result
 	}
+	req.Header.Set("Accept", "*/*")
 
 	started := time.Now()
-	resp, err := s.doUpstreamModelsRequest(req, upstreamModelsProxyURL(&probeAccount), &probeAccount)
+	resp, err := s.doUpstreamModelsRequest(req, upstreamModelsProxyURL(account), account)
 	result.LatencyMS = time.Since(started).Milliseconds()
 	if err != nil {
 		result.Error = err.Error()
@@ -836,6 +831,7 @@ func (s *AccountTestService) measureBaseURLLatency(ctx context.Context, account 
 	}
 	_ = resp.Body.Close()
 	result.OK = true
+	result.StatusCode = resp.StatusCode
 	return result
 }
 

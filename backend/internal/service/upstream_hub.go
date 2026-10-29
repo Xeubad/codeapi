@@ -176,20 +176,8 @@ func (s *UpstreamHubService) MeasureBaseURLs(ctx context.Context, input MeasureU
 			return nil, ErrUpstreamEntryNotFound
 		}
 	} else {
-		platform := strings.TrimSpace(input.Platform)
-		if !domain.IsConcretePlatform(platform) {
-			return nil, fmt.Errorf("platform %q is not a concrete platform", input.Platform)
-		}
-		apiKey := strings.TrimSpace(input.APIKey)
-		if apiKey == "" {
-			return nil, fmt.Errorf("api key is required for measuring base urls")
-		}
-		account = &Account{
-			Platform:    platform,
-			Type:        AccountTypeAPIKey,
-			Credentials: map[string]any{"api_key": apiKey},
-			ProxyID:     input.ProxyID,
-		}
+		// 基础连通性检查不需要 key 与平台，只需要出口（代理或直连）。
+		account = &Account{Type: AccountTypeAPIKey, ProxyID: input.ProxyID}
 		if input.ProxyID != nil && *input.ProxyID > 0 {
 			proxy, proxyErr := s.admin.GetProxy(ctx, *input.ProxyID)
 			if proxyErr != nil {

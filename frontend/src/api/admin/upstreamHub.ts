@@ -69,6 +69,7 @@ export interface UpstreamBaseURLLatency {
   url: string
   ok: boolean
   latency_ms: number
+  status_code?: number
   error?: string
 }
 

@@ -47,7 +47,7 @@
 
 ### 条目：`Account(type=apikey)` + `extra.upstream_vendor_id`
 
-一条上游记录 = 一行 Account，不建新实体。条目可绑定出口代理（`account.proxy_id`，0=直连）；服务端不读取 shell 的代理环境变量，跨境/受限线路必须显式绑定代理，否则测速、探测与转发都会被 reset。归属判定只读 `extra.upstream_vendor_id`（兼容 int64/int/float64/string 反序列化），**与账号 type 无关**。条目创建复用 `AdminService.CreateAccount` 全套校验，`SkipDefaultGroupBind` 避免自动挂默认组。
+一条上游记录 = 一行 Account，不建新实体。**hub 界面不提供任何代理配置**：需要代理时在 IP 管理创建并绑定到账号（平台能力，`account.proxy_id`）。归属判定只读 `extra.upstream_vendor_id`（兼容 int64/int/float64/string 反序列化），**与账号 type 无关**。条目创建复用 `AdminService.CreateAccount` 全套校验，`SkipDefaultGroupBind` 避免自动挂默认组。
 
 > **类型选择（2026-10-28 修正）**：条目最初建成 `type=upstream`，实测不可用——网关凭据解析（`OpenAIGatewayService.GetAccessToken`、`GatewayService.GetAccessToken`）以及全仓 20+ 处 `switch account.Type` 都不认 `upstream`，会落 `default:` 报 `unsupported account type`。改用 `type=apikey` + 自定义 `base_url`：这是平台日常在跑的国产厂商手动 Key 形态，所有转发路径天然支持，且 `GetOpenAIBaseURL`/`GetOpenAIApiKey` 本就对 upstream/apikey 同口径处理。历史条目由迁移 `900_xeu_upstream_entry_type_apikey.sql` 转换（只改带 `extra.upstream_vendor_id` 且未软删的行，不碰 antigravity relay）。
 
@@ -289,7 +289,8 @@ DI 走 google/wire（`cmd/server/wire_gen.go` 手工补丁，本机无 wire CLI 
 - **保存即定稿**：`POST /admin/upstream-base-urls/latency` 并发测各候选地址——**不带鉴权的 GET {base}，计时到响应头**（DNS+TCP+TLS+首包），任何 HTTP 状态（含 401/404）都算可达；不需要 key、不消耗额度。模型可用性由「探测上游模型」另行负责；`CreateEntry`/`UpdateEntry` 在服务端用同一测量选最快者写入 `credentials.base_url`，全部不可达则 400 阻断保存。**运行期不切换地址**，避免请求途中换线路导致行为漂移。
 - **探测结果按钮块**：模型以按钮块展示，点击切换启用（选中=青柠实底），无复选框；手动添加保留。
 - 账号页的模型同步保持原有 404/405 语义，端点变体只在 hub 探测路径启用（`fetchUpstreamModelList(..., allowEndpointVariants)`）。
-- **出口代理**：条目支持 `proxy_id`（条目表「代理」列）。实测本机直连 geek2api 全部 reset、走本地代理后 1.1–5.9s 可达；测速单地址超时放宽到 10s，避免把慢但可用的镜像误判为不可达。
+- **代理不在 hub 配置**：曾加过条目级 `proxy_id` 与「测速出口」，已全部移除——代理一律走 IP 管理（绑定在账号上）。地址弹窗只做直连可达性检查。
+- **地址弹窗**：顶部「添加地址 / 测速」两个按钮；每行 = 地址输入 + 删除，测速结果直接回填在该地址下方（完整换行展示，不截断）。保存时仍优先选可达地址中最快的一个；全部不可达则按第一个地址保存（本机直连不通不等于上游不可用）。
 
 ### 验证口径
 

@@ -35,7 +35,6 @@ export interface UpstreamEntry {
   status: string
   groups: UpstreamEntryGroupRef[]
   models: string[]
-  proxy_id?: number | null
 }
 
 export interface UpstreamEntryModelProbe {
@@ -83,8 +82,6 @@ export interface UpstreamEntryRequest {
   schedulable?: boolean
   /** 厂家候选地址；>=2 个时服务端在保存前实测并只固化最快的一个 */
   base_urls?: string[]
-  /** 出口代理；0 表示直连 */
-  proxy_id?: number | null
 }
 
 export async function listVendors(): Promise<UpstreamVendor[]> {
@@ -173,7 +170,6 @@ export interface MeasureBaseURLsRequest {
   platform?: string
   api_key?: string
   base_urls: string[]
-  proxy_id?: number | null
 }
 
 export async function measureBaseURLs(payload: MeasureBaseURLsRequest): Promise<UpstreamBaseURLLatency[]> {

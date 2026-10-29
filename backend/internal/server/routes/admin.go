@@ -758,6 +758,7 @@ func registerUpstreamHubRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		vendors.PUT("/:id", h.Admin.UpstreamHub.UpdateVendor)
 		vendors.DELETE("/:id", h.Admin.UpstreamHub.DeleteVendor)
 		vendors.POST("/:id/entries", h.Admin.UpstreamHub.CreateEntry)
+		vendors.POST("/:id/entries/import", h.Admin.UpstreamHub.ImportEntry)
 	}
 	entries := admin.Group("/upstream-entries")
 	{

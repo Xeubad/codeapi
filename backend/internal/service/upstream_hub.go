@@ -107,10 +107,12 @@ type UpdateUpstreamEntryInput struct {
 }
 
 var (
-	ErrUpstreamVendorNotFound = errors.New("upstream vendor not found")
-	ErrUpstreamVendorNotEmpty = errors.New("upstream vendor still has entries")
-	ErrUpstreamEntryNotFound  = errors.New("upstream entry not found")
-	ErrUpstreamGroupInvalid   = errors.New("group platform does not match entry platform")
+	ErrUpstreamVendorNotFound      = errors.New("upstream vendor not found")
+	ErrUpstreamVendorNotEmpty      = errors.New("upstream vendor still has entries")
+	ErrUpstreamEntryNotFound       = errors.New("upstream entry not found")
+	ErrUpstreamGroupInvalid        = errors.New("group platform does not match entry platform")
+	ErrUpstreamAccountIneligible   = errors.New("account is not eligible to join the upstream hub")
+	ErrUpstreamAccountAlreadyOwned = errors.New("account already belongs to an upstream vendor")
 )
 
 // UpstreamVendorRepository 上游厂家与条目（accounts.extra 归属）的持久化接口。
@@ -470,6 +472,33 @@ type DuplicateUpstreamEntryInput struct {
 	Platform    string
 	Concurrency int
 	Priority    int
+}
+
+// ImportAccountToVendor 把账号管理中已有的转发账号纳入上游聚合。
+// 只接受符合 hub 条目形态的账号：type=apikey、credentials 带 base_url 与 api_key，
+// 且尚未归属任何厂家；只写 extra.upstream_vendor_id，不动账号其它字段。
+func (s *UpstreamHubService) ImportAccountToVendor(ctx context.Context, accountID, vendorID int64) (*UpstreamEntry, error) {
+	if _, err := s.repo.GetByID(ctx, vendorID); err != nil {
+		return nil, err
+	}
+	account, err := s.admin.GetAccount(ctx, accountID)
+	if err != nil {
+		return nil, err
+	}
+	if _, ok := upstreamVendorIDFromExtra(account.Extra); ok {
+		return nil, ErrUpstreamAccountAlreadyOwned
+	}
+	if account.Type != AccountTypeAPIKey ||
+		strings.TrimSpace(account.GetCredential("base_url")) == "" ||
+		strings.TrimSpace(account.GetCredential("api_key")) == "" {
+		return nil, ErrUpstreamAccountIneligible
+	}
+	if err := s.admin.UpdateAccountExtra(ctx, accountID, map[string]any{
+		UpstreamVendorIDExtraKey: vendorID,
+	}); err != nil {
+		return nil, err
+	}
+	return s.getEntry(ctx, accountID)
 }
 
 func (s *UpstreamHubService) DuplicateEntry(ctx context.Context, accountID int64, input DuplicateUpstreamEntryInput) (*UpstreamEntry, error) {

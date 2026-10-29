@@ -582,6 +582,14 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 	if account.Platform == PlatformTypeSafe && input.Type != "" && input.Type != AccountTypeAPIKey {
 		return nil, errors.New("typesafe accounts only support apikey credentials")
 	}
+	// 上游聚合条目的分组归属由 hub 校验平台并维护，账号管理不得直接改分组，
+	// 否则会绕过「具体平台分组只能挂同平台条目」的约束。
+	if input.GroupIDs != nil {
+		if _, ok := upstreamVendorIDFromExtra(account.Extra); ok {
+			return nil, infraerrors.Newf(http.StatusBadRequest, "UPSTREAM_ENTRY_GROUP_MANAGED_IN_HUB",
+				"account %d belongs to an upstream vendor; manage its groups in Upstream Hub", id)
+		}
+	}
 	var normalizedExtra map[string]any
 	if input.Extra != nil {
 		normalizedExtra, err = normalizeOpenAILongContextBillingUpdateExtra(account, input)
@@ -1000,7 +1008,7 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 
 	// 预取所有目标账号，供凭据守卫/代理守卫/混合渠道检查共用，避免多次 DB 查询。
 	var cachedTargets []*Account
-	if len(input.Credentials) > 0 || input.ProxyID != nil || needMixedChannelCheck || openAISettings.any() || input.ProbeEnabled != nil || input.RateMultiplier != nil {
+	if len(input.Credentials) > 0 || input.ProxyID != nil || needMixedChannelCheck || input.GroupIDs != nil || openAISettings.any() || input.ProbeEnabled != nil || input.RateMultiplier != nil {
 		loaded, err := s.accountRepo.GetByIDs(ctx, input.AccountIDs)
 		if err != nil {
 			return nil, err
@@ -1011,6 +1019,16 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 	for _, account := range cachedTargets {
 		if account != nil {
 			targetsByID[account.ID] = account
+		}
+	}
+	if input.GroupIDs != nil {
+		for _, accountID := range input.AccountIDs {
+			if account, ok := targetsByID[accountID]; ok {
+				if _, owned := upstreamVendorIDFromExtra(account.Extra); owned {
+					return nil, infraerrors.Newf(http.StatusBadRequest, "UPSTREAM_ENTRY_GROUP_MANAGED_IN_HUB",
+						"account %d belongs to an upstream vendor; manage its groups in Upstream Hub", account.ID)
+				}
+			}
 		}
 	}
 	if openAISettings.any() {

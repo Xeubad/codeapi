@@ -249,6 +249,13 @@
               >
                 {{ accountDisplayEmail(row) }}
               </span>
+              <span
+                v-if="hubVendorNameOf(row)"
+                class="mt-0.5 self-start rounded-md bg-primary-50 px-1.5 py-0.5 text-[11px] font-medium text-primary-700 dark:bg-primary-900/30 dark:text-primary-300"
+                :title="t('admin.accounts.hub.entryBadge', { vendor: hubVendorNameOf(row) })"
+              >
+                {{ t('admin.accounts.hub.entryBadge', { vendor: hubVendorNameOf(row) }) }}
+              </span>
             </div>
           </template>
           <template #cell-notes="{ value }">
@@ -435,11 +442,15 @@
           </template>
           <template #cell-actions="{ row }">
             <div class="flex items-center gap-1">
-              <button @click="handleEdit(row)" class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400">
+              <a v-if="isHubEntry(row)" :href="hubLinkFor(row)" class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-primary-50 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400">
+                <Icon name="cube" size="sm" />
+                <span class="text-xs">{{ t('admin.accounts.hub.manageInHub') }}</span>
+              </a>
+              <button v-if="!isHubEntry(row)" @click="handleEdit(row)" class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400">
                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" /></svg>
                 <span class="text-xs">{{ t('common.edit') }}</span>
               </button>
-              <button @click="handleDelete(row)" class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400">
+              <button v-if="!isHubEntry(row)" @click="handleDelete(row)" class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400">
                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
                 <span class="text-xs">{{ t('common.delete') }}</span>
               </button>
@@ -460,9 +471,29 @@
     <AccountTestModal :show="showTest" :account="testingAcc" @close="closeTestModal" />
     <AccountStatsModal :show="showStats" :account="statsAcc" @close="closeStatsModal" />
     <ScheduledTestsPanel :show="showSchedulePanel" :account-id="scheduleAcc?.id ?? null" :model-options="scheduleModelOptions" @close="closeSchedulePanel" />
-    <AccountActionMenu :show="menu.show" :account="menu.acc" :anchor-rect="menu.anchorRect" @close="menu.show = false" @test="handleTest" @stats="handleViewStats" @schedule="handleSchedule" @duplicate="handleDuplicateAccount" @reauth="handleReAuth" @refresh-token="handleRefresh" @recover-state="handleRecoverState" @reset-quota="handleResetQuota" @set-privacy="handleSetPrivacy" @create-spark-shadow="handleCreateSparkShadow" />
+    <AccountActionMenu :show="menu.show" :account="menu.acc" :anchor-rect="menu.anchorRect" @close="menu.show = false" @attach-to-hub="openHubImport" @test="handleTest" @stats="handleViewStats" @schedule="handleSchedule" @duplicate="handleDuplicateAccount" @reauth="handleReAuth" @refresh-token="handleRefresh" @recover-state="handleRecoverState" @reset-quota="handleResetQuota" @set-privacy="handleSetPrivacy" @create-spark-shadow="handleCreateSparkShadow" />
     <SyncFromCrsModal :show="showSync" @close="showSync = false" @synced="reload" />
     <ImportDataModal :show="showImportData" @close="showImportData = false" @imported="handleDataImported" />
+    <BaseDialog :show="showHubImport" :title="t('admin.accounts.hub.attachTitle')" @close="closeHubImport">
+      <div class="space-y-3">
+        <p class="text-sm text-gray-600 dark:text-gray-300">
+          {{ t('admin.accounts.hub.attachHint', { name: hubImportAccount?.name || '' }) }}
+        </p>
+        <div>
+          <label class="input-label">{{ t('admin.accounts.hub.vendor') }}</label>
+          <Select v-model="hubImportVendorId" :options="hubVendorOptions" :placeholder="t('admin.accounts.hub.vendorPlaceholder')" />
+        </div>
+        <p v-if="hubVendors.length === 0" class="text-xs text-amber-600 dark:text-amber-400">
+          {{ t('admin.accounts.hub.noVendors') }}
+        </p>
+      </div>
+      <template #footer>
+        <button class="btn btn-secondary" @click="closeHubImport">{{ t('common.cancel') }}</button>
+        <button class="btn btn-primary" :disabled="hubImporting || !hubImportVendorId" @click="confirmHubImport">
+          {{ t('admin.accounts.hub.attachConfirm') }}
+        </button>
+      </template>
+    </BaseDialog>
     <BulkEditAccountModal
       :show="showBulkEdit"
       :account-ids="selIds"
@@ -496,6 +527,7 @@ import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { adminAPI } from '@/api/admin'
+import upstreamHubAPI, { type UpstreamVendor } from '@/api/admin/upstreamHub'
 import { useTableLoader } from '@/composables/useTableLoader'
 import { useSwipeSelect, type SwipeSelectVirtualContext } from '@/composables/useSwipeSelect'
 import { useTableSelection } from '@/composables/useTableSelection'
@@ -504,6 +536,8 @@ import TotpStepUpDialog from '@/components/auth/TotpStepUpDialog.vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 import DataTable from '@/components/common/DataTable.vue'
+import BaseDialog from '@/components/common/BaseDialog.vue'
+import Select from '@/components/common/Select.vue'
 import HelpTooltip from '@/components/common/HelpTooltip.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
@@ -542,6 +576,76 @@ import type { Account, AccountListItem, AccountPlatform, AccountSchedulerGroupSc
 const { t } = useI18n()
 const appStore = useAppStore()
 const authStore = useAuthStore()
+
+const hubVendors = ref<UpstreamVendor[]>([])
+const showHubImport = ref(false)
+const hubImportAccount = ref<AccountListItem | null>(null)
+const hubImportVendorId = ref<number | null>(null)
+const hubImporting = ref(false)
+const hubVendorOptions = computed(() => hubVendors.value.map((vendor) => ({ label: vendor.name, value: vendor.id })))
+const hubVendorMap = computed(() => new Map(hubVendors.value.map((vendor) => [vendor.id, vendor.name])))
+
+function upstreamVendorIDOf(row: { extra?: Record<string, unknown> | null }): number | null {
+  const raw = row.extra?.upstream_vendor_id
+  if (typeof raw === 'number' && Number.isFinite(raw) && raw > 0) return raw
+  if (typeof raw === 'string' && raw.trim() !== '') {
+    const parsed = Number(raw)
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null
+  }
+  return null
+}
+
+function isHubEntry(row: { extra?: Record<string, unknown> | null }): boolean {
+  return upstreamVendorIDOf(row) !== null
+}
+
+function hubVendorNameOf(row: { extra?: Record<string, unknown> | null }): string {
+  const id = upstreamVendorIDOf(row)
+  return id ? hubVendorMap.value.get(id) || `#${id}` : ''
+}
+
+function hubLinkFor(row: { extra?: Record<string, unknown> | null }): string {
+  const id = upstreamVendorIDOf(row)
+  return id ? `/admin/upstream-hub?vendor=${id}` : '/admin/upstream-hub'
+}
+
+async function loadHubVendors() {
+  try {
+    hubVendors.value = await upstreamHubAPI.listVendors()
+  } catch {
+    hubVendors.value = []
+  }
+}
+
+function openHubImport(account: AccountListItem) {
+  hubImportAccount.value = account
+  hubImportVendorId.value = hubVendors.value[0]?.id ?? null
+  showHubImport.value = true
+}
+
+function closeHubImport() {
+  showHubImport.value = false
+  hubImportAccount.value = null
+  hubImportVendorId.value = null
+}
+
+async function confirmHubImport() {
+  const account = hubImportAccount.value
+  const vendorId = hubImportVendorId.value
+  if (!account || !vendorId) return
+  hubImporting.value = true
+  try {
+    await upstreamHubAPI.importEntry(vendorId, account.id)
+    appStore.showSuccess(t('admin.accounts.hub.attachSuccess'))
+    closeHubImport()
+    await loadHubVendors()
+    await reload()
+  } catch (err) {
+    appStore.showError(extractApiErrorMessage(err, t('admin.accounts.hub.attachFailed')))
+  } finally {
+    hubImporting.value = false
+  }
+}
 
 const proxies = ref<AccountProxy[]>([])
 const groups = ref<AdminGroup[]>([])
@@ -1858,7 +1962,14 @@ const toggleSelectAllVisible = (event: Event) => {
   toggleVisible(target.checked)
 }
 const handleBulkDelete = async () => {
-  const accountIds = [...selIds.value]
+  const hubAccountIds = new Set(
+    accounts.value.filter((account) => isHubEntry(account) && selIds.value.includes(account.id)).map((account) => account.id)
+  )
+  const accountIds = [...selIds.value].filter((id) => !hubAccountIds.has(id))
+  if (hubAccountIds.size > 0) {
+    appStore.showError(t('admin.accounts.hub.bulkDeleteBlocked', { count: hubAccountIds.size }))
+  }
+  if (accountIds.length === 0) return
   if (!confirm(t('admin.accounts.bulkActions.confirmDelete', { count: accountIds.length }))) return
   try {
     const result = await adminAPI.accounts.batchDelete(accountIds)
@@ -2539,6 +2650,7 @@ onMounted(async () => {
 
   load()
   loadUpstreamBillingProbeGlobalState()
+  void loadHubVendors()
   const [proxiesResult, groupsResult] = await Promise.allSettled([
     adminAPI.proxies.getAll(),
     adminAPI.groups.getAll()

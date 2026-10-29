@@ -118,6 +118,14 @@ export async function createEntry(vendorId: number, payload: UpstreamEntryReques
   return data
 }
 
+/** 把账号管理里已有的转发账号纳入指定厂家（只写归属，不动账号其它字段）。 */
+export async function importEntry(vendorId: number, accountId: number): Promise<UpstreamEntry> {
+  const { data } = await apiClient.post<UpstreamEntry>(`/admin/upstream-vendors/${vendorId}/entries/import`, {
+    account_id: accountId
+  })
+  return data
+}
+
 export async function updateEntry(accountId: number, payload: UpstreamEntryRequest): Promise<UpstreamEntry> {
   const { data } = await apiClient.put<UpstreamEntry>(`/admin/upstream-entries/${accountId}`, payload)
   return data
@@ -192,6 +200,7 @@ const upstreamHubAPI = {
   updateVendor,
   deleteVendor,
   createEntry,
+  importEntry,
   updateEntry,
   duplicateEntry,
   deleteEntry,

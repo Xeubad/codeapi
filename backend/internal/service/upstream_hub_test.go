@@ -165,9 +165,10 @@ func TestGetVendorDetailWarnsOverBudget(t *testing.T) {
 // stubUpstreamAdmin 只实现上游聚合用到的三个方法，其余方法由嵌入的 nil 接口满足。
 type stubUpstreamAdmin struct {
 	AdminService
-	account *Account
-	updated *UpdateAccountInput
-	created *CreateAccountInput
+	account      *Account
+	updated      *UpdateAccountInput
+	created      *CreateAccountInput
+	extraUpdates map[string]any
 }
 
 func (s *stubUpstreamAdmin) GetAccount(context.Context, int64) (*Account, error) {
@@ -184,6 +185,19 @@ func (s *stubUpstreamAdmin) UpdateAccount(_ context.Context, _ int64, input *Upd
 
 func (s *stubUpstreamAdmin) GetProxy(context.Context, int64) (*Proxy, error) {
 	return &Proxy{ID: 3, Name: "ip-mgmt-proxy"}, nil
+}
+
+func (s *stubUpstreamAdmin) UpdateAccountExtra(_ context.Context, _ int64, updates map[string]any) error {
+	s.extraUpdates = updates
+	if s.account != nil {
+		if s.account.Extra == nil {
+			s.account.Extra = map[string]any{}
+		}
+		for key, value := range updates {
+			s.account.Extra[key] = value
+		}
+	}
+	return nil
 }
 
 func (s *stubUpstreamAdmin) CreateAccount(_ context.Context, input *CreateAccountInput) (*Account, error) {
@@ -597,4 +611,85 @@ func TestUpdateEntryUsesPrimaryVendorBaseURL(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, admin.updated)
 	require.Equal(t, "https://fast.example.com", admin.updated.Credentials["base_url"])
+}
+
+func TestImportAccountToVendorSetsOwnership(t *testing.T) {
+	repo := &stubUpstreamVendorRepo{
+		vendors: []UpstreamVendor{{ID: 3, Name: "relay"}},
+		entries: map[int64][]UpstreamEntry{
+			3: {{AccountID: 5, VendorID: 3, Name: "relay-key"}},
+		},
+	}
+	admin := &stubUpstreamAdmin{account: &Account{
+		ID:       5,
+		Type:     AccountTypeAPIKey,
+		Platform: PlatformOpenAI,
+		Credentials: map[string]any{
+			"base_url": "https://relay.example",
+			"api_key":  "sk-test",
+		},
+	}}
+	svc := NewUpstreamHubService(repo, admin, nil)
+
+	entry, err := svc.ImportAccountToVendor(context.Background(), 5, 3)
+	require.NoError(t, err)
+	require.Equal(t, int64(5), entry.AccountID)
+	require.Equal(t, int64(3), entry.VendorID)
+	require.Equal(t, map[string]any{UpstreamVendorIDExtraKey: int64(3)}, admin.extraUpdates)
+}
+
+func TestImportAccountToVendorRejectsIneligible(t *testing.T) {
+	tests := []struct {
+		name    string
+		account *Account
+		wantErr error
+	}{
+		{
+			name: "owned by another vendor",
+			account: &Account{
+				ID:          5,
+				Type:        AccountTypeAPIKey,
+				Credentials: map[string]any{"base_url": "https://relay.example", "api_key": "sk-test"},
+				Extra:       map[string]any{UpstreamVendorIDExtraKey: int64(9)},
+			},
+			wantErr: ErrUpstreamAccountAlreadyOwned,
+		},
+		{
+			name: "oauth account",
+			account: &Account{
+				ID:          5,
+				Type:        AccountTypeOAuth,
+				Credentials: map[string]any{"base_url": "https://relay.example", "api_key": "sk-test"},
+			},
+			wantErr: ErrUpstreamAccountIneligible,
+		},
+		{
+			name: "missing base url",
+			account: &Account{
+				ID:          5,
+				Type:        AccountTypeAPIKey,
+				Credentials: map[string]any{"api_key": "sk-test"},
+			},
+			wantErr: ErrUpstreamAccountIneligible,
+		},
+		{
+			name: "missing api key",
+			account: &Account{
+				ID:          5,
+				Type:        AccountTypeAPIKey,
+				Credentials: map[string]any{"base_url": "https://relay.example"},
+			},
+			wantErr: ErrUpstreamAccountIneligible,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := &stubUpstreamVendorRepo{vendors: []UpstreamVendor{{ID: 3, Name: "relay"}}}
+			admin := &stubUpstreamAdmin{account: tt.account}
+			svc := NewUpstreamHubService(repo, admin, nil)
+			_, err := svc.ImportAccountToVendor(context.Background(), 5, 3)
+			require.ErrorIs(t, err, tt.wantErr)
+			require.Nil(t, admin.extraUpdates)
+		})
+	}
 }

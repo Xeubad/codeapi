@@ -913,3 +913,26 @@ func TestCreateAccountDropsOpenCodeGoManagedKeys(t *testing.T) {
 	require.NotContains(t, created.Extra, OpenCodeGoUsageSnapshotExtraKey)
 	require.Equal(t, "value", created.Extra["custom"])
 }
+
+func TestUpdateAccountRejectsGroupChangesForUpstreamEntries(t *testing.T) {
+	accountID := int64(77)
+	repo := &upstreamBillingProbeAccountRepo{accounts: map[int64]*Account{
+		accountID: {
+			ID:       accountID,
+			Platform: PlatformOpenAI,
+			Type:     AccountTypeAPIKey,
+			Status:   StatusActive,
+			Extra:    map[string]any{UpstreamVendorIDExtraKey: int64(3)},
+		},
+	}}
+	svc := &adminServiceImpl{accountRepo: repo}
+	groupIDs := []int64{1}
+
+	_, err := svc.UpdateAccount(context.Background(), accountID, &UpdateAccountInput{GroupIDs: &groupIDs})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "manage its groups in Upstream Hub")
+
+	// 非分组字段的编辑仍应放行。
+	_, err = svc.UpdateAccount(context.Background(), accountID, &UpdateAccountInput{Name: "renamed"})
+	require.NoError(t, err)
+}

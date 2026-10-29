@@ -27,6 +27,10 @@
               <Icon name="copy" size="sm" class="text-sky-500" />
               {{ t('admin.accounts.duplicateAccount') }}
             </button>
+            <button v-if="canAttachToHub" @click="$emit('attach-to-hub', account); $emit('close')" class="flex w-full items-center gap-2 px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-dark-700">
+              <Icon name="cube" size="sm" class="text-primary-500" />
+              {{ t('admin.accounts.hub.attach') }}
+            </button>
             <!-- 影子账号不持凭据:重授权/刷新 token 对其无效(后端拒绝),故隐藏(外审 G4)。 -->
             <template v-if="(account.type === 'oauth' || account.type === 'setup-token') && !isShadow">
               <button @click="$emit('reauth', account); $emit('close')" class="flex w-full items-center gap-2 px-4 py-2 text-sm text-blue-600 hover:bg-gray-100 dark:hover:bg-dark-700">
@@ -70,7 +74,7 @@ import { Icon } from '@/components/icons'
 import type { Account } from '@/types'
 
 const props = defineProps<{ show: boolean; account: Account | null; anchorRect: DOMRect | null }>()
-const emit = defineEmits(['close', 'test', 'stats', 'schedule', 'duplicate', 'reauth', 'refresh-token', 'recover-state', 'reset-quota', 'set-privacy', 'create-spark-shadow'])
+const emit = defineEmits(['close', 'test', 'stats', 'schedule', 'duplicate', 'attach-to-hub', 'reauth', 'refresh-token', 'recover-state', 'reset-quota', 'set-privacy', 'create-spark-shadow'])
 const { t } = useI18n()
 const menuRef = ref<HTMLElement | null>(null)
 const { width: viewportWidth, height: viewportHeight } = useWindowSize()
@@ -108,6 +112,17 @@ useResizeObserver(menuRef, updatePosition)
 const canDuplicate = computed(() => {
   if (!props.account || props.account.parent_account_id != null) return false
   return ['apikey', 'upstream', 'bedrock', 'service_account'].includes(props.account.type)
+})
+// 只有形态与 hub 条目一致的转发账号才可纳入：apikey + 自定义 base_url + 已有 key，
+// 且尚未归属任何厂家（归属只认 extra.upstream_vendor_id）。
+const canAttachToHub = computed(() => {
+  const account = props.account
+  if (!account || account.type !== 'apikey' || account.parent_account_id != null) return false
+  const extra = account.extra as Record<string, unknown> | undefined
+  if (extra?.upstream_vendor_id != null) return false
+  const baseURL = typeof account.credentials?.base_url === 'string' ? account.credentials.base_url.trim() : ''
+  if (!baseURL) return false
+  return account.credentials_status?.has_api_key !== false
 })
 const isRateLimited = computed(() => {
   if (props.account?.rate_limit_reset_at && new Date(props.account.rate_limit_reset_at) > new Date()) {

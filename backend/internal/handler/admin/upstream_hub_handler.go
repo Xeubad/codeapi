@@ -45,6 +45,34 @@ type upstreamEntryGroupsRequest struct {
 	GroupIDs []int64 `json:"group_ids"`
 }
 
+type upstreamImportEntryRequest struct {
+	AccountID int64 `json:"account_id"`
+}
+
+// ImportEntry 把账号管理里已有的转发账号纳入指定厂家。
+// POST /api/v1/admin/upstream-vendors/:id/entries/import
+func (h *UpstreamHubHandler) ImportEntry(c *gin.Context) {
+	vendorID, ok := parseIDParam(c, "id")
+	if !ok {
+		return
+	}
+	var req upstreamImportEntryRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	if req.AccountID <= 0 {
+		response.BadRequest(c, "account_id is required")
+		return
+	}
+	entry, err := h.svc.ImportAccountToVendor(c.Request.Context(), req.AccountID, vendorID)
+	if err != nil {
+		writeUpstreamHubError(c, err)
+		return
+	}
+	response.Success(c, entry)
+}
+
 func (h *UpstreamHubHandler) ListVendors(c *gin.Context) {
 	vendors, err := h.svc.ListVendors(c.Request.Context())
 	if err != nil {
@@ -396,7 +424,10 @@ func writeUpstreamHubError(c *gin.Context, err error) {
 	case errors.Is(err, service.ErrUpstreamVendorNotFound),
 		errors.Is(err, service.ErrUpstreamEntryNotFound):
 		response.NotFound(c, err.Error())
-	case errors.Is(err, service.ErrUpstreamVendorNotEmpty):
+	case errors.Is(err, service.ErrUpstreamAccountIneligible):
+		response.BadRequest(c, err.Error())
+	case errors.Is(err, service.ErrUpstreamAccountAlreadyOwned),
+		errors.Is(err, service.ErrUpstreamVendorNotEmpty):
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 	default:
 		response.ErrorFrom(c, err)

@@ -590,6 +590,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import { extractApiErrorMessage } from '@/utils/apiError'
 import { syncUpstreamModelsPreview } from '@/api/admin/accounts'
@@ -614,6 +615,7 @@ import Toggle from '@/components/common/Toggle.vue'
 import Icon from '@/components/icons/Icon.vue'
 
 const { t } = useI18n()
+const route = useRoute()
 const appStore = useAppStore()
 
 const vendors = ref<UpstreamVendor[]>([])
@@ -1254,5 +1256,11 @@ async function toggleSchedulable(entry: UpstreamEntry, value: boolean) {
 
 
 
-onMounted(load)
+onMounted(async () => {
+  await load()
+  const vendorParam = Number(route.query.vendor)
+  if (Number.isFinite(vendorParam) && vendorParam > 0 && vendors.value.some((vendor) => vendor.id === vendorParam)) {
+    await toggleDetail(vendorParam)
+  }
+})
 </script>

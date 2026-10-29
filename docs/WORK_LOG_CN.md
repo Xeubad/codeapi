@@ -36,6 +36,39 @@
 
 ---
 
+## 2026年10月30日
+
+**主题**：聚合调度布局收口 + 第一批逻辑修复（分组增量同步、链路真实 Key、供给折叠、归一模型参数）
+
+### 改动
+
+- 布局：聚合调度单元管理由「整页切换 + 返回按钮」改为标准 `BaseDialog`（full），列表页保持 `TablePageLayout`；删除返回单元列表的逻辑，保留 `?unit=` 深链；弹窗内沿用 tabs / card / table 规范。
+- 侧边栏：分组管理 → 聚合调度 → 上游聚合 → 账号管理，其余保持相对顺序；聚合调度加 `hideInSimpleMode`。
+- 后端：`SetEntryGroups` 由「全删重建」改为增量 diff，未变更分组保留 `account_groups.enabled` 与 `priority`；新增 `diffAccountGroupIDs` 单测；hub 前端删除为规避重置而做的二次 enable 补偿。
+- 供给汇入：按厂家折叠；勾选即汇入；每行展示平台/并发/优先级/模型数，停用、不可调度、未登记模型给出徽章或琥珀提示；「本单元启用」开关常驻（未汇入禁用）；单元无任何挂载时默认展开全部厂家。
+- 链路视图：弃用 mock 的 `groups/:id/stats`，改读 `groups/:id/api-keys`；客户列展示 key（`maskApiKey`）/属主/状态，统计卡显示在用与总数；条目列只列已挂载条目。
+- 归一模型：补匹配方式、接口端点、备注与行内编辑；上游模型候选来自所选平台已挂载条目（datalist，可自由输入）；平台下拉标注供给数，无供给给出不阻塞提示；重复路由返回可读提示；删除「同模型按优先级降级」错误文案。
+
+### 关键决策
+
+- 单元 = composite 分组的设计不变；管理动作收进弹窗，避免出现独立于其它管理页的「二级页面」版式。
+- `SetEntryGroups` 必须增量：全删重建会静默重置其它分组的「暂不调用」与调度优先级，前端补偿只能覆盖弹窗内可见的分组。
+- 链路客户数据复用现有 admin 接口（返回完整 key，前端打码），不新增聚合专用端点。
+- 跨平台优先级回退链本轮不做：唯一索引 `(group_id, endpoint, match_type, public_model)` 限制一模型一路由，resolver 也只取单条；`priority` 继续落库但 UI 不暴露，避免承诺不存在的能力。
+- `/admin/groups/:id/stats` 的 mock 实现保留（上游代码），聚合页不再依赖它。
+
+### 验证
+
+- 后端：`gofmt -l` 干净；`go build ./...`；`go test ./internal/repository/ ./internal/service/`（149.5s，全绿）。
+- 实测（本地 8080 新二进制）：把条目在 group 4 的 enabled 置 false，再保存相同分组集合 `[2,4]`，enabled 仍为 false（旧实现会重置为 true）；测试后已恢复原状态。
+- 前端：`pnpm check:i18n`、`vue-tsc --noEmit`、`vite build` 通过；`pnpm test:run` 375 文件 / 2861 用例全绿。
+- 未做浏览器实点：浏览器自动化被安全策略拦截（登录页导航也被拒），聚合页由 8 条组件测试与构建覆盖，需管理员登录后目视走查。
+
+### 产出
+
+- `e0514ba22` feat(aggregation): manage units in a dialog and fix the first-round issues
+- 本次 docs 提交（设计文档第四轮 + 本日志）
+
 ## 2026年10月29日
 
 **主题**：上游同步模式切换——从全量 merge 改为解耦 + 选择性 cherry-pick

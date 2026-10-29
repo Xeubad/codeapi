@@ -64,7 +64,6 @@ export default {
     probeModels: 'Probe upstream models',
     probing: 'Probing…',
     probeFound: 'Upstream returned {count} models',
-    probeHint: 'Run "Probe upstream models" to fetch the real catalog; checked models are saved as this entry’s model whitelist (/v1/models and composite routing both rely on it). If the upstream has no model endpoint, add IDs manually below.',
     probeSourceUpstream: 'Live upstream',
     probeSourceCatalog: 'Catalog suggestions',
     manualModelPlaceholder: 'Add a model ID manually, e.g. deepseek-chat',

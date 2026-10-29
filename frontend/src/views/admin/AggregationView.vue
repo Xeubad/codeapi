@@ -1,293 +1,351 @@
 <template>
   <AppLayout>
-    <div class="space-y-4">
-      <div class="page-header">
-        <div>
-          <div class="flex flex-wrap items-center gap-2">
-            <button v-if="selectedUnitId" class="btn btn-ghost btn-sm" @click="backToList">
-              ← {{ t('admin.aggregation.back') }}
-            </button>
-            <h1 class="page-title">
-              {{ selectedUnit ? selectedUnit.name : t('admin.aggregation.title') }}
-            </h1>
-            <span v-if="selectedUnit" class="badge badge-primary">{{ t('admin.aggregation.compositeBadge') }}</span>
+    <!-- 单元列表：与分组/渠道等列表页一致，使用 TablePageLayout + 工具栏 -->
+    <TablePageLayout v-if="!selectedUnitId">
+      <template #filters>
+        <div class="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
+          <div class="flex flex-1 flex-wrap items-center gap-3">
+            <div class="relative w-full sm:w-64">
+              <Icon
+                name="search"
+                size="md"
+                class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500"
+              />
+              <input
+                v-model="unitSearch"
+                type="text"
+                :placeholder="t('admin.aggregation.searchUnits')"
+                class="input pl-10"
+              />
+            </div>
+            <span class="text-xs text-gray-500 dark:text-gray-400">
+              {{ t('admin.aggregation.unitsTotal', { count: filteredUnits.length }) }}
+            </span>
           </div>
-          <p class="page-subtitle">
-            {{ selectedUnit ? t('admin.aggregation.unitDesc') : t('admin.aggregation.description') }}
-          </p>
+          <div class="flex w-full flex-shrink-0 flex-wrap items-center justify-end gap-3 lg:w-auto">
+            <button class="btn btn-secondary" :disabled="loading" @click="loadAll">
+              <Icon name="refresh" size="md" :class="loading ? 'animate-spin' : ''" />
+            </button>
+            <button class="btn btn-primary" @click="openCreateUnit">
+              <Icon name="plus" size="md" class="mr-2" />
+              {{ t('admin.aggregation.createUnit') }}
+            </button>
+          </div>
         </div>
-        <div class="flex flex-wrap items-center gap-2">
-          <template v-if="selectedUnitId">
+      </template>
+
+      <template #table>
+        <table class="table">
+          <thead>
+            <tr>
+              <th>{{ t('admin.aggregation.unitName') }}</th>
+              <th>{{ t('admin.aggregation.entryCount') }}</th>
+              <th>{{ t('admin.aggregation.routeCount') }}</th>
+              <th>RPM</th>
+              <th>{{ t('admin.aggregation.status') }}</th>
+              <th class="text-right">{{ t('common.actions') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="unit in filteredUnits" :key="unit.id">
+              <td>
+                <div class="font-medium text-gray-900 dark:text-white">{{ unit.name }}</div>
+                <div v-if="unit.description" class="max-w-[28rem] truncate text-xs text-gray-500">
+                  {{ unit.description }}
+                </div>
+              </td>
+              <td>{{ attachedCountFor(unit.id) }}</td>
+              <td>{{ routesCountByGroup[unit.id] ?? '—' }}</td>
+              <td>{{ unit.rpm_limit || '∞' }}</td>
+              <td>
+                <span class="badge" :class="unit.status === 'active' ? 'badge-primary' : 'badge-gray'">
+                  {{ unit.status }}
+                </span>
+              </td>
+              <td class="text-right">
+                <button class="btn btn-sm btn-secondary" @click="openUnit(unit.id)">
+                  {{ t('admin.aggregation.manage') }}
+                </button>
+              </td>
+            </tr>
+            <tr v-if="filteredUnits.length === 0">
+              <td colspan="6">
+                <EmptyState
+                  :title="t('admin.aggregation.noUnits')"
+                  :description="t('admin.aggregation.noUnitsHint')"
+                />
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </template>
+    </TablePageLayout>
+
+    <!-- 单元详情：头部卡片 + 页签，与渠道监控等详情页一致 -->
+    <div v-else class="w-full min-w-0 space-y-6 pb-8">
+      <header
+        class="page-header mb-0 rounded-3xl bg-white p-5 shadow-sm ring-1 ring-gray-900/5 dark:bg-dark-800 dark:ring-dark-700 sm:p-6"
+      >
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 class="page-title flex items-center gap-2 text-xl font-black text-gray-900 dark:text-white">
+              <button class="btn btn-ghost btn-sm" @click="backToList">← {{ t('admin.aggregation.back') }}</button>
+              <span
+                class="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-primary-50 text-primary-600 dark:bg-primary-900/30 dark:text-primary-400"
+              >
+                <Icon name="swap" size="sm" />
+              </span>
+              {{ selectedUnit?.name }}
+              <span class="badge badge-primary">{{ t('admin.aggregation.compositeBadge') }}</span>
+            </h1>
+            <p class="page-description mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+              {{ t('admin.aggregation.unitDesc') }}
+            </p>
+          </div>
+          <div class="flex flex-wrap items-center gap-3">
             <button class="btn btn-secondary btn-sm" @click="goToGroups">
               {{ t('admin.aggregation.configureInGroups') }}
             </button>
-          </template>
-          <template v-else>
-            <button class="btn btn-primary btn-sm" @click="openCreateUnit">{{ t('admin.aggregation.createUnit') }}</button>
-          </template>
-          <button class="btn btn-secondary btn-sm" :disabled="loading" @click="loadAll">
-            {{ t('admin.aggregation.refresh') }}
-          </button>
+            <button class="btn btn-secondary btn-sm" :disabled="loading" @click="loadAll">
+              {{ t('admin.aggregation.refresh') }}
+            </button>
+          </div>
+        </div>
+        <div class="mt-4 border-t border-gray-100 pt-4 dark:border-dark-700">
+          <div class="tabs inline-flex w-full max-w-xl flex-wrap sm:w-auto" role="tablist">
+            <button
+              type="button"
+              role="tab"
+              class="tab flex-1 sm:flex-none"
+              :class="detailTab === 'supply' ? 'tab-active' : ''"
+              :aria-selected="detailTab === 'supply'"
+              @click="detailTab = 'supply'"
+            >
+              {{ t('admin.aggregation.tabSupply') }}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              class="tab flex-1 sm:flex-none"
+              :class="detailTab === 'routes' ? 'tab-active' : ''"
+              :aria-selected="detailTab === 'routes'"
+              @click="detailTab = 'routes'"
+            >
+              {{ t('admin.aggregation.tabRoutes') }}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              class="tab flex-1 sm:flex-none"
+              :class="detailTab === 'chain' ? 'tab-active' : ''"
+              :aria-selected="detailTab === 'chain'"
+              @click="detailTab = 'chain'"
+            >
+              {{ t('admin.aggregation.tabChain') }}
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <div class="grid gap-4 sm:grid-cols-3">
+        <div class="card p-4">
+          <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.aggregation.statEntries') }}</p>
+          <p class="mt-1 text-2xl font-semibold text-gray-900 dark:text-white">{{ attachedCount }}</p>
+        </div>
+        <div class="card p-4">
+          <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.aggregation.statRoutes') }}</p>
+          <p class="mt-1 text-2xl font-semibold text-gray-900 dark:text-white">{{ routes.length }}</p>
+        </div>
+        <div class="card p-4">
+          <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.aggregation.statKeys') }}</p>
+          <p class="mt-1 text-2xl font-semibold text-gray-900 dark:text-white">{{ stats?.active_api_keys || 0 }}</p>
         </div>
       </div>
 
-      <!-- 单元列表 -->
-      <template v-if="!selectedUnitId">
-        <EmptyState
-          v-if="!loading && units.length === 0"
-          :title="t('admin.aggregation.noUnits')"
-          :description="t('admin.aggregation.noUnitsHint')"
-        />
-        <div v-else class="table-container">
+      <!-- 供给汇入 -->
+      <section v-if="detailTab === 'supply'" class="card p-5">
+        <div class="mb-3">
+          <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ t('admin.aggregation.supply') }}</h2>
+          <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.aggregation.supplyHint') }}</p>
+        </div>
+        <div v-if="entries.length === 0" class="py-6 text-center text-sm text-gray-500">
+          {{ t('admin.aggregation.noEntries') }}
+        </div>
+        <div v-else class="space-y-4">
+          <div v-for="vendor in vendorGroups" :key="vendor.id">
+            <div class="mb-1 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+              <span class="font-medium text-gray-700 dark:text-gray-300">{{ vendor.name }}</span>
+              <span>
+                {{ t('admin.aggregation.vendorBudget', {
+                  used: vendor.allocated_concurrency,
+                  total: vendor.concurrency_budget || '∞'
+                }) }}
+              </span>
+            </div>
+            <div class="divide-y divide-gray-100 dark:divide-dark-700">
+              <div
+                v-for="entry in vendor.entries"
+                :key="entry.account_id"
+                class="flex items-center gap-3 py-2"
+              >
+                <input
+                  type="checkbox"
+                  class="cursor-pointer"
+                  :checked="isAttached(entry)"
+                  @change="toggleAttach(entry)"
+                />
+                <div class="min-w-0 flex-1">
+                  <div class="truncate text-sm text-gray-900 dark:text-white">{{ entry.name }}</div>
+                  <div class="text-xs text-gray-500 dark:text-gray-400">
+                    {{ entry.platform }} · {{ t('admin.aggregation.modelsCount', { count: entry.models?.length || 0 }) }}
+                  </div>
+                </div>
+                <span v-if="isAttached(entry) && !isEnabledHere(entry)" class="badge badge-gray">
+                  {{ t('admin.aggregation.disabledHere') }}
+                </span>
+                <Toggle
+                  v-if="isAttached(entry)"
+                  :model-value="isEnabledHere(entry)"
+                  @update:model-value="() => toggleEntryEnabled(entry)"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 归一模型 -->
+      <section v-else-if="detailTab === 'routes'" class="card p-5">
+        <div class="mb-3">
+          <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ t('admin.aggregation.modelRoutes') }}</h2>
+          <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.aggregation.modelRoutesHint') }}</p>
+        </div>
+        <div class="table-container">
           <table class="table">
             <thead>
               <tr>
-                <th>{{ t('admin.aggregation.unitName') }}</th>
-                <th>{{ t('admin.aggregation.entryCount') }}</th>
-                <th>{{ t('admin.aggregation.routeCount') }}</th>
-                <th>RPM</th>
-                <th>{{ t('admin.aggregation.status') }}</th>
+                <th>{{ t('admin.aggregation.publicModel') }}</th>
+                <th>{{ t('admin.aggregation.targetPlatform') }}</th>
+                <th>{{ t('admin.aggregation.upstreamModel') }}</th>
+                <th>{{ t('admin.aggregation.priority') }}</th>
+                <th>{{ t('admin.aggregation.enabled') }}</th>
                 <th class="text-right">{{ t('common.actions') }}</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="unit in units" :key="unit.id">
+              <tr v-for="route in routes" :key="route.id">
+                <td class="font-mono text-xs">{{ route.public_model }}</td>
+                <td><span class="badge badge-primary">{{ route.target_platform }}</span></td>
+                <td class="font-mono text-xs">{{ route.upstream_model || route.public_model }}</td>
+                <td>{{ route.priority }}</td>
                 <td>
-                  <div class="font-medium text-gray-900 dark:text-white">{{ unit.name }}</div>
-                  <div v-if="unit.description" class="max-w-[28rem] truncate text-xs text-gray-500">
-                    {{ unit.description }}
-                  </div>
-                </td>
-                <td>{{ attachedCountFor(unit.id) }}</td>
-                <td>{{ routesCountByGroup[unit.id] ?? '—' }}</td>
-                <td>{{ unit.rpm_limit || '∞' }}</td>
-                <td>
-                  <span class="badge" :class="unit.status === 'active' ? 'badge-primary' : 'badge-gray'">
-                    {{ unit.status }}
-                  </span>
+                  <Toggle :model-value="route.enabled" @update:model-value="() => toggleRouteEnabled(route)" />
                 </td>
                 <td class="text-right">
-                  <button class="btn btn-sm btn-secondary" @click="openUnit(unit.id)">
-                    {{ t('admin.aggregation.manage') }}
+                  <button class="btn btn-sm btn-ghost text-red-600" @click="removeRoute(route)">
+                    {{ t('admin.aggregation.delete') }}
                   </button>
+                </td>
+              </tr>
+              <tr v-if="routes.length === 0">
+                <td colspan="6" class="py-4 text-center text-xs text-gray-500">
+                  {{ t('admin.aggregation.noRoutes') }}
                 </td>
               </tr>
             </tbody>
           </table>
         </div>
-      </template>
+        <div class="mt-4 grid gap-3 sm:grid-cols-2">
+          <input v-model="routeForm.public_model" class="input" :placeholder="t('admin.aggregation.publicModelPlaceholder')" />
+          <Select v-model="routeForm.target_platform" :options="platformOptions" />
+          <input v-model="routeForm.upstream_model" class="input" :placeholder="t('admin.aggregation.upstreamModelPlaceholder')" />
+          <input v-model.number="routeForm.priority" class="input" type="number" min="1" :placeholder="t('admin.aggregation.priority')" />
+        </div>
+        <div class="mt-3 flex flex-wrap items-center justify-between gap-2">
+          <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.aggregation.routeFormHint') }}</p>
+          <button class="btn btn-primary btn-sm" :disabled="saving || !routeForm.public_model.trim()" @click="addRoute">
+            {{ t('admin.aggregation.addRoute') }}
+          </button>
+        </div>
+      </section>
 
-      <!-- 单元详情 -->
-      <template v-else>
-        <div class="grid gap-4 xl:grid-cols-2">
-          <!-- 供给汇入 -->
-          <div class="card p-4">
-            <div class="mb-3 flex items-center justify-between">
-              <div>
-                <h2 class="text-base font-semibold text-gray-900 dark:text-white">
-                  {{ t('admin.aggregation.supply') }}
-                </h2>
-                <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.aggregation.supplyHint') }}</p>
-              </div>
-              <span class="badge badge-gray">{{ t('admin.aggregation.attachedCount', { count: attachedCount }) }}</span>
-            </div>
-            <div v-if="entries.length === 0" class="py-6 text-center text-sm text-gray-500">
-              {{ t('admin.aggregation.noEntries') }}
-            </div>
-            <div v-else class="max-h-[26rem] space-y-3 overflow-y-auto pr-1">
-              <div v-for="vendor in vendorGroups" :key="vendor.id" class="space-y-1">
-                <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-                  <span class="font-medium text-gray-700 dark:text-gray-300">{{ vendor.name }}</span>
-                  <span>
-                    {{ t('admin.aggregation.vendorBudget', {
-                      used: vendor.allocated_concurrency,
-                      total: vendor.concurrency_budget || '∞'
-                    }) }}
-                  </span>
-                </div>
-                <div
-                  v-for="entry in vendor.entries"
-                  :key="entry.account_id"
-                  class="flex items-center gap-2 rounded-lg border border-gray-200 px-2 py-1.5 dark:border-dark-600"
-                  :class="isAttached(entry) ? 'bg-primary-50/60 dark:bg-primary-900/10' : ''"
-                >
-                  <input
-                    type="checkbox"
-                    class="cursor-pointer"
-                    :checked="isAttached(entry)"
-                    @change="toggleAttach(entry)"
-                  />
-                  <div class="min-w-0 flex-1">
-                    <div class="truncate text-sm text-gray-900 dark:text-white">{{ entry.name }}</div>
-                    <div class="text-xs text-gray-500 dark:text-gray-400">
-                      {{ entry.platform }} · {{ t('admin.aggregation.modelsCount', { count: entry.models?.length || 0 }) }}
-                    </div>
-                  </div>
-                  <span v-if="isAttached(entry) && !isEnabledHere(entry)" class="badge badge-gray">
-                    {{ t('admin.aggregation.disabledHere') }}
-                  </span>
-                  <Toggle
-                    v-if="isAttached(entry)"
-                    :model-value="isEnabledHere(entry)"
-                    @update:model-value="() => toggleEntryEnabled(entry)"
-                  />
-                </div>
-              </div>
-            </div>
+      <!-- 链路视图 -->
+      <section v-else class="card p-5">
+        <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ t('admin.aggregation.chainView') }}</h2>
+            <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.aggregation.chainHint') }}</p>
           </div>
-
-          <!-- 归一模型 -->
-          <div class="card p-4">
-            <div class="mb-3">
-              <h2 class="text-base font-semibold text-gray-900 dark:text-white">
-                {{ t('admin.aggregation.modelRoutes') }}
-              </h2>
-              <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.aggregation.modelRoutesHint') }}</p>
-            </div>
-            <div class="table-container">
-              <table class="table">
-                <thead>
-                  <tr>
-                    <th>{{ t('admin.aggregation.publicModel') }}</th>
-                    <th>{{ t('admin.aggregation.targetPlatform') }}</th>
-                    <th>{{ t('admin.aggregation.upstreamModel') }}</th>
-                    <th>{{ t('admin.aggregation.priority') }}</th>
-                    <th>{{ t('admin.aggregation.enabled') }}</th>
-                    <th class="text-right">{{ t('common.actions') }}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="route in routes" :key="route.id">
-                    <td class="font-mono text-xs">{{ route.public_model }}</td>
-                    <td><span class="badge badge-primary">{{ route.target_platform }}</span></td>
-                    <td class="font-mono text-xs">{{ route.upstream_model || route.public_model }}</td>
-                    <td>{{ route.priority }}</td>
-                    <td>
-                      <Toggle :model-value="route.enabled" @update:model-value="() => toggleRouteEnabled(route)" />
-                    </td>
-                    <td class="text-right">
-                      <button class="btn btn-sm btn-ghost text-red-600" @click="removeRoute(route)">
-                        {{ t('admin.aggregation.delete') }}
-                      </button>
-                    </td>
-                  </tr>
-                  <tr v-if="routes.length === 0">
-                    <td colspan="6" class="py-4 text-center text-xs text-gray-500">
-                      {{ t('admin.aggregation.noRoutes') }}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <div class="mt-3 grid gap-2 sm:grid-cols-2">
-              <input v-model="routeForm.public_model" class="input" :placeholder="t('admin.aggregation.publicModelPlaceholder')" />
-              <Select v-model="routeForm.target_platform" :options="platformOptions" />
-              <input v-model="routeForm.upstream_model" class="input" :placeholder="t('admin.aggregation.upstreamModelPlaceholder')" />
-              <input v-model.number="routeForm.priority" class="input" type="number" min="1" :placeholder="t('admin.aggregation.priority')" />
-            </div>
-            <div class="mt-2 flex items-center justify-between">
-              <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.aggregation.routeFormHint') }}</p>
-              <button class="btn btn-primary btn-sm" :disabled="saving || !routeForm.public_model.trim()" @click="addRoute">
-                {{ t('admin.aggregation.addRoute') }}
-              </button>
-            </div>
+          <div class="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
+            <span class="inline-flex items-center gap-1">
+              <span class="h-2 w-4 rounded bg-primary-500"></span>{{ t('admin.aggregation.legendOn') }}
+            </span>
+            <span class="inline-flex items-center gap-1">
+              <span class="h-2 w-4 rounded border border-dashed border-gray-400"></span>{{ t('admin.aggregation.legendOff') }}
+            </span>
           </div>
         </div>
-
-        <!-- 链路视图 -->
-        <div class="card p-4">
-          <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h2 class="text-base font-semibold text-gray-900 dark:text-white">
-                {{ t('admin.aggregation.chainView') }}
-              </h2>
-              <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.aggregation.chainHint') }}</p>
-            </div>
-            <div class="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
-              <span class="inline-flex items-center gap-1">
-                <span class="h-2 w-4 rounded bg-primary-500"></span>{{ t('admin.aggregation.legendOn') }}
-              </span>
-              <span class="inline-flex items-center gap-1">
-                <span class="h-2 w-4 rounded border border-dashed border-gray-400"></span>{{ t('admin.aggregation.legendOff') }}
-              </span>
+        <div class="grid gap-3 md:grid-cols-4">
+          <div class="space-y-2">
+            <h3 class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">{{ t('admin.aggregation.vendors') }}</h3>
+            <div
+              v-for="vendor in vendors"
+              :key="vendor.id"
+              class="rounded-lg border border-gray-200 px-2 py-1.5 text-sm dark:border-dark-600"
+            >
+              <div class="truncate font-medium text-gray-900 dark:text-white">{{ vendor.name }}</div>
+              <div class="text-xs text-gray-500 dark:text-gray-400">
+                {{ t('admin.aggregation.vendorBudget', { used: vendor.allocated_concurrency, total: vendor.concurrency_budget || '∞' }) }}
+              </div>
             </div>
           </div>
-          <div class="grid gap-3 md:grid-cols-4">
-            <div class="space-y-2">
-              <h3 class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
-                {{ t('admin.aggregation.vendors') }}
-              </h3>
-              <div
-                v-for="vendor in vendors"
-                :key="vendor.id"
-                class="rounded-lg border border-gray-200 px-2 py-1.5 text-sm dark:border-dark-600"
-              >
-                <div class="truncate font-medium text-gray-900 dark:text-white">{{ vendor.name }}</div>
-                <div class="text-xs text-gray-500 dark:text-gray-400">
-                  {{ t('admin.aggregation.vendorBudget', {
-                    used: vendor.allocated_concurrency,
-                    total: vendor.concurrency_budget || '∞'
-                  }) }}
-                </div>
+          <div class="space-y-2">
+            <h3 class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">{{ t('admin.aggregation.entries') }}</h3>
+            <div
+              v-for="entry in entries"
+              :key="entry.account_id"
+              class="rounded-lg border px-2 py-1.5 text-sm"
+              :class="
+                isAttached(entry) && isEnabledHere(entry)
+                  ? 'border-primary-300 bg-primary-50 text-primary-800 dark:border-primary-700 dark:bg-primary-900/20 dark:text-primary-300'
+                  : 'border-dashed border-gray-300 text-gray-500 dark:border-dark-600 dark:text-dark-300'
+              "
+            >
+              <div class="truncate">{{ entry.name }}</div>
+              <div class="text-xs opacity-80">
+                {{ entry.platform }} ·
+                {{ isAttached(entry) && !isEnabledHere(entry) ? t('admin.aggregation.disabledHere') : t('admin.aggregation.modelsCount', { count: entry.models?.length || 0 }) }}
               </div>
             </div>
-            <div class="space-y-2">
-              <h3 class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
-                {{ t('admin.aggregation.entries') }}
-              </h3>
-              <div
-                v-for="entry in entries"
-                :key="entry.account_id"
-                class="rounded-lg border px-2 py-1.5 text-sm"
-                :class="
-                  isAttached(entry) && isEnabledHere(entry)
-                    ? 'border-primary-300 bg-primary-50 text-primary-800 dark:border-primary-700 dark:bg-primary-900/20 dark:text-primary-300'
-                    : 'border-dashed border-gray-300 text-gray-500 dark:border-dark-600 dark:text-dark-300'
-                "
-              >
-                <div class="truncate">{{ entry.name }}</div>
-                <div class="text-xs opacity-80">
-                  {{ entry.platform }} ·
-                  {{ isAttached(entry) && !isEnabledHere(entry) ? t('admin.aggregation.disabledHere') : t('admin.aggregation.modelsCount', { count: entry.models?.length || 0 }) }}
-                </div>
+          </div>
+          <div class="space-y-2">
+            <h3 class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">{{ t('admin.aggregation.group') }}</h3>
+            <div
+              v-if="selectedUnit"
+              class="rounded-lg border border-primary-300 bg-primary-50 px-2 py-1.5 text-sm text-primary-800 dark:border-primary-700 dark:bg-primary-900/20 dark:text-primary-300"
+            >
+              <div class="truncate font-medium">{{ selectedUnit.name }}</div>
+              <div class="text-xs opacity-80">
+                {{ t('admin.aggregation.attachedCount', { count: attachedCount }) }} · RPM {{ selectedUnit.rpm_limit || '∞' }}
               </div>
             </div>
-            <div class="space-y-2">
-              <h3 class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
-                {{ t('admin.aggregation.group') }}
-              </h3>
-              <div v-if="selectedUnit" class="rounded-lg border border-primary-300 bg-primary-50 px-2 py-1.5 text-sm text-primary-800 dark:border-primary-700 dark:bg-primary-900/20 dark:text-primary-300">
-                <div class="truncate font-medium">{{ selectedUnit.name }}</div>
-                <div class="text-xs opacity-80">
-                  {{ t('admin.aggregation.attachedCount', { count: attachedCount }) }}
-                  · RPM {{ selectedUnit.rpm_limit || '∞' }}
-                </div>
+          </div>
+          <div class="space-y-2">
+            <h3 class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">{{ t('admin.aggregation.customers') }}</h3>
+            <div class="rounded-lg border border-gray-200 px-2 py-1.5 text-sm dark:border-dark-600">
+              <div class="text-gray-900 dark:text-white">
+                {{ t('admin.aggregation.activeKeys', { count: stats?.active_api_keys || 0 }) }}
               </div>
-            </div>
-            <div class="space-y-2">
-              <h3 class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
-                {{ t('admin.aggregation.customers') }}
-              </h3>
-              <div class="rounded-lg border border-gray-200 px-2 py-1.5 text-sm dark:border-dark-600">
-                <div class="text-gray-900 dark:text-white">
-                  {{ t('admin.aggregation.activeKeys', { count: stats?.active_api_keys || 0 }) }}
-                </div>
-                <div class="text-xs text-gray-500 dark:text-gray-400">
-                  {{ t('admin.aggregation.totalKeys', { count: stats?.total_api_keys || 0 }) }}
-                </div>
+              <div class="text-xs text-gray-500 dark:text-gray-400">
+                {{ t('admin.aggregation.totalKeys', { count: stats?.total_api_keys || 0 }) }}
               </div>
             </div>
           </div>
         </div>
-      </template>
+      </section>
     </div>
 
-    <!-- 新建单元 -->
-    <BaseDialog
-      :show="showCreateDialog"
-      :title="t('admin.aggregation.createUnit')"
-      @close="showCreateDialog = false"
-    >
+    <BaseDialog :show="showCreateDialog" :title="t('admin.aggregation.createUnit')" @close="showCreateDialog = false">
       <div class="space-y-3">
         <div>
           <label class="input-label">{{ t('admin.aggregation.unitName') }}</label>
@@ -295,7 +353,12 @@
         </div>
         <div>
           <label class="input-label">{{ t('admin.aggregation.unitDescription') }}</label>
-          <input v-model="createForm.description" class="input" type="text" :placeholder="t('admin.aggregation.unitDescriptionPlaceholder')" />
+          <input
+            v-model="createForm.description"
+            class="input"
+            type="text"
+            :placeholder="t('admin.aggregation.unitDescriptionPlaceholder')"
+          />
         </div>
         <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.aggregation.createUnitHint') }}</p>
       </div>
@@ -320,10 +383,12 @@ import groupsAPI from '@/api/admin/groups'
 import { CONCRETE_PLATFORM_OPTIONS } from '@/constants/platforms'
 import type { AdminGroup, CompositeModelRoute } from '@/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
+import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import Select from '@/components/common/Select.vue'
 import Toggle from '@/components/common/Toggle.vue'
+import Icon from '@/components/icons/Icon.vue'
 
 const { t } = useI18n()
 const appStore = useAppStore()
@@ -340,8 +405,19 @@ const routes = ref<CompositeModelRoute[]>([])
 const routesCountByGroup = ref<Record<number, number>>({})
 const stats = ref<{ total_api_keys: number; active_api_keys: number } | null>(null)
 const selectedUnitId = ref<number | null>(null)
+const detailTab = ref<'supply' | 'routes' | 'chain'>('supply')
+const unitSearch = ref('')
 
 const units = computed(() => groups.value.filter((group) => group.platform === 'composite'))
+const filteredUnits = computed(() => {
+  const keyword = unitSearch.value.trim().toLowerCase()
+  if (!keyword) return units.value
+  return units.value.filter(
+    (unit) =>
+      unit.name.toLowerCase().includes(keyword) ||
+      (unit.description || '').toLowerCase().includes(keyword)
+  )
+})
 const selectedUnit = computed(() => units.value.find((group) => group.id === selectedUnitId.value) || null)
 const platformOptions = computed(() =>
   CONCRETE_PLATFORM_OPTIONS.map((platform) => ({ label: platform.label, value: platform.value }))
@@ -429,6 +505,7 @@ async function refreshEntries() {
 
 function openUnit(unitId: number) {
   selectedUnitId.value = unitId
+  detailTab.value = 'supply'
   void router.replace({ query: { ...route.query, unit: String(unitId) } })
   void loadUnitData()
 }

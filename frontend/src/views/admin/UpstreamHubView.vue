@@ -406,9 +406,6 @@
                             {{ model }}
                           </button>
                         </div>
-                        <p v-else-if="!row.probeError" class="text-xs text-gray-400 dark:text-dark-400">
-                          {{ t('admin.upstreamHub.probeHint') }}
-                        </p>
                         <div class="flex items-center gap-2 border-t border-gray-200 pt-2 dark:border-dark-600">
                           <input
                             v-model="row.manualModel"

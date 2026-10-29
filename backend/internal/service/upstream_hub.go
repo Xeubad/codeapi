@@ -40,19 +40,17 @@ type UpstreamEntryGroupRef struct {
 }
 
 type UpstreamEntry struct {
-	AccountID   int64  `json:"account_id"`
-	VendorID    int64  `json:"vendor_id"`
-	Name        string `json:"name"`
-	Platform    string `json:"platform"`
-	BaseURL     string `json:"base_url"`
-	HasAPIKey   bool   `json:"has_api_key"`
-	Concurrency int    `json:"concurrency"`
-	Priority    int    `json:"priority"`
-	Schedulable bool   `json:"schedulable"`
-	Status      string `json:"status"`
-	// ProxyID 是条目绑定的出口代理（nil = 直连）。
-	ProxyID *int64                  `json:"proxy_id"`
-	Groups  []UpstreamEntryGroupRef `json:"groups"`
+	AccountID   int64                   `json:"account_id"`
+	VendorID    int64                   `json:"vendor_id"`
+	Name        string                  `json:"name"`
+	Platform    string                  `json:"platform"`
+	BaseURL     string                  `json:"base_url"`
+	HasAPIKey   bool                    `json:"has_api_key"`
+	Concurrency int                     `json:"concurrency"`
+	Priority    int                     `json:"priority"`
+	Schedulable bool                    `json:"schedulable"`
+	Status      string                  `json:"status"`
+	Groups      []UpstreamEntryGroupRef `json:"groups"`
 	// Models 是 credentials.model_mapping 的键（已登记的对外模型名，排序后）。
 	// 网关的 /v1/models 与 composite 归属解析都只认这份映射，为空即无模型可暴露。
 	Models []string `json:"models"`
@@ -96,8 +94,6 @@ type CreateUpstreamEntryInput struct {
 	Schedulable *bool
 	// BaseURLs 是厂家的候选地址；>=2 个时保存前实测延迟，只固化最快的一个。
 	BaseURLs []string
-	// ProxyID 指定条目出口代理；nil = 直连。
-	ProxyID *int64
 }
 
 type UpdateUpstreamEntryInput struct {
@@ -108,8 +104,6 @@ type UpdateUpstreamEntryInput struct {
 	Priority    *int
 	Schedulable *bool
 	BaseURLs    []string
-	// ProxyID 为 nil 表示不修改；0 表示清空（直连）。
-	ProxyID *int64
 }
 
 var (
@@ -117,9 +111,6 @@ var (
 	ErrUpstreamVendorNotEmpty = errors.New("upstream vendor still has entries")
 	ErrUpstreamEntryNotFound  = errors.New("upstream entry not found")
 	ErrUpstreamGroupInvalid   = errors.New("group platform does not match entry platform")
-	// ErrUpstreamBaseURLUnreachable 表示厂家的候选地址全部不可达：保存必须被阻止，
-	// 不能把一条永不可用的条目写进库里。
-	ErrUpstreamBaseURLUnreachable = errors.New("all upstream base urls are unreachable")
 )
 
 // UpstreamVendorRepository 上游厂家与条目（accounts.extra 归属）的持久化接口。
@@ -150,8 +141,6 @@ type MeasureUpstreamBaseURLsInput struct {
 	Platform  string
 	APIKey    string
 	BaseURLs  []string
-	// ProxyID 仅用于未保存的草稿行，已保存条目用账号自身的代理。
-	ProxyID *int64
 }
 
 // MeasureBaseURLs 并发测厂家候选地址的延迟，供保存前挑选最快者。只测不改数据。
@@ -176,15 +165,8 @@ func (s *UpstreamHubService) MeasureBaseURLs(ctx context.Context, input MeasureU
 			return nil, ErrUpstreamEntryNotFound
 		}
 	} else {
-		// 基础连通性检查不需要 key 与平台，只需要出口（代理或直连）。
-		account = &Account{Type: AccountTypeAPIKey, ProxyID: input.ProxyID}
-		if input.ProxyID != nil && *input.ProxyID > 0 {
-			proxy, proxyErr := s.admin.GetProxy(ctx, *input.ProxyID)
-			if proxyErr != nil {
-				return nil, proxyErr
-			}
-			account.Proxy = proxy
-		}
+		// 基础连通性检查不需要 key 与平台。
+		account = &Account{Type: AccountTypeAPIKey}
 	}
 	return s.probe.MeasureBaseURLLatencies(ctx, account, urls), nil
 }
@@ -335,12 +317,6 @@ func (s *UpstreamHubService) CreateEntry(ctx context.Context, vendorID int64, in
 			Platform:    platform,
 			Type:        AccountTypeAPIKey,
 			Credentials: map[string]any{"api_key": apiKey},
-			ProxyID:     input.ProxyID,
-		}
-		if input.ProxyID != nil && *input.ProxyID > 0 {
-			if proxy, proxyErr := s.admin.GetProxy(ctx, *input.ProxyID); proxyErr == nil {
-				measureAccount.Proxy = proxy
-			}
 		}
 		chosen, pickErr := s.pickSaveBaseURL(ctx, measureAccount, baseURL, input.BaseURLs)
 		if pickErr != nil {
@@ -365,7 +341,6 @@ func (s *UpstreamHubService) CreateEntry(ctx context.Context, vendorID int64, in
 		},
 		Concurrency:          input.Concurrency,
 		Priority:             input.Priority,
-		ProxyID:              input.ProxyID,
 		SkipDefaultGroupBind: true,
 	})
 	if err != nil {
@@ -425,7 +400,6 @@ func (s *UpstreamHubService) UpdateEntry(ctx context.Context, accountID int64, i
 		Credentials:           credentials,
 		Concurrency:           input.Concurrency,
 		Priority:              input.Priority,
-		ProxyID:               input.ProxyID,
 		SkipMixedChannelCheck: true,
 	}
 	if _, err := s.admin.UpdateAccount(ctx, accountID, update); err != nil {
@@ -529,7 +503,9 @@ func (s *UpstreamHubService) pickSaveBaseURL(ctx context.Context, account *Accou
 		}
 	}
 	if fastest == nil {
-		return "", ErrUpstreamBaseURLUnreachable
+		// 全部不可达时仍按第一个地址保存：代理可能由平台 IP 管理绑在账号上，
+		// hub 侧不做代理探测，避免把「本机直连不通」误判成不可保存。
+		return urls[0], nil
 	}
 	return fastest.URL, nil
 }

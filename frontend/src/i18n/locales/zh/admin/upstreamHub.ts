@@ -21,6 +21,7 @@ export default {
     baseURLTestNeedsKey: '先填一个条目的 API Key 才能测速',
     baseURLPoolRequired: '请先在「接入地址」里配置厂家的 Base URL',
     addBaseURL: '+ 添加地址',
+    noBaseURLs: '还没有地址，先点「添加地址」',
     measureBaseURLs: '测速',
     measuring: '测速中…',
     fastestBaseURL: '最快 {host} · {ms}ms',

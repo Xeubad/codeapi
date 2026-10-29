@@ -21,6 +21,7 @@ export default {
     baseURLTestNeedsKey: 'Fill in one entry’s API key before measuring',
     baseURLPoolRequired: 'Configure the vendor Base URL under "Base URLs" first',
     addBaseURL: '+ Add URL',
+    noBaseURLs: 'No URLs yet — click "Add URL" first',
     measureBaseURLs: 'Measure',
     measuring: 'Measuring…',
     fastestBaseURL: 'Fastest {host} · {ms}ms',

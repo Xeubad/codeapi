@@ -249,7 +249,6 @@
                 <th class="min-w-[10rem] whitespace-nowrap">{{ t('admin.upstreamHub.apiKey') }}</th>
                 <th class="min-w-[6rem] whitespace-nowrap">{{ t('admin.upstreamHub.concurrency') }}</th>
                 <th class="min-w-[8.5rem] whitespace-nowrap">{{ t('admin.upstreamHub.priority') }}</th>
-                <th class="min-w-[7rem] whitespace-nowrap">{{ t('admin.upstreamHub.proxy') }}</th>
                 <th class="min-w-[9.5rem] whitespace-nowrap">{{ t('admin.upstreamHub.models') }}</th>
                 <th class="min-w-[9rem] whitespace-nowrap">{{ t('admin.upstreamHub.groups') }}</th>
                 <th class="whitespace-nowrap text-right">{{ t('common.actions') }}</th>
@@ -278,29 +277,12 @@
                   <td><input v-model.number="row.concurrency" class="input" type="number" min="1" /></td>
                   <td><input v-model.number="row.priority" class="input" type="number" /></td>
                   <td>
-                    <Select v-model="row.proxyId" :options="proxyOptions" />
-                  </td>
-                  <td>
-                    <button
-                      type="button"
-                      class="flex w-full items-center justify-between gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-left text-sm dark:border-dark-600 dark:bg-dark-800"
-                      :class="row.models.length ? '' : 'text-amber-600 dark:text-amber-400'"
-                      @click="toggleModelPanel(row)"
+                    <span
+                      class="text-sm"
+                      :class="row.models.length ? 'text-gray-700 dark:text-gray-300' : 'text-amber-600 dark:text-amber-400'"
                     >
-                      <span class="truncate">
-                        {{ t('admin.upstreamHub.modelsRegistered', { count: row.models.length }) }}
-                      </span>
-                      <svg
-                        class="h-4 w-4 shrink-0 text-gray-400 transition-transform"
-                        :class="row.modelPanelOpen ? 'rotate-180' : ''"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                      >
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6" />
-                      </svg>
-                    </button>
+                      {{ t('admin.upstreamHub.modelsRegistered', { count: row.models.length }) }}
+                    </span>
                   </td>
                   <td class="relative">
                     <button
@@ -349,96 +331,98 @@
                     </div>
                   </td>
                   <td class="text-right whitespace-nowrap">
-                    <button class="btn btn-sm btn-secondary" @click="copyRow(row)">
+                    <button
+                      class="btn btn-sm btn-secondary"
+                      :disabled="row.probeLoading"
+                      @click="toggleModelDropdown(row, $event)"
+                    >
+                      {{ row.probeLoading ? t('admin.upstreamHub.probing') : t('admin.upstreamHub.probeModels') }}
+                    </button>
+                    <div
+                      v-if="row.modelDropdownOpen"
+                      class="dropdown fixed z-40 w-[30rem] text-left"
+                      :style="{ top: row.modelDropdownTop + 'px', right: row.modelDropdownRight + 'px' }"
+                    >
+                      <div class="space-y-2 p-2">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <span
+                            v-if="row.probeSource"
+                            class="badge"
+                            :class="row.probeSource === 'models.dev' ? 'badge-gray' : 'badge-primary'"
+                          >
+                            {{
+                              row.probeSource === 'models.dev'
+                                ? t('admin.upstreamHub.probeSourceCatalog')
+                                : t('admin.upstreamHub.probeSourceUpstream')
+                            }}
+                          </span>
+                          <span class="text-xs text-gray-500 dark:text-dark-300">
+                            {{ t('admin.upstreamHub.modelsSelected', { count: row.models.length }) }}
+                          </span>
+                          <div v-if="row.probeModels.length" class="ml-auto flex items-center gap-3">
+                            <button class="text-xs text-primary-600 hover:underline" @click="selectAllProbeModels(row)">
+                              {{ t('admin.upstreamHub.selectAll') }}
+                            </button>
+                            <button class="text-xs text-gray-500 hover:underline" @click="clearRowModels(row)">
+                              {{ t('admin.upstreamHub.clearAll') }}
+                            </button>
+                          </div>
+                        </div>
+                        <p
+                          v-if="row.probeError"
+                          class="whitespace-normal break-all rounded-md bg-red-50 px-2 py-1 text-xs text-red-700 dark:bg-red-900/20 dark:text-red-300"
+                        >
+                          {{ row.probeError }}
+                        </p>
+                        <p
+                          v-if="row.probeWarning"
+                          class="whitespace-normal break-all rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-700 dark:bg-amber-900/20 dark:text-amber-300"
+                        >
+                          {{ row.probeWarning }}
+                        </p>
+                        <div v-if="row.probeModels.length" class="flex max-h-52 flex-wrap gap-1.5 overflow-y-auto">
+                          <button
+                            v-for="model in row.probeModels"
+                            :key="model"
+                            type="button"
+                            class="rounded-md px-2 py-1 font-mono text-xs transition-colors"
+                            :class="
+                              row.models.includes(model)
+                                ? 'bg-primary-500 text-white'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-dark-700 dark:text-dark-200 dark:hover:bg-dark-600'
+                            "
+                            @click="toggleRowModel(row, model)"
+                          >
+                            {{ model }}
+                          </button>
+                        </div>
+                        <p v-else-if="!row.probeError" class="text-xs text-gray-400 dark:text-dark-400">
+                          {{ t('admin.upstreamHub.probeHint') }}
+                        </p>
+                        <div class="flex items-center gap-2 border-t border-gray-200 pt-2 dark:border-dark-600">
+                          <input
+                            v-model="row.manualModel"
+                            class="input flex-1 font-mono text-xs"
+                            type="text"
+                            :placeholder="t('admin.upstreamHub.manualModelPlaceholder')"
+                            @keyup.enter="addManualModel(row)"
+                          />
+                          <button
+                            class="btn btn-secondary btn-sm shrink-0"
+                            :disabled="!row.manualModel.trim()"
+                            @click="addManualModel(row)"
+                          >
+                            {{ t('admin.upstreamHub.addModel') }}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                    <button class="btn btn-sm btn-secondary ml-1" @click="copyRow(row)">
                       {{ t('admin.upstreamHub.duplicate') }}
                     </button>
                     <button class="btn btn-sm btn-ghost ml-1 text-red-600" @click="removeRow(row, index)">
                       {{ t('admin.upstreamHub.delete') }}
                     </button>
-                  </td>
-                </tr>
-                <tr v-if="row.modelPanelOpen">
-                  <td colspan="9" class="bg-gray-50 dark:bg-dark-800/40">
-                    <div class="space-y-2">
-                      <div class="flex flex-wrap items-center gap-2">
-                        <button
-                          class="btn btn-secondary btn-sm"
-                          :disabled="row.probeLoading"
-                          @click="probeRowModels(row)"
-                        >
-                          {{ row.probeLoading ? t('admin.upstreamHub.probing') : t('admin.upstreamHub.probeModels') }}
-                        </button>
-                        <span class="text-xs text-gray-500 dark:text-dark-300">
-                          {{ t('admin.upstreamHub.modelsSelected', { count: row.models.length }) }}
-                        </span>
-                        <span
-                          v-if="row.probeSource"
-                          class="badge"
-                          :class="row.probeSource === 'models.dev' ? 'badge-gray' : 'badge-primary'"
-                        >
-                          {{
-                            row.probeSource === 'models.dev'
-                              ? t('admin.upstreamHub.probeSourceCatalog')
-                              : t('admin.upstreamHub.probeSourceUpstream')
-                          }}
-                        </span>
-                        <span v-if="row.probeError" class="text-xs text-red-600 dark:text-red-400">
-                          {{ row.probeError }}
-                        </span>
-                        <span v-else-if="row.probeModels.length" class="text-xs text-gray-500 dark:text-dark-300">
-                          {{ t('admin.upstreamHub.probeFound', { count: row.probeModels.length }) }}
-                        </span>
-                        <div v-if="row.probeModels.length" class="ml-auto flex items-center gap-3">
-                          <button class="text-xs text-primary-600 hover:underline" @click="selectAllProbeModels(row)">
-                            {{ t('admin.upstreamHub.selectAll') }}
-                          </button>
-                          <button class="text-xs text-gray-500 hover:underline" @click="clearRowModels(row)">
-                            {{ t('admin.upstreamHub.clearAll') }}
-                          </button>
-                        </div>
-                      </div>
-                      <p v-if="row.probeWarning" class="rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">
-                        {{ row.probeWarning }}
-                      </p>
-                      <div
-                        v-if="row.probeModels.length"
-                        class="flex max-h-40 flex-wrap gap-1.5 overflow-y-auto rounded-lg border border-gray-200 bg-white p-2 dark:border-dark-600 dark:bg-dark-800"
-                      >
-                        <button
-                          v-for="model in row.probeModels"
-                          :key="model"
-                          type="button"
-                          class="rounded-md px-2 py-1 font-mono text-xs transition-colors"
-                          :class="
-                            row.models.includes(model)
-                              ? 'bg-primary-500 text-white'
-                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-dark-700 dark:text-dark-200 dark:hover:bg-dark-600'
-                          "
-                          @click="toggleRowModel(row, model)"
-                        >
-                          {{ model }}
-                        </button>
-                      </div>
-                      <p v-else class="text-xs text-gray-400 dark:text-dark-400">
-                        {{ t('admin.upstreamHub.probeHint') }}
-                      </p>
-                      <div class="flex items-center gap-2">
-                        <input
-                          v-model="row.manualModel"
-                          class="input flex-1"
-                          type="text"
-                          :placeholder="t('admin.upstreamHub.manualModelPlaceholder')"
-                          @keyup.enter="addManualModel(row)"
-                        />
-                        <button
-                          class="btn btn-secondary btn-sm"
-                          :disabled="!row.manualModel.trim()"
-                          @click="addManualModel(row)"
-                        >
-                          {{ t('admin.upstreamHub.addModel') }}
-                        </button>
-                      </div>
-                    </div>
                   </td>
                 </tr>
               </template>
@@ -473,60 +457,69 @@
 
 
 
-    <!-- Base URL pool dialog：厂家地址池在这里统一维护与测速 -->
+    <!-- Base URL pool dialog：只维护地址与连通性，不涉及代理/模型 -->
     <BaseDialog
       :show="showBaseURLDialog"
       :title="t('admin.upstreamHub.baseURLDialogTitle')"
       @close="showBaseURLDialog = false"
     >
       <div class="space-y-3">
-        <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.upstreamHub.baseURLDialogHint') }}</p>
-        <div>
-          <label class="input-label">{{ t('admin.upstreamHub.measureProxy') }}</label>
-          <Select v-model="baseURLForm.proxyId" :options="proxyOptions" />
-          <p class="input-hint">{{ t('admin.upstreamHub.measureProxyHint') }}</p>
-        </div>
-        <div class="space-y-2">
-          <div v-for="(_, index) in baseURLForm.urls" :key="index" class="flex items-center gap-2">
-            <input v-model="baseURLForm.urls[index]" class="input flex-1" type="text" placeholder="https://api.example.com/v1" />
-            <button class="btn btn-sm btn-ghost text-red-600" @click="baseURLForm.urls.splice(index, 1)">
-              {{ t('admin.upstreamHub.removeRow') }}
-            </button>
-          </div>
-          <button class="btn btn-secondary btn-sm" @click="baseURLForm.urls.push('')">
+        <div class="flex flex-wrap items-center gap-2">
+          <button class="btn btn-primary btn-sm" @click="addBaseURLRow">
             {{ t('admin.upstreamHub.addBaseURL') }}
           </button>
-        </div>
-        <div class="flex flex-wrap items-center gap-2">
-          <button class="btn btn-secondary btn-sm" :disabled="baseURLTesting || cleanBaseURLs.length === 0" @click="testBaseURLs">
+          <button
+            class="btn btn-primary btn-sm"
+            :disabled="baseURLTesting || cleanBaseURLs.length === 0"
+            @click="testBaseURLs"
+          >
             {{ baseURLTesting ? t('admin.upstreamHub.measuring') : t('admin.upstreamHub.measureBaseURLs') }}
           </button>
           <span v-if="baseURLTestError" class="text-xs text-red-600 dark:text-red-400">{{ baseURLTestError }}</span>
         </div>
-        <div v-if="baseURLTestResults.length" class="max-h-48 overflow-y-auto rounded-lg border border-gray-200 dark:border-dark-600">
+        <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.upstreamHub.baseURLDialogHint') }}</p>
+        <div class="space-y-2">
           <div
-            v-for="item in baseURLTestResults"
-            :key="item.url"
-            class="flex items-center justify-between gap-2 px-3 py-1 text-xs"
+            v-for="(_, index) in baseURLForm.urls"
+            :key="index"
+            class="rounded-lg border border-gray-200 p-2 dark:border-dark-600"
           >
-            <span class="truncate font-mono">{{ item.url }}</span>
-            <span :class="item.ok ? 'text-primary-600 dark:text-primary-400' : 'text-red-600 dark:text-red-400'">
-              {{
-                item.ok
-                  ? `${item.latency_ms}ms · HTTP ${item.status_code}`
-                  : item.error || t('admin.upstreamHub.allBaseURLsUnreachable')
-              }}
-            </span>
+            <div class="flex items-center gap-2">
+              <input
+                v-model="baseURLForm.urls[index]"
+                class="input flex-1 font-mono text-xs"
+                type="text"
+                placeholder="https://api.example.com/v1"
+              />
+              <button
+                class="btn btn-sm btn-ghost shrink-0 text-red-600"
+                @click="removeBaseURLRow(index)"
+              >
+                {{ t('admin.upstreamHub.delete') }}
+              </button>
+            </div>
+            <p
+              v-if="baseURLResultFor(baseURLForm.urls[index])"
+              class="mt-1 whitespace-normal break-all text-xs"
+              :class="baseURLResultFor(baseURLForm.urls[index])?.ok ? 'text-primary-600 dark:text-primary-400' : 'text-red-600 dark:text-red-400'"
+            >
+              <template v-if="baseURLResultFor(baseURLForm.urls[index])?.ok">
+                {{ baseURLResultFor(baseURLForm.urls[index])?.latency_ms }}ms ·
+                HTTP {{ baseURLResultFor(baseURLForm.urls[index])?.status_code }}
+              </template>
+              <template v-else>
+                {{ baseURLResultFor(baseURLForm.urls[index])?.error || t('admin.upstreamHub.allBaseURLsUnreachable') }}
+              </template>
+            </p>
           </div>
+          <p v-if="baseURLForm.urls.length === 0" class="text-xs text-gray-500 dark:text-gray-400">
+            {{ t('admin.upstreamHub.noBaseURLs') }}
+          </p>
         </div>
       </div>
       <template #footer>
         <button class="btn btn-secondary" @click="showBaseURLDialog = false">{{ t('admin.upstreamHub.cancel') }}</button>
-        <button
-          class="btn btn-primary"
-          :disabled="baseURLSaving || cleanBaseURLs.length === 0"
-          @click="saveBaseURLs"
-        >
+        <button class="btn btn-primary" :disabled="baseURLSaving || cleanBaseURLs.length === 0" @click="saveBaseURLs">
           {{ t('admin.upstreamHub.saveBaseURLs') }}
         </button>
       </template>
@@ -551,8 +544,6 @@ import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { extractApiErrorMessage } from '@/utils/apiError'
 import { syncUpstreamModelsPreview } from '@/api/admin/accounts'
-import proxiesAPI from '@/api/admin/proxies'
-import type { Proxy } from '@/types'
 import upstreamHubAPI, {
   type UpstreamBaseURLLatency,
   type UpstreamEntry,
@@ -600,8 +591,9 @@ interface EntryRow {
   // 已登记的模型白名单（model_mapping 的键），保存时若有改动才回写
   models: string[]
   modelsDirty: boolean
-  proxyId: number
-  modelPanelOpen: boolean
+  modelDropdownOpen: boolean
+  modelDropdownTop: number
+  modelDropdownRight: number
   probeLoading: boolean
   probeError: string
   probeModels: string[]
@@ -613,11 +605,6 @@ const showEntryDialog = ref(false)
 const entryRows = ref<EntryRow[]>([])
 const pendingDeletes = ref<Array<{ accountId: number; concurrency: number }>>([])
 const groupOptions = ref<UpstreamGroupOption[]>([])
-const proxies = ref<Proxy[]>([])
-const proxyOptions = computed(() => [
-  { label: t('admin.upstreamHub.proxyDirect'), value: 0 },
-  ...proxies.value.map((proxy) => ({ label: proxy.name, value: proxy.id }))
-])
 
 const showDeleteConfirm = ref(false)
 const deleteTarget = ref<{ type: 'vendor'; id: number; name: string } | null>(null)
@@ -658,8 +645,9 @@ function entryToRow(entry: UpstreamEntry): EntryRow {
     dropdownRight: 0,
     models: [...(entry.models || [])],
     modelsDirty: false,
-    proxyId: entry.proxy_id ?? 0,
-    modelPanelOpen: false,
+    modelDropdownOpen: false,
+    modelDropdownTop: 0,
+    modelDropdownRight: 0,
     probeLoading: false,
     probeError: '',
     probeModels: [],
@@ -782,8 +770,9 @@ function blankRow(): EntryRow {
     dropdownRight: 0,
     models: [],
     modelsDirty: false,
-    proxyId: 0,
-    modelPanelOpen: false,
+    modelDropdownOpen: false,
+    modelDropdownTop: 0,
+    modelDropdownRight: 0,
     probeLoading: false,
     probeError: '',
     probeModels: [],
@@ -808,10 +797,15 @@ function groupPlatformLabel(group: UpstreamGroupOption): string {
   return group.platform === 'composite' ? t('admin.upstreamHub.compositeGroup') : group.platform
 }
 
-const anyRowDropdownOpen = computed(() => entryRows.value.some((row) => row.expanded))
+const anyRowDropdownOpen = computed(() =>
+  entryRows.value.some((row) => row.expanded || row.modelDropdownOpen)
+)
 
 function closeAllDropdowns() {
-  for (const item of entryRows.value) item.expanded = false
+  for (const item of entryRows.value) {
+    item.expanded = false
+    item.modelDropdownOpen = false
+  }
 }
 
 function toggleRowDropdown(row: EntryRow, event: Event) {
@@ -836,8 +830,16 @@ function toggleRowGroup(row: EntryRow, groupId: number) {
   }
 }
 
-function toggleModelPanel(row: EntryRow) {
-  row.modelPanelOpen = !row.modelPanelOpen
+// 探测按钮：打开下拉并立即探测（每次点击都重新拉一次上游列表）。
+async function toggleModelDropdown(row: EntryRow, event: Event) {
+  const willOpen = !row.modelDropdownOpen
+  closeAllDropdowns()
+  if (!willOpen) return
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  row.modelDropdownTop = rect.bottom + 4
+  row.modelDropdownRight = Math.max(8, window.innerWidth - rect.right)
+  row.modelDropdownOpen = true
+  await probeRowModels(row)
 }
 
 function toggleRowModel(row: EntryRow, model: string) {
@@ -929,7 +931,6 @@ async function openEntriesDialog() {
   if (entryRows.value.length === 0) addEntryRow()
   try {
     groupOptions.value = await upstreamHubAPI.listGroups()
-    proxies.value = await proxiesAPI.getAll()
   } catch (err) {
     appStore.showError(extractApiErrorMessage(err, t('admin.upstreamHub.loadFailed')))
   }
@@ -941,7 +942,6 @@ function closeEntriesDialog() {
   entryRows.value = []
   pendingDeletes.value = []
   groupOptions.value = []
-  proxies.value = []
 }
 
 async function copyRow(row: EntryRow) {
@@ -974,7 +974,9 @@ async function copyRow(row: EntryRow) {
     groupEnabled: { ...row.groupEnabled },
     models: [...row.models],
     modelsDirty: row.models.length > 0,
-    modelPanelOpen: false,
+    modelDropdownOpen: false,
+    modelDropdownTop: 0,
+    modelDropdownRight: 0,
     probeLoading: false,
     probeError: '',
     probeModels: [],
@@ -996,7 +998,7 @@ function removeRow(row: EntryRow, index: number) {
 
 // ---------- 接入地址池（厂家级，添加/编辑页内维护） ----------
 const showBaseURLDialog = ref(false)
-const baseURLForm = reactive({ urls: [] as string[], proxyId: 0 })
+const baseURLForm = reactive({ urls: [] as string[] })
 const baseURLTesting = ref(false)
 const baseURLSaving = ref(false)
 const baseURLTestResults = ref<UpstreamBaseURLLatency[]>([])
@@ -1004,35 +1006,39 @@ const baseURLTestError = ref('')
 
 const cleanBaseURLs = computed(() => baseURLForm.urls.map((url) => url.trim()).filter(Boolean))
 
-async function openBaseURLDialog() {
+function openBaseURLDialog() {
   baseURLForm.urls = vendorBaseURLs.value.length ? [...vendorBaseURLs.value] : ['']
-  // 测速出口默认沿用第一条条目的代理，没有条目时用直连。
-  baseURLForm.proxyId = detail.value?.entries[0]?.proxy_id ?? 0
   baseURLTestResults.value = []
   baseURLTestError.value = ''
   showBaseURLDialog.value = true
-  if (proxies.value.length === 0) {
-    try {
-      proxies.value = await proxiesAPI.getAll()
-    } catch (err) {
-      appStore.showError(extractApiErrorMessage(err, t('admin.upstreamHub.loadFailed')))
-    }
-  }
 }
 
-// 基础连通性检查：只需要出口（代理或直连），不需要 key 与平台。
-function baseURLTestTarget() {
-  return { proxy_id: baseURLForm.proxyId }
+function addBaseURLRow() {
+  baseURLForm.urls.push('')
+}
+
+function removeBaseURLRow(index: number) {
+  baseURLForm.urls.splice(index, 1)
+}
+
+function normalizeURLForCompare(raw: string): string {
+  return raw.trim().replace(/\/+$/, '').toLowerCase()
+}
+
+// 测速结果按地址回填到对应行；后端返回的是归一化后的 URL。
+function baseURLResultFor(raw: string): UpstreamBaseURLLatency | undefined {
+  const target = normalizeURLForCompare(raw)
+  if (!target) return undefined
+  return baseURLTestResults.value.find((item) => normalizeURLForCompare(item.url) === target)
 }
 
 async function testBaseURLs() {
   const urls = cleanBaseURLs.value
   if (urls.length === 0) return
-  const target = baseURLTestTarget()
   baseURLTesting.value = true
   baseURLTestError.value = ''
   try {
-    baseURLTestResults.value = await upstreamHubAPI.measureBaseURLs({ ...target, base_urls: urls })
+    baseURLTestResults.value = await upstreamHubAPI.measureBaseURLs({ base_urls: urls })
   } catch (err) {
     baseURLTestError.value = extractApiErrorMessage(err, t('admin.upstreamHub.measureFailed'))
   } finally {
@@ -1090,8 +1096,7 @@ async function saveEntryRows() {
           api_key: row.api_key,
           concurrency: Number(row.concurrency) || 1,
           priority: Number(row.priority) || 50,
-          base_urls: baseURLs,
-          proxy_id: row.proxyId
+          base_urls: baseURLs
         })
         await applyRowGroups(row.accountId, row)
         if (row.modelsDirty) {
@@ -1108,8 +1113,7 @@ async function saveEntryRows() {
           api_key: row.api_key,
           concurrency: Number(row.concurrency) || 1,
           priority: Number(row.priority) || 50,
-          base_urls: baseURLs,
-          proxy_id: row.proxyId
+          base_urls: baseURLs
         })
         await applyRowGroups(created.account_id, row)
         if (row.models.length > 0) {

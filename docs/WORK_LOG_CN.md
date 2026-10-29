@@ -65,13 +65,14 @@
 - 实测（本地 8080 新二进制）：把条目在 group 4 的 enabled 置 false，再保存相同分组集合 `[2,4]`，enabled 仍为 false（旧实现会重置为 true）；测试后已恢复原状态。
 - 前端：`pnpm check:i18n`、`vue-tsc --noEmit`、`vite build` 通过；`pnpm test:run` 375 文件 / 2861 用例全绿。
 - 迁移实测：在全新临时库 `sub2api_migtest` 上跑完整迁移成功，`upstream_vendors.base_urls` 列存在；验证后已删库。
+- CI（head `e48d305ee`）：CI 工作流全绿（frontend / golangci-lint / shell / 含集成测试的 test job）。Security Scan 仍红，原因与本次改动无关：`golang.org/x/net@v0.60.0` GO-2026-6860、`vue-i18n` GHSA-83rm-6c8r-g728，均需依赖升级后再处理。
 - 未做浏览器实点：浏览器自动化被安全策略拦截（登录页导航也被拒），聚合页由 8 条组件测试与构建覆盖，需管理员登录后目视走查。
 
 ### 产出
 
 - `e0514ba22` feat(aggregation): manage units in a dialog and fix the first-round issues
 - `95674a743` docs(aggregation): record the dialog layout and first-round fixes
-- 本次 fix 提交（迁移排序补丁 + 日志补充）
+- `e48d305ee` fix(migrations): create upstream_vendors before the base_urls alter
 
 ## 2026年10月29日
 

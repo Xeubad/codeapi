@@ -537,6 +537,11 @@
                 {{ baseURLResultFor(baseURLForm.urls[index])?.latency_ms }}ms ·
                 HTTP {{ baseURLResultFor(baseURLForm.urls[index])?.status_code }}
               </template>
+              <template v-else-if="baseURLResultFor(baseURLForm.urls[index])?.status_code">
+                {{ baseURLResultFor(baseURLForm.urls[index])?.latency_ms }}ms ·
+                HTTP {{ baseURLResultFor(baseURLForm.urls[index])?.status_code }} ·
+                {{ t('admin.upstreamHub.baseURLPathMissing') }}
+              </template>
               <template v-else>
                 {{ baseURLResultFor(baseURLForm.urls[index])?.error || t('admin.upstreamHub.allBaseURLsUnreachable') }}
               </template>

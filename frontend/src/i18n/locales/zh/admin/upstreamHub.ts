@@ -22,6 +22,7 @@ export default {
     measureProxy: '测速代理',
     measureProxyHint: '测速代理来自 IP 管理，仅作用于本次测速，不会写入条目；运行时代理请在 IP 管理绑定到账号。',
     baseURLInvalid: '地址格式无效，需以 http:// 或 https:// 开头',
+    baseURLPathMissing: '接口路径不存在，检查 Base URL 前缀（如是否少了 /v1）',
     baseURLsEmptyTitle: '还没有接入地址',
     baseURLsEmptyDesc: '未配置时无法保存条目；先填写厂家提供的 Base URL。',
     baseURLsMissingBanner: '该厂家还没有配置接入地址，保存条目会被阻断',

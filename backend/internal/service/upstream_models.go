@@ -807,15 +807,18 @@ func (s *AccountTestService) MeasureBaseURLLatencies(ctx context.Context, accoun
 	return results
 }
 
-// measureBaseURLLatency 是最基础的连通性检查：通过条目出口（代理或直连）向该地址
-// 发一个**不带鉴权**的 GET，只等响应头到达。计时覆盖 DNS + TCP + TLS + 首个响应头，
-// 任何 HTTP 状态都算可达（401/404 说明网络与端点都在）；不消耗配额、不需要 key。
+// measureBaseURLLatency 是最基础的连通性检查：通过条目出口（代理或直连）向
+// {base}/v1/models 发一个**不带鉴权**的 GET，只等响应头到达。计时覆盖 DNS + TCP +
+// TLS + 首包；401/403 等说明主机与接口路径都在（只是缺 key），404/405 单独判为
+// 路径不对。不消耗配额、不需要 key。
 func (s *AccountTestService) measureBaseURLLatency(ctx context.Context, account *Account, rawURL string) UpstreamBaseURLLatency {
 	result := UpstreamBaseURLLatency{URL: rawURL}
 
+	// 打 API 的模型列表路径而不是根路径：根路径在纯 API 主机上常常没有页面（404），
+	// 而 /v1/models 未带鉴权会返回 401，能同时证明「主机可达 + 接口路径存在」。
 	requestCtx, cancel := context.WithTimeout(ctx, upstreamBaseURLMeasureTimeout)
 	defer cancel()
-	req, err := http.NewRequestWithContext(requestCtx, http.MethodGet, rawURL, nil)
+	req, err := http.NewRequestWithContext(requestCtx, http.MethodGet, buildOpenAIModelsURL(rawURL), nil)
 	if err != nil {
 		result.Error = "invalid url"
 		return result
@@ -830,8 +833,13 @@ func (s *AccountTestService) measureBaseURLLatency(ctx context.Context, account 
 		return result
 	}
 	_ = resp.Body.Close()
-	result.OK = true
 	result.StatusCode = resp.StatusCode
+	// 404/405 说明主机通了但 Base URL 路径不对，单独报出来；其余状态都算可达。
+	if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusMethodNotAllowed {
+		result.Error = "endpoint path not found"
+		return result
+	}
+	result.OK = true
 	return result
 }
 

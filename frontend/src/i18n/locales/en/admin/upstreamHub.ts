@@ -22,6 +22,7 @@ export default {
     measureProxy: 'Test via',
     measureProxyHint: 'Test proxy comes from IP management and applies to this test only — never stored. Bind runtime proxies to accounts in IP management.',
     baseURLInvalid: 'Invalid URL — must start with http:// or https://',
+    baseURLPathMissing: 'Endpoint path missing — check the base URL prefix (e.g. /v1)',
     baseURLsEmptyTitle: 'No base URL configured',
     baseURLsEmptyDesc: 'Entries cannot be saved without a base URL. Add the vendor-provided URL first.',
     baseURLsMissingBanner: 'This vendor has no base URL yet; saving entries is blocked',

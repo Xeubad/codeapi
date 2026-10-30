@@ -86,6 +86,8 @@ type TrendDataPoint struct {
 	InputTokens         int64   `json:"input_tokens"`
 	OutputTokens        int64   `json:"output_tokens"`
 	CacheCreationTokens int64   `json:"cache_creation_tokens"`
+	CacheCreation5m     int64   `json:"cache_creation_5m_tokens"`
+	CacheCreation1h     int64   `json:"cache_creation_1h_tokens"`
 	CacheReadTokens     int64   `json:"cache_read_tokens"`
 	TotalTokens         int64   `json:"total_tokens"`
 	Cost                float64 `json:"cost"`        // 标准计费

@@ -285,6 +285,8 @@ describe('AggregationView', () => {
     await publicModelInput.setValue('public-alias')
     const upstreamInput = wrapper.find('input[placeholder="admin.aggregation.upstreamModelPlaceholder"]')
     await upstreamInput.setValue('mock-deepseek-chat')
+    const priorityInput = wrapper.find('input[type="number"]')
+    await priorityInput.setValue('20')
 
     const addButton = wrapper
       .findAll('button')
@@ -300,7 +302,8 @@ describe('AggregationView', () => {
         target_platform: 'openai',
         upstream_model: 'mock-deepseek-chat',
         match_type: 'exact',
-        endpoint: 'any'
+        endpoint: 'any',
+        priority: 20
       })
     )
   })

@@ -480,3 +480,59 @@ func TestCompositeRouteResolverExplicitRoutesCoverBucketTwoProviders(t *testing.
 		})
 	}
 }
+
+func TestCompositeRouteResolverFallbackChainPicksAvailablePlatform(t *testing.T) {
+	routes := []CompositeModelRoute{
+		{ID: 1, GroupID: 7, PublicModel: "alias", MatchType: CompositeRouteMatchExact, TargetPlatform: PlatformAnthropic, UpstreamModel: "claude-x", Endpoint: CompositeRouteEndpointAny, Priority: 10, Enabled: true},
+		{ID: 2, GroupID: 7, PublicModel: "alias", MatchType: CompositeRouteMatchExact, TargetPlatform: PlatformOpenAI, UpstreamModel: "gpt-x", Endpoint: CompositeRouteEndpointAny, Priority: 20, Enabled: true},
+	}
+	resolver := NewCompositeRouteResolver(compositeRouteRepoStub{routes: routes})
+
+	// 未配置容量探测：保留原有语义，取最高优先级那条（管理端预览同口径）。
+	decision, err := resolver.Resolve(context.Background(), 7, "alias", "")
+	require.NoError(t, err)
+	require.Equal(t, PlatformAnthropic, decision.TargetPlatform)
+	require.Equal(t, "claude-x", decision.UpstreamModel)
+
+	var checked []string
+	resolver.SetChainAvailabilityChecker(func(_ context.Context, _ int64, platform, upstreamModel string) bool {
+		checked = append(checked, platform+":"+upstreamModel)
+		return platform == PlatformOpenAI
+	})
+
+	decision, err = resolver.ResolveWithFallback(context.Background(), 7, "alias", "")
+	require.NoError(t, err)
+	require.Equal(t, PlatformOpenAI, decision.TargetPlatform)
+	require.Equal(t, "gpt-x", decision.UpstreamModel)
+	require.Equal(t, []string{"anthropic:claude-x", "openai:gpt-x"}, checked)
+
+	// 全部平台都没有可用账号时回落到最高优先级，保留原有报错语境。
+	resolver.SetChainAvailabilityChecker(func(context.Context, int64, string, string) bool { return false })
+	decision, err = resolver.ResolveWithFallback(context.Background(), 7, "alias", "")
+	require.NoError(t, err)
+	require.Equal(t, PlatformAnthropic, decision.TargetPlatform)
+
+	// /v1/models 对同一对外模型只输出一次。
+	models, err := resolver.ListExactPublicModels(context.Background(), 7, "", false)
+	require.NoError(t, err)
+	require.Equal(t, []string{"alias"}, models)
+}
+
+func TestCompositeRouteResolverChainOrdersByPriorityAfterExactMatch(t *testing.T) {
+	routes := []CompositeModelRoute{
+		{ID: 1, GroupID: 7, PublicModel: "alias", MatchType: CompositeRouteMatchPrefix, TargetPlatform: PlatformAnthropic, Priority: 1, Enabled: true},
+		{ID: 2, GroupID: 7, PublicModel: "alias", MatchType: CompositeRouteMatchExact, TargetPlatform: PlatformOpenAI, Priority: 50, Enabled: true},
+		{ID: 3, GroupID: 7, PublicModel: "alias", MatchType: CompositeRouteMatchExact, TargetPlatform: PlatformAnthropic, Priority: 10, Enabled: true},
+	}
+	resolver := NewCompositeRouteResolver(compositeRouteRepoStub{routes: routes})
+	var order []string
+	resolver.SetChainAvailabilityChecker(func(_ context.Context, _ int64, platform, _ string) bool {
+		order = append(order, platform)
+		return false
+	})
+
+	decision, err := resolver.ResolveWithFallback(context.Background(), 7, "alias", "")
+	require.NoError(t, err)
+	require.Equal(t, PlatformAnthropic, decision.TargetPlatform)
+	require.Equal(t, []string{PlatformAnthropic, PlatformOpenAI, PlatformAnthropic}, order)
+}

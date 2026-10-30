@@ -2534,7 +2534,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 	// Apply the resolved upstream model through MapRequestModel on every turn.
 	wsRouteModel := reqModel
 	if apiKey.Group != nil && apiKey.Group.Platform == service.PlatformComposite {
-		decision, resolveErr := h.compositeResolver.Resolve(c.Request.Context(), apiKey.Group.ID, reqModel, service.CompositeRouteEndpointResponses)
+		decision, resolveErr := h.compositeResolver.ResolveWithFallback(c.Request.Context(), apiKey.Group.ID, reqModel, service.CompositeRouteEndpointResponses)
 		if resolveErr != nil {
 			reqLog.Error("openai.websocket_composite_route_failed", zap.Error(resolveErr))
 			closeOpenAIClientWS(wsConn, coderws.StatusInternalError, "Failed to resolve composite model route")

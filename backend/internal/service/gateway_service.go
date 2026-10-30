@@ -877,6 +877,7 @@ func NewGatewayService(
 	}
 	if compositeResolver != nil {
 		compositeResolver.SetModelOwnershipResolver(svc.resolveCompositeModelOwnership)
+		compositeResolver.SetChainAvailabilityChecker(svc.HasSchedulableAccountForModel)
 	}
 	svc.userGroupRateResolver = newUserGroupRateResolver(
 		userGroupRateRepo,

@@ -33,9 +33,15 @@ func (d CompositeRouteDecision) AmbiguousMessage() string {
 	return fmt.Sprintf("Model %q is mapped on multiple provider platforms in this group; configure an explicit composite route", d.PublicModel)
 }
 
+// CompositeChainAvailabilityChecker reports whether a composite group can
+// currently serve upstreamModel on platform. It lets ResolveWithFallback pick
+// the first route in the priority chain that has a schedulable account.
+type CompositeChainAvailabilityChecker func(ctx context.Context, groupID int64, platform, upstreamModel string) bool
+
 type CompositeRouteResolver struct {
 	repo                   CompositeModelRouteRepository
 	modelOwnershipResolver CompositeModelOwnershipResolver
+	chainAvailability      CompositeChainAvailabilityChecker
 }
 
 func NewCompositeRouteResolver(repo CompositeModelRouteRepository) *CompositeRouteResolver {
@@ -45,6 +51,13 @@ func NewCompositeRouteResolver(repo CompositeModelRouteRepository) *CompositeRou
 func (r *CompositeRouteResolver) SetModelOwnershipResolver(resolver CompositeModelOwnershipResolver) {
 	if r != nil {
 		r.modelOwnershipResolver = resolver
+	}
+}
+
+// SetChainAvailabilityChecker wires the capacity probe used by ResolveWithFallback.
+func (r *CompositeRouteResolver) SetChainAvailabilityChecker(checker CompositeChainAvailabilityChecker) {
+	if r != nil {
+		r.chainAvailability = checker
 	}
 }
 
@@ -58,12 +71,19 @@ func (r *CompositeRouteResolver) ListExactPublicModels(ctx context.Context, grou
 		return nil, err
 	}
 	models := make([]string, 0, len(routes))
+	seen := make(map[string]struct{}, len(routes))
 	for _, route := range routes {
 		if route.Enabled && route.MatchType == CompositeRouteMatchExact &&
 			(endpoint == "" || normalizeCompositeRouteEndpoint(route.Endpoint) == CompositeRouteEndpointAny || normalizeCompositeRouteEndpoint(route.Endpoint) == endpoint) {
-			if model := strings.TrimSpace(route.PublicModel); model != "" {
-				models = append(models, model)
+			model := strings.TrimSpace(route.PublicModel)
+			if model == "" {
+				continue
 			}
+			if _, ok := seen[model]; ok {
+				continue
+			}
+			seen[model] = struct{}{}
+			models = append(models, model)
 		}
 	}
 	if !includeSystemOne {
@@ -94,7 +114,46 @@ func filterSystemOneRouteModels(routes []CompositeModelRoute, models []string, e
 	return filtered
 }
 
+// Resolve returns the highest-priority matching route without considering
+// current capacity. Admin previews and diagnostics use this.
 func (r *CompositeRouteResolver) Resolve(ctx context.Context, groupID int64, model, endpoint string) (CompositeRouteDecision, error) {
+	routes, err := r.listRoutes(ctx, groupID)
+	if err != nil {
+		return CompositeRouteDecision{GroupID: groupID, PublicModel: strings.TrimSpace(model), Endpoint: normalizeCompositeRouteEndpoint(endpoint)}, err
+	}
+	return r.resolveWithRoutes(ctx, groupID, model, endpoint, routes, false)
+}
+
+// ResolveWithFallback is Resolve plus capacity-aware chain selection: among
+// matching routes ordered by priority, the first platform with a schedulable
+// account wins. Failures that happen after forwarding still stay inside the
+// chosen platform; this only avoids landing on a platform with no capacity.
+func (r *CompositeRouteResolver) ResolveWithFallback(ctx context.Context, groupID int64, model, endpoint string) (CompositeRouteDecision, error) {
+	routes, err := r.listRoutes(ctx, groupID)
+	if err != nil {
+		return CompositeRouteDecision{GroupID: groupID, PublicModel: strings.TrimSpace(model), Endpoint: normalizeCompositeRouteEndpoint(endpoint)}, err
+	}
+	return r.resolveWithRoutes(ctx, groupID, model, endpoint, routes, true)
+}
+
+func (r *CompositeRouteResolver) listRoutes(ctx context.Context, groupID int64) ([]CompositeModelRoute, error) {
+	if r == nil || r.repo == nil || groupID <= 0 {
+		return nil, nil
+	}
+	routes, err := r.repo.ListByGroup(ctx, groupID, false)
+	if err != nil {
+		return nil, fmt.Errorf("list composite routes: %w", err)
+	}
+	return routes, nil
+}
+
+func (r *CompositeRouteResolver) resolveWithRoutes(
+	ctx context.Context,
+	groupID int64,
+	model, endpoint string,
+	routes []CompositeModelRoute,
+	useFallback bool,
+) (CompositeRouteDecision, error) {
 	model = strings.TrimSpace(model)
 	endpoint = normalizeCompositeRouteEndpoint(endpoint)
 	decision := CompositeRouteDecision{
@@ -107,27 +166,21 @@ func (r *CompositeRouteResolver) Resolve(ctx context.Context, groupID int64, mod
 		return decision, nil
 	}
 
-	if r != nil && r.repo != nil && groupID > 0 {
-		routes, err := r.repo.ListByGroup(ctx, groupID, false)
-		if err != nil {
-			return decision, fmt.Errorf("list composite routes: %w", err)
-		}
-		if route, ok := matchCompositeRoute(routes, model, endpoint); ok {
-			upstreamModel := strings.TrimSpace(route.UpstreamModel)
-			if upstreamModel == "" {
-				upstreamModel = model
+	if chain := matchCompositeRouteChain(routes, model, endpoint); len(chain) > 0 {
+		chosen := chain[0]
+		if useFallback && r != nil && r.chainAvailability != nil {
+			for _, candidate := range chain {
+				upstreamModel := strings.TrimSpace(candidate.UpstreamModel)
+				if upstreamModel == "" {
+					upstreamModel = model
+				}
+				if r.chainAvailability(ctx, groupID, candidate.TargetPlatform, upstreamModel) {
+					chosen = candidate
+					break
+				}
 			}
-			return CompositeRouteDecision{
-				Matched:        true,
-				Source:         CompositeRouteSourceExplicit,
-				GroupID:        groupID,
-				PublicModel:    model,
-				TargetPlatform: route.TargetPlatform,
-				UpstreamModel:  upstreamModel,
-				Endpoint:       endpoint,
-				Route:          &route,
-			}, nil
 		}
+		return explicitRouteDecision(groupID, model, endpoint, chosen), nil
 	}
 
 	if r != nil && r.modelOwnershipResolver != nil && groupID > 0 {
@@ -179,9 +232,38 @@ func (r *CompositeRouteResolver) Resolve(ctx context.Context, groupID int64, mod
 	return decision, nil
 }
 
+func explicitRouteDecision(groupID int64, model, endpoint string, route CompositeModelRoute) CompositeRouteDecision {
+	upstreamModel := strings.TrimSpace(route.UpstreamModel)
+	if upstreamModel == "" {
+		upstreamModel = model
+	}
+	routeCopy := route
+	return CompositeRouteDecision{
+		Matched:        true,
+		Source:         CompositeRouteSourceExplicit,
+		GroupID:        groupID,
+		PublicModel:    model,
+		TargetPlatform: route.TargetPlatform,
+		UpstreamModel:  upstreamModel,
+		Endpoint:       endpoint,
+		Route:          &routeCopy,
+	}
+}
+
 func matchCompositeRoute(routes []CompositeModelRoute, model, endpoint string) (CompositeModelRoute, bool) {
-	if len(routes) == 0 {
+	chain := matchCompositeRouteChain(routes, model, endpoint)
+	if len(chain) == 0 {
 		return CompositeModelRoute{}, false
+	}
+	return chain[0], true
+}
+
+// matchCompositeRouteChain returns every enabled route matching the request,
+// ordered from highest to lowest priority. Explicit duplicates are allowed so a
+// public model can fail over across platforms by priority.
+func matchCompositeRouteChain(routes []CompositeModelRoute, model, endpoint string) []CompositeModelRoute {
+	if len(routes) == 0 {
+		return nil
 	}
 
 	type candidate struct {
@@ -230,7 +312,7 @@ func matchCompositeRoute(routes []CompositeModelRoute, model, endpoint string) (
 		})
 	}
 	if len(candidates) == 0 {
-		return CompositeModelRoute{}, false
+		return nil
 	}
 
 	sort.SliceStable(candidates, func(i, j int) bool {
@@ -249,5 +331,10 @@ func matchCompositeRoute(routes []CompositeModelRoute, model, endpoint string) (
 		}
 		return a.route.ID < b.route.ID
 	})
-	return candidates[0].route, true
+
+	chain := make([]CompositeModelRoute, 0, len(candidates))
+	for _, candidate := range candidates {
+		chain = append(chain, candidate.route)
+	}
+	return chain
 }

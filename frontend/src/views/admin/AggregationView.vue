@@ -323,17 +323,19 @@
                   <th>{{ t('admin.aggregation.endpoint') }}</th>
                   <th>{{ t('admin.aggregation.targetPlatform') }}</th>
                   <th>{{ t('admin.aggregation.upstreamModel') }}</th>
+                  <th>{{ t('admin.aggregation.priority') }}</th>
                   <th>{{ t('admin.aggregation.enabled') }}</th>
                   <th class="text-right">{{ t('common.actions') }}</th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="route in routes" :key="route.id">
+                <tr v-for="route in sortedRoutes" :key="route.id">
                   <td class="font-mono text-xs">{{ route.public_model }}</td>
                   <td>{{ matchTypeLabel(route.match_type) }}</td>
                   <td>{{ endpointLabel(route.endpoint) }}</td>
                   <td><span class="badge badge-primary">{{ platformLabel(route.target_platform) }}</span></td>
                   <td class="font-mono text-xs">{{ route.upstream_model || route.public_model }}</td>
+                  <td>{{ route.priority }}</td>
                   <td>
                     <Toggle :model-value="route.enabled" @update:model-value="() => toggleRouteEnabled(route)" />
                   </td>
@@ -347,7 +349,7 @@
                   </td>
                 </tr>
                 <tr v-if="routes.length === 0">
-                  <td colspan="7" class="py-4 text-center text-xs text-gray-500">
+                  <td colspan="8" class="py-4 text-center text-xs text-gray-500">
                     {{ t('admin.aggregation.noRoutes') }}
                   </td>
                 </tr>
@@ -403,6 +405,11 @@
               <div>
                 <label class="input-label">{{ t('admin.aggregation.endpoint') }}</label>
                 <Select v-model="routeForm.endpoint" :options="endpointOptions" />
+              </div>
+              <div>
+                <label class="input-label">{{ t('admin.aggregation.priority') }}</label>
+                <input v-model.number="routeForm.priority" class="input" type="number" min="1" />
+                <p class="input-hint">{{ t('admin.aggregation.priorityHint') }}</p>
               </div>
               <div>
                 <label class="input-label">{{ t('admin.aggregation.notes') }}</label>
@@ -649,6 +656,11 @@ const units = ref<AggregationUnit[]>([])
 const vendors = ref<UpstreamVendor[]>([])
 const entries = ref<UpstreamEntry[]>([])
 const routes = ref<CompositeModelRoute[]>([])
+const sortedRoutes = computed(() =>
+  [...routes.value].sort(
+    (a, b) => a.public_model.localeCompare(b.public_model) || a.priority - b.priority || a.id - b.id
+  )
+)
 const keys = ref<GroupAPIKey[]>([])
 const keysTotal = ref(0)
 const selectedUnitId = ref<number | null>(null)

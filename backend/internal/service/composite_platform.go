@@ -197,11 +197,31 @@ func (s *GatewayService) resolveCompositeRouteDecision(ctx context.Context, grou
 			Endpoint:       normalizeCompositeRouteEndpoint(endpoint),
 		}, true, nil
 	}
-	decision, err := s.compositeResolver.Resolve(ctx, group.ID, requestedModel, endpoint)
+	decision, err := s.compositeResolver.ResolveWithFallback(ctx, group.ID, requestedModel, endpoint)
 	if err != nil {
 		return decision, false, err
 	}
 	return decision, decision.Matched, nil
+}
+
+// HasSchedulableAccountForModel reports whether the group currently has a
+// schedulable account on platform that can serve upstreamModel. It reuses the
+// scheduler snapshot/mixed-scheduling path so the fallback chain does not route
+// to a platform whose pool is empty.
+func (s *GatewayService) HasSchedulableAccountForModel(ctx context.Context, groupID int64, platform, upstreamModel string) bool {
+	if s == nil || groupID <= 0 || strings.TrimSpace(platform) == "" {
+		return false
+	}
+	accounts, _, err := s.listSchedulableAccounts(ctx, &groupID, platform, false)
+	if err != nil {
+		return false
+	}
+	for i := range accounts {
+		if s.isModelSupportedByAccountWithContext(ctx, &accounts[i], upstreamModel) {
+			return true
+		}
+	}
+	return false
 }
 
 func isConcreteRequestPlatform(platform string) bool {

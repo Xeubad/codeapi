@@ -93,6 +93,32 @@
 - `9e88db3b4` docs(policy): 上游策略改为完全解耦 + 按需借鉴 —— 已推送 `origin/main`（`a17f27d6b..9e88db3b4`）。
   直连 GitHub 超时，需按既有约定在命令内联 `proxy_on` 后 push 才成功。
 
+**主题（同日第三次工作）**：代并行会话核验并落地仪表板改版与用量趋势字段
+
+### 改动
+
+- 本会话未新增业务代码，只做核验与落地：`ef7401939`（后端 2 文件，趋势补齐 5m/1h 缓存写入拆分）与 `18639df09`（前端 32 文件，仪表板按角色分离改版）。
+- 核验期间对方清理掉的临时产物（`backend/ent/schema/.entc/`、`frontend/dashboard-preview.html`、`src/DashboardPreview.vue`、`src/dashboard-preview-main.ts`）未进入提交。
+
+### 关键决策
+
+- 这批改动来自并行会话（最后写入 02:22，静默约 30 分钟），不是本会话产出；落地前按「后端跑受影响 package + 界面改动构建进 dist」的标准全量复核，绿了才提交，避免把在途半成品推上 `main`（同日已发生过一次：一个未配对的 `</div>` 让 `vite build` 直接失败）。
+- 按主题拆两个提交（后端字段 / 前端改版），保留 bisect 能力。
+- 聚合表路径的 5m/1h 拆分返回 `0::bigint` 占位而非伪造数字，作为已知边界写进提交信息。
+
+### 验证
+
+- 后端：`gofmt -l` 无输出；`go build ./...` 通过；`go test ./internal/pkg/usagestats/ ./internal/repository/` 通过（repository 8.0s）。
+- 前端：`check:i18n` 3 用例、`vue-tsc --noEmit` 无错、`test:run` **379 文件 / 2878 用例**全绿（较本会话上一轮的 372/2846 增加 7 文件 32 用例）、`pnpm build` 成功并嵌入 `backend/internal/web/dist`。
+- `make -C backend build`（`-tags embed`）通过；`git diff --check` 干净。
+- **未运行**：完整 `make test`（后端只跑受影响两个 package）；仪表板页面的浏览器实测（由并行会话做过，本会话未重复点验）。
+
+### 产出
+
+- `ef7401939` feat(usagestats): 用量趋势补齐 5m/1h 缓存写入拆分
+- `18639df09` feat(dashboard): 仪表板按角色分离改版
+- 本条日志随同一次 `docs(worklog)` 提交落地。
+
 ---
 
 ## 2026年10月30日

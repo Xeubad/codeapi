@@ -63,7 +63,7 @@
 
 ### 产出
 
-- 未提交：本会话的权限模式连续两次拒绝 `git commit`（连同 10-26 晚的首页 Hero 面板改动一起留在工作区）。落地命令见 10-26 第三次工作一节，另加本轮：`git add docs/UI_REFACTOR_RESEARCH_CN.md docs/WORK_LOG_CN.md && git commit -m "docs(ui-research): 以冲突面实测修订全站重构决策并新增 §9"`。
+- 与同日第二次工作合并落地：`9e88db3b4` docs(policy): 上游策略改为完全解耦 + 按需借鉴（含本节 UI 调研文档的 §7.2/§9 修订），已推送 `origin/main`。
 
 **主题（同日第二次工作）**：上游策略改为「完全解耦 + 按需借鉴」，并据此二次修订全站 UI 重构决策
 
@@ -90,7 +90,8 @@
 
 ### 产出
 
-- 未提交（本会话权限模式拒绝 `git commit`）。建议与上一条目合并为两个 docs 提交：`docs(policy): 上游策略改为完全解耦 + 按需借鉴` 与 `docs(ui-research): 二次修订全站重构决策（§7.4 为最终口径）`。
+- `9e88db3b4` docs(policy): 上游策略改为完全解耦 + 按需借鉴 —— 已推送 `origin/main`（`a17f27d6b..9e88db3b4`）。
+  直连 GitHub 超时，需按既有约定在命令内联 `proxy_on` 后 push 才成功。
 
 ---
 
@@ -661,10 +662,8 @@
 
 ### 产出
 
-- 未提交（本轮会话的权限模式拒绝 commit/push，改动全部留在 `main` 工作区）。落地时按主题拆两个提交：
-  1. `feat(home): 首页 Hero 面板改为 base_url 接入卡` → `HomeView.vue` + zh/en `landing.ts` + `HomeView.compact.spec.ts`
-  2. `docs(home): 设计文档 §12 面板口径与本次工作日志` → 本文档 + `GATEWAY_HOME_DESIGN_RESEARCH_CN.md`
-  （`UpstreamHubView.vue` 不在清单内：它已回到 HEAD 状态，见上方「构建中断的处置」。）
+- `3b2a8d294` feat(home): 首页 Hero 面板改为 base_url 接入卡
+- 文档改动（本文件 + `GATEWAY_HOME_DESIGN_RESEARCH_CN.md`）随本条 docs 提交一起落地，即该提交本身。
 
 **主题（同日第三次工作）**：全站 UI 重构选型调研（React Bits 与通用组件库对比）入档
 

@@ -38,7 +38,7 @@
 
 ## 2026年10月30日
 
-**主题**：聚合调度布局收口 + 第一批逻辑修复（分组增量同步、链路真实 Key、供给折叠、归一模型参数）
+**主题**：聚合调度布局收口 + 两批逻辑修复（增量分组、链路真实 Key、供给折叠、账号收口、单元管理、跨平台回退链、依赖安全）
 
 ### 改动
 
@@ -49,13 +49,21 @@
 - 链路视图：弃用 mock 的 `groups/:id/stats`，改读 `groups/:id/api-keys`；客户列展示 key（`maskApiKey`）/属主/状态，统计卡显示在用与总数；条目列只列已挂载条目。
 - 归一模型：补匹配方式、接口端点、备注与行内编辑；上游模型候选来自所选平台已挂载条目（datalist，可自由输入）；平台下拉标注供给数，无供给给出不阻塞提示；重复路由返回可读提示；删除「同模型按优先级降级」错误文案。
 - 迁移排序：新增 `900_xeu_upstream_vendor_0_bootstrap.sql`，在 `*_base_urls.sql` 之前幂等建出 `upstream_vendors`，修复全新数据库上「先 ALTER 后建表」导致 CI 集成测试失败的问题。
+- 账号管理收口：聚合条目加「上游聚合 · 厂家」徽章，编辑跳 hub、删除隐藏、批量删除跳过；新增厂家条目导入接口（仅 apikey + base_url + api_key 且未归属），只写归属；账号菜单新增「纳入上游聚合」；后端拒绝单条/批量直接改 hub 条目分组。
+- 单元管理补全：新增 `GET /admin/aggregation/units`（单元 + 条目数 + 路由数），列表去掉 N+1；聚合页支持重命名与删除（级联路由/挂载，条目保留）；GroupsView 新建/编辑表单新增「从上游聚合引用」区块。
+- 跨平台回退链：迁移 `910_xeu_composite_route_chain.sql` 删除唯一索引并改建链式索引；resolver 新增 `ResolveWithFallback`，按匹配强度/端点/前缀/优先级排序并探测可调度账号，选第一个有号的平台；gateway/Gemini/WS/调度统一接入；`/v1/models` 去重；聚合页恢复优先级 UI。
+- 依赖安全：`x/net` → v0.62.0、`vue-i18n` → 11.4.16 + `@intlify/message-compiler`；移除未使用且未进 bundle 的 `@lobehub/icons`（连带 532 个包），消除 decode-uri-component 审计命中。
 
 ### 关键决策
 
 - 单元 = composite 分组的设计不变；管理动作收进弹窗，避免出现独立于其它管理页的「二级页面」版式。
 - `SetEntryGroups` 必须增量：全删重建会静默重置其它分组的「暂不调用」与调度优先级，前端补偿只能覆盖弹窗内可见的分组。
 - 链路客户数据复用现有 admin 接口（返回完整 key，前端打码），不新增聚合专用端点。
-- 跨平台优先级回退链本轮不做：唯一索引 `(group_id, endpoint, match_type, public_model)` 限制一模型一路由，resolver 也只取单条；`priority` 继续落库但 UI 不暴露，避免承诺不存在的能力。
+- 跨平台回退链只做“选路阶段”：同一对外模型可配多条路由，解析时选第一个有可调度账号的平台；主平台有号但转发全部失败时不做跨平台重放（改造成本在 HTTP 重放链路）。该边界已写入设计文档。
+- 容量探测复用调度同款账号列表（快照 + 混合调度 + 限流/过载过滤），首条命中即停；管理端预览保持静态解析，不受当前容量影响。
+- 账号归属保持单一来源：hub 条目在账号页只读，纳入必须显式选厂家；后端拦截分组修改，避免绕过平台校验。
+- 单元列表改后端汇总，避免前端按单元逐个拉路由；删除单元只清路由与挂载，不删上游条目。
+- `@lobehub/icons` 未被任何代码 import、也未进构建产物，选择直接删除而不是登记审计例外或 override 未确认修复的 0.5.1。
 - `/admin/groups/:id/stats` 的 mock 实现保留（上游代码），聚合页不再依赖它。
 - 迁移顺序问题没有重命名已应用的 `900_xeu_upstream_vendor_base_urls.sql`，而是用前置 bootstrap 补丁修排序：重命名会破坏「已应用迁移不可改名」的约束；bootstrap 是纯增量、幂等，已在本地库与全新库都验证为无副作用。
 
@@ -65,7 +73,12 @@
 - 实测（本地 8080 新二进制）：把条目在 group 4 的 enabled 置 false，再保存相同分组集合 `[2,4]`，enabled 仍为 false（旧实现会重置为 true）；测试后已恢复原状态。
 - 前端：`pnpm check:i18n`、`vue-tsc --noEmit`、`vite build` 通过；`pnpm test:run` 375 文件 / 2861 用例全绿。
 - 迁移实测：在全新临时库 `sub2api_migtest` 上跑完整迁移成功，`upstream_vendors.base_urls` 列存在；验证后已删库。
-- CI（head `e48d305ee`）：CI 工作流全绿（frontend / golangci-lint / shell / 含集成测试的 test job）。Security Scan 仍红，原因与本次改动无关：`golang.org/x/net@v0.60.0` GO-2026-6860、`vue-i18n` GHSA-83rm-6c8r-g728，均需依赖升级后再处理。
+- CI（head `e48d305ee`）：CI 工作流全绿；当时的 Security Scan 红于 x/net GO-2026-6860 与 vue-i18n GHSA-83rm-6c8r-g728，已在第二批升级修复。
+- 后端（第二批）：`go test ./...` 在依赖升级后全绿；回退链提交后 `go test ./internal/service/ ./internal/server/routes/ ./internal/handler/admin/ ./internal/repository/` 全绿；`go build ./...` 通过。
+- 前端（第二批）：`check:i18n`、`vue-tsc --noEmit`、`vite build` 通过；全量 `pnpm test:run` 377 文件 / 2870 用例全绿。
+- 迁移实测：全新临时库完整迁移后 `composite_model_routes` 的链式索引存在、旧唯一索引不存在；本地库已应用 `910_xeu_composite_route_chain.sql`。
+- 实测（本地 8080）：账号纳入成功、重复纳入 409、直接改分组 400；`/admin/aggregation/units` 返回条目/路由计数；单元重命名成功并已还原；同一对外模型跨平台两条路由均创建成功（旧唯一索引会 409），测试后已清理。
+- CI（head `3e14f1584`）：CI 与 Security Scan 均全绿，含集成测试（迁移 910 在全新测试库上通过）。
 - 未做浏览器实点：浏览器自动化被安全策略拦截（登录页导航也被拒），聚合页由 8 条组件测试与构建覆盖，需管理员登录后目视走查。
 
 ### 产出
@@ -73,6 +86,14 @@
 - `e0514ba22` feat(aggregation): manage units in a dialog and fix the first-round issues
 - `95674a743` docs(aggregation): record the dialog layout and first-round fixes
 - `e48d305ee` fix(migrations): create upstream_vendors before the base_urls alter
+- `ca199cee1` docs(worklog): record the CI result for the migration fix
+- `0d92b2392` chore(deps): bump x/net and vue-i18n to patch security advisories
+- `484a42e10` test(i18n): assert rendered translations after the vue-i18n v11 runtime JIT
+- `86c346bc3` feat(accounts): mark hub entries read-only and allow explicit hub inclusion
+- `0a7ecda0f` feat(aggregation): complete unit management and group-side hub references
+- `306cc0398` feat(composite): resolve model routes as a capacity-aware priority chain
+- `3e14f1584` chore(deps): drop the unused @lobehub/icons dependency
+- 本次 docs 提交（设计文档第五轮 + 本日志）
 
 ## 2026年10月29日
 

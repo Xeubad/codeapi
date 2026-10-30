@@ -186,7 +186,7 @@ func (s *UpdateService) applyReleaseAssets(ctx context.Context, releaseAssets []
 	var checksumURL string
 
 	for _, asset := range releaseAssets {
-		if strings.Contains(asset.Name, archiveName) && !strings.HasSuffix(asset.Name, ".txt") {
+		if isReleaseArchiveAsset(asset.Name, archiveName) {
 			downloadURL = asset.DownloadURL
 		}
 		if asset.Name == "checksums.txt" {
@@ -197,15 +197,18 @@ func (s *UpdateService) applyReleaseAssets(ctx context.Context, releaseAssets []
 	if downloadURL == "" {
 		return fmt.Errorf("no compatible release found for %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
+	// Integrity verification is mandatory. Installing an unverified binary from
+	// a compromised or incomplete release must fail closed.
+	if checksumURL == "" {
+		return fmt.Errorf("checksums.txt not found for %s/%s release", runtime.GOOS, runtime.GOARCH)
+	}
 
 	// SECURITY: Validate download URL is from trusted domain
-	if err := validateDownloadURL(downloadURL); err != nil {
+	if err := ValidateDownloadURL(downloadURL); err != nil {
 		return fmt.Errorf("invalid download URL: %w", err)
 	}
-	if checksumURL != "" {
-		if err := validateDownloadURL(checksumURL); err != nil {
-			return fmt.Errorf("invalid checksum URL: %w", err)
-		}
+	if err := ValidateDownloadURL(checksumURL); err != nil {
+		return fmt.Errorf("invalid checksum URL: %w", err)
 	}
 
 	// Get current executable path
@@ -234,11 +237,9 @@ func (s *UpdateService) applyReleaseAssets(ctx context.Context, releaseAssets []
 		return fmt.Errorf("download failed: %w", err)
 	}
 
-	// Verify checksum if available
-	if checksumURL != "" {
-		if err := s.verifyChecksum(ctx, archivePath, checksumURL); err != nil {
-			return fmt.Errorf("checksum verification failed: %w", err)
-		}
+	// Verify checksum before extraction or replacement.
+	if err := s.verifyChecksum(ctx, archivePath, checksumURL); err != nil {
+		return fmt.Errorf("checksum verification failed: %w", err)
 	}
 
 	// Extract binary from archive
@@ -443,9 +444,27 @@ func (s *UpdateService) getArchiveName() string {
 	return fmt.Sprintf("%s_%s", osName, arch)
 }
 
-// validateDownloadURL checks if the URL is from an allowed domain
-// SECURITY: This prevents SSRF and ensures downloads only come from trusted GitHub domains
-func validateDownloadURL(rawURL string) error {
+// isReleaseArchiveAsset matches only the platform archive itself. Sidecar
+// files such as .sig/.sha256 must never be mistaken for the installable binary.
+func isReleaseArchiveAsset(name, archiveName string) bool {
+	switch {
+	case strings.HasSuffix(name, ".txt"),
+		strings.HasSuffix(name, ".sig"),
+		strings.HasSuffix(name, ".sha256"),
+		strings.HasSuffix(name, ".sha512"):
+		return false
+	}
+	for _, suffix := range []string{".tar.gz", ".tgz", ".tar"} {
+		if strings.HasSuffix(name, "_"+archiveName+suffix) {
+			return true
+		}
+	}
+	return false
+}
+
+// ValidateDownloadURL checks if the URL is from an allowed domain.
+// SECURITY: This prevents SSRF and ensures downloads only come from trusted GitHub domains.
+func ValidateDownloadURL(rawURL string) error {
 	parsedURL, err := url.Parse(rawURL)
 	if err != nil {
 		return fmt.Errorf("invalid URL: %w", err)
@@ -526,7 +545,9 @@ func (s *UpdateService) extractBinary(archivePath, destPath string) error {
 	}
 
 	// Handle tar archive
-	if strings.Contains(archivePath, ".tar") {
+	if strings.HasSuffix(archivePath, ".tar") ||
+		strings.HasSuffix(archivePath, ".tar.gz") ||
+		strings.HasSuffix(archivePath, ".tgz") {
 		tr := tar.NewReader(reader)
 		for {
 			hdr, err := tr.Next()

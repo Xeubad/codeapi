@@ -435,8 +435,10 @@ func (s *PaymentService) doBalance(ctx context.Context, o *dbent.PaymentOrder, l
 
 	switch action {
 	case redeemActionSkipCompleted:
+		// The balance is already credited; affiliate rebate failures must not
+		// turn a paid order into FAILED and invite a manual double credit.
 		if err := s.applyAffiliateRebateForOrder(ctx, o); err != nil {
-			return err
+			slog.Error("affiliate rebate failed after payment fulfillment", "orderID", o.ID, "error", err)
 		}
 		// Code already created and redeemed — just mark completed
 		return s.markCompleted(ctx, o, lease, "RECHARGE_SUCCESS")
@@ -452,7 +454,7 @@ func (s *PaymentService) doBalance(ctx context.Context, o *dbent.PaymentOrder, l
 		return fmt.Errorf("redeem balance: %w", err)
 	}
 	if err := s.applyAffiliateRebateForOrder(ctx, o); err != nil {
-		return err
+		slog.Error("affiliate rebate failed after payment fulfillment", "orderID", o.ID, "error", err)
 	}
 	return s.markCompleted(ctx, o, lease, "RECHARGE_SUCCESS")
 }
@@ -607,7 +609,7 @@ func (s *PaymentService) doSub(ctx context.Context, o *dbent.PaymentOrder, lease
 		return err
 	}
 	if err := s.applyAffiliateRebateForOrder(ctx, o); err != nil {
-		return err
+		slog.Error("affiliate rebate failed after payment fulfillment", "orderID", o.ID, "error", err)
 	}
 	return s.markCompleted(ctx, o, lease, "SUBSCRIPTION_SUCCESS")
 }

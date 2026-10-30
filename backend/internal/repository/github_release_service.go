@@ -61,6 +61,7 @@ func NewGitHubReleaseClient(proxyURL string, allowDirectOnProxyError bool) servi
 		downloadClient = &http.Client{Timeout: 10 * time.Minute}
 	}
 	downloadClient = cloneHTTPClient(downloadClient)
+	downloadClient.CheckRedirect = githubDownloadCheckRedirect(downloadClient.CheckRedirect)
 
 	return &githubReleaseClient{
 		httpClient:         apiClient,
@@ -83,6 +84,20 @@ func githubAPICheckRedirect(previous func(*http.Request, []*http.Request) error)
 	return func(req *http.Request, via []*http.Request) error {
 		if !isGitHubAPIURL(req.URL) {
 			req.Header.Del("Authorization")
+		}
+		if previous != nil {
+			return previous(req, via)
+		}
+		return nil
+	}
+}
+
+// githubDownloadCheckRedirect prevents release downloads from following a
+// redirect away from the trusted GitHub download hosts.
+func githubDownloadCheckRedirect(previous func(*http.Request, []*http.Request) error) func(*http.Request, []*http.Request) error {
+	return func(req *http.Request, via []*http.Request) error {
+		if err := service.ValidateDownloadURL(req.URL.String()); err != nil {
+			return err
 		}
 		if previous != nil {
 			return previous(req, via)
@@ -232,7 +247,7 @@ func (c *githubReleaseClient) FetchChecksumFile(ctx context.Context, url string)
 		return nil, err
 	}
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.downloadHTTPClient.Do(req)
 	if err != nil {
 		return nil, err
 	}

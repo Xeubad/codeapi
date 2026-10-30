@@ -328,17 +328,16 @@ func (s *TotpService) Disable(ctx context.Context, userID int64, emailCode, pass
 	return nil
 }
 
-// VerifyCode verifies a TOTP code for a user
+// VerifyCode verifies a TOTP code for a user.
+//
+// The attempt counter is reserved before evaluating the code. Redis INCR is the
+// serialization point, so concurrent guesses can never evaluate more than
+// maxTotpAttempts codes. Cache failures are fail-closed: if the reservation
+// cannot be recorded, the code is not evaluated.
 func (s *TotpService) VerifyCode(ctx context.Context, userID int64, code string) error {
 	slog.Debug("totp_verify_code_called",
 		"user_id", userID,
 		"code_len", len(code))
-
-	// Check rate limiting
-	attempts, err := s.cache.GetVerifyAttempts(ctx, userID)
-	if err == nil && attempts >= maxTotpAttempts {
-		return ErrTotpTooManyAttempts
-	}
 
 	// Get user
 	user, err := s.userRepo.GetByID(ctx, userID)
@@ -357,6 +356,19 @@ func (s *TotpService) VerifyCode(ctx context.Context, userID int64, code string)
 		return ErrTotpNotSetup
 	}
 
+	// Reserve one verification attempt before looking at the code. A failed
+	// reservation must reject the request instead of silently disabling the cap.
+	attempts, err := s.cache.IncrementVerifyAttempts(ctx, userID)
+	if err != nil {
+		slog.Warn("totp_verify_attempt_reservation_failed",
+			"user_id", userID,
+			"error", err)
+		return infraerrors.InternalServer("TOTP_VERIFY_ERROR", "failed to verify totp code")
+	}
+	if attempts > maxTotpAttempts {
+		return ErrTotpTooManyAttempts
+	}
+
 	slog.Debug("totp_verify_encrypted_secret",
 		"user_id", userID,
 		"encrypted_len", len(*user.TotpSecretEncrypted))
@@ -370,27 +382,15 @@ func (s *TotpService) VerifyCode(ctx context.Context, userID int64, code string)
 		return infraerrors.InternalServer("TOTP_VERIFY_ERROR", "failed to verify totp code")
 	}
 
-	secretPrefix := "N/A"
-	if len(secret) >= 4 {
-		secretPrefix = secret[:4]
-	}
-	slog.Debug("totp_verify_decrypted",
-		"user_id", userID,
-		"secret_len", len(secret),
-		"secret_prefix", secretPrefix)
-
 	// Verify the code
 	valid := totp.Validate(code, secret)
 	slog.Debug("totp_verify_result",
 		"user_id", userID,
 		"valid", valid,
 		"secret_len", len(secret),
-		"secret_prefix", secretPrefix,
 		"server_time", time.Now().UTC().Format(time.RFC3339))
 
 	if !valid {
-		// Increment failed attempts
-		_, _ = s.cache.IncrementVerifyAttempts(ctx, userID)
 		return ErrTotpInvalidCode
 	}
 

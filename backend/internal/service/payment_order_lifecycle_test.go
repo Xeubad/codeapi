@@ -722,6 +722,55 @@ func TestReconcilePendingPaymentOrdersQueriesAlipayOrder(t *testing.T) {
 	require.Equal(t, order.OutTradeNo, provider.lastQueryTradeNo)
 }
 
+func TestReconcileFailedPaidPaymentOrdersRetriesFulfillment(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentOrderLifecycleTestClient(t)
+
+	user, err := client.User.Create().
+		SetEmail("failed-paid-reconcile@example.com").
+		SetPasswordHash("hash").
+		SetUsername("failed-paid-reconcile-user").
+		Save(ctx)
+	require.NoError(t, err)
+
+	order, err := client.PaymentOrder.Create().
+		SetUserID(user.ID).
+		SetUserEmail(user.Email).
+		SetUserName(user.Username).
+		SetAmount(50).
+		SetPayAmount(50).
+		SetFeeRate(0).
+		SetRechargeCode("FAILED-PAID-RECONCILE").
+		SetOutTradeNo("sub2_failed_paid_reconcile").
+		SetPaymentType(payment.TypeAlipay).
+		SetPaymentTradeNo("trade-failed-paid").
+		SetOrderType(payment.OrderTypeBalance).
+		SetStatus(OrderStatusFailed).
+		SetPaidAt(time.Now().Add(-time.Hour)).
+		SetFailedAt(time.Now().Add(-2 * paymentFulfillmentLeaseDuration)).
+		SetFailedReason("transient fulfillment error").
+		SetExpiresAt(time.Now().Add(time.Hour)).
+		SetClientIP("127.0.0.1").
+		SetSrcHost("api.example.com").
+		Save(ctx)
+	require.NoError(t, err)
+
+	userRepo := &mockUserRepo{getByIDUser: &User{ID: user.ID, Email: user.Email, Username: user.Username}}
+	userRepo.updateBalanceFn = func(context.Context, int64, float64) error { return nil }
+	redeemRepo := &paymentFulfillmentRedeemRepo{codesByCode: map[string]*RedeemCode{}}
+	redeemService := NewRedeemService(redeemRepo, userRepo, nil, nil, nil, client, nil, nil)
+	svc := &PaymentService{entClient: client, redeemService: redeemService, userRepo: userRepo}
+
+	recovered, err := svc.ReconcileFailedPaidPaymentOrders(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 1, recovered)
+
+	reloaded, err := client.PaymentOrder.Get(ctx, order.ID)
+	require.NoError(t, err)
+	require.Equal(t, OrderStatusCompleted, reloaded.Status)
+	require.Nil(t, reloaded.FailedReason)
+}
+
 func TestVerifyOrderByOutTradeNoUsesOutTradeNoWhenPaymentTradeNoAlreadyExistsForAlipay(t *testing.T) {
 	ctx := context.Background()
 	client := newPaymentOrderLifecycleTestClient(t)

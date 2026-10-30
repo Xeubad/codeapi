@@ -87,6 +87,15 @@ describe('HomeView compact mode', () => {
     expect(wrapper.find('[data-testid="compact-home"]').exists()).toBe(false)
   })
 
+  it('strips executable HTML from custom home content', () => {
+    const wrapper = mountHome({
+      home_content: '<section id="custom-home">Custom home<script>window.alert(1)</script></section>',
+    })
+
+    expect(wrapper.get('#custom-home').text()).toBe('Custom home')
+    expect(wrapper.find('#custom-home script').exists()).toBe(false)
+  })
+
   it('renders custom URL content ahead of compact mode', () => {
     const wrapper = mountHome({
       compact_home_enabled: true,

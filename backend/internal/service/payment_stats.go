@@ -179,7 +179,18 @@ func roundAmount(amount float64) float64 {
 
 func (s *PaymentService) writeAuditLog(ctx context.Context, oid int64, action, op string, detail map[string]any) {
 	dj, _ := json.Marshal(detail)
-	_, err := s.entClient.PaymentAuditLog.Create().SetOrderID(strconv.FormatInt(oid, 10)).SetAction(action).SetDetail(string(dj)).SetOperator(op).Save(ctx)
+	// payment_audit_logs has a unique (order_id, action) constraint used for
+	// fulfillment idempotency. Duplicate events are expected during provider
+	// retries, so absorb the conflict instead of emitting an ERROR for every
+	// retry while keeping the first event as the canonical record.
+	err := s.entClient.PaymentAuditLog.Create().
+		SetOrderID(strconv.FormatInt(oid, 10)).
+		SetAction(action).
+		SetDetail(string(dj)).
+		SetOperator(op).
+		OnConflictColumns(paymentauditlog.FieldOrderID, paymentauditlog.FieldAction).
+		DoNothing().
+		Exec(ctx)
 	if err != nil {
 		slog.Error("audit log failed", "orderID", oid, "action", action, "error", err)
 	}

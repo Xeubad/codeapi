@@ -608,27 +608,34 @@ download_and_extract() {
     trap "rm -rf $TEMP_DIR" EXIT
 
     # Download archive
-    if ! curl -sL "$download_url" -o "$TEMP_DIR/$archive_name"; then
+    if ! curl -fsSL "$download_url" -o "$TEMP_DIR/$archive_name"; then
         print_error "$(msg 'download_failed')"
         exit 1
     fi
 
-    # Download and verify checksum
+    # Download and verify checksum. Missing or invalid checksums must abort the
+    # install instead of falling back to an unverified binary.
     print_info "$(msg 'verifying_checksum')"
-    if curl -sL "$checksum_url" -o "$TEMP_DIR/checksums.txt" 2>/dev/null; then
-        local expected_checksum=$(grep "$archive_name" "$TEMP_DIR/checksums.txt" | awk '{print $1}')
-        local actual_checksum=$(sha256sum "$TEMP_DIR/$archive_name" | awk '{print $1}')
-
-        if [ "$expected_checksum" != "$actual_checksum" ]; then
-            print_error "$(msg 'checksum_failed')"
-            print_error "Expected: $expected_checksum"
-            print_error "Actual: $actual_checksum"
-            exit 1
-        fi
-        print_success "$(msg 'checksum_verified')"
-    else
-        print_warning "$(msg 'checksum_not_found')"
+    if ! curl -fsSL "$checksum_url" -o "$TEMP_DIR/checksums.txt"; then
+        print_error "$(msg 'checksum_not_found')"
+        exit 1
     fi
+    local expected_checksum
+    expected_checksum=$(awk -v name="$archive_name" '$2 == name {print $1; exit}' "$TEMP_DIR/checksums.txt")
+    if [ -z "$expected_checksum" ]; then
+        print_error "$(msg 'checksum_not_found')"
+        exit 1
+    fi
+    local actual_checksum
+    actual_checksum=$(sha256sum "$TEMP_DIR/$archive_name" | awk '{print $1}')
+
+    if [ "$expected_checksum" != "$actual_checksum" ]; then
+        print_error "$(msg 'checksum_failed')"
+        print_error "Expected: $expected_checksum"
+        print_error "Actual: $actual_checksum"
+        exit 1
+    fi
+    print_success "$(msg 'checksum_verified')"
 
     # Extract
     print_info "$(msg 'extracting')"
@@ -699,7 +706,7 @@ install_service() {
     cat > /etc/systemd/system/sub2api.service << EOF
 [Unit]
 Description=Sub2API - AI API Gateway Platform
-Documentation=https://github.com/Wei-Shaw/sub2api
+Documentation=https://github.com/Xeubad/codeapi
 After=network.target postgresql.service redis.service
 Wants=postgresql.service redis.service
 

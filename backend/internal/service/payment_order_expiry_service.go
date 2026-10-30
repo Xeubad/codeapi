@@ -16,8 +16,9 @@ const (
 	// paymentOrderExpiryLeaderLockKey gates the periodic reconcile + expiry sweep so
 	// that only one instance issues the upstream payment-provider calls per cycle.
 	paymentOrderExpiryLeaderLockKey = "payment:order:expiry:leader"
-	// paymentOrderExpiryLeaderLockTTL must exceed the combined reconcile + expiry
-	// timeouts (2 * expiryCheckTimeout) so the lock never expires mid-run.
+	// paymentOrderExpiryLeaderLockTTL must exceed the combined reconcile, failed
+	// recovery, and expiry timeouts (3 * expiryCheckTimeout) so the lock never
+	// expires mid-run.
 	paymentOrderExpiryLeaderLockTTL = 3 * time.Minute
 )
 
@@ -104,6 +105,15 @@ func (s *PaymentOrderExpiryService) runOnce() {
 		slog.Warn("[PaymentOrderExpiry] failed to reconcile pending payment orders", "error", err)
 	} else if recovered > 0 {
 		slog.Info("[PaymentOrderExpiry] reconciled paid orders", "count", recovered)
+	}
+
+	failedRecoveryCtx, cancel := context.WithTimeout(context.Background(), expiryCheckTimeout)
+	failedRecovered, err := s.paymentSvc.ReconcileFailedPaidPaymentOrders(failedRecoveryCtx)
+	cancel()
+	if err != nil {
+		slog.Warn("[PaymentOrderExpiry] failed to retry failed paid orders", "error", err)
+	} else if failedRecovered > 0 {
+		slog.Info("[PaymentOrderExpiry] recovered failed paid orders", "count", failedRecovered)
 	}
 
 	expireCtx, cancel := context.WithTimeout(context.Background(), expiryCheckTimeout)

@@ -2141,6 +2141,7 @@
                       <a
                         href="https://dash.cloudflare.com/"
                         target="_blank"
+                        rel="noopener noreferrer"
                         class="text-primary-600 hover:text-primary-500"
                         >{{
                           t("admin.settings.turnstile.cloudflareDashboard")
@@ -6331,8 +6332,10 @@
                   class="mt-2 border-t border-gray-200 pt-2 first:mt-0 first:border-0 first:pt-0 dark:border-dark-600"
                 >
                   <a
-                    :href="r.url"
+                    v-if="sanitizeUrl(r.url)"
+                    :href="sanitizeUrl(r.url)"
                     target="_blank"
+                    rel="noopener noreferrer"
                     class="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
                     >{{ r.title }}</a
                   >
@@ -9013,6 +9016,7 @@ import type {
 } from "@/types";
 import type { ProviderInstance } from "@/types/payment";
 import AppLayout from "@/components/layout/AppLayout.vue";
+import { sanitizeUrl } from "@/utils/url";
 import Icon from "@/components/icons/Icon.vue";
 import Select, { type SelectOption } from "@/components/common/Select.vue";
 import {

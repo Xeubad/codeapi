@@ -111,8 +111,17 @@ func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest
 	}
 	resp, err := s.invokeProvider(ctx, order, req, cfg, limitAmount, payAmountStr, payAmount, plan, sel)
 	if err != nil {
-		_, _ = s.entClient.PaymentOrder.UpdateOneID(order.ID).
+		// Provider creation failed before any payment was registered. Only a
+		// still-pending order may be marked FAILED; a concurrent callback or
+		// reconciliation could already have advanced it to PAID/COMPLETED.
+		_, _ = s.entClient.PaymentOrder.Update().
+			Where(
+				paymentorder.IDEQ(order.ID),
+				paymentorder.StatusEQ(OrderStatusPending),
+			).
 			SetStatus(OrderStatusFailed).
+			SetFailedAt(time.Now()).
+			SetFailedReason(psErrMsg(err)).
 			Save(ctx)
 		return nil, err
 	}

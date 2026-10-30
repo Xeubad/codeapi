@@ -338,6 +338,46 @@ func (s *PaymentService) ReconcilePendingPaymentOrders(ctx context.Context) (int
 	return recovered, nil
 }
 
+// ReconcileFailedPaidPaymentOrders retries fulfillment for orders that were
+// marked FAILED after payment was already confirmed. Without this sweep such
+// orders leave the Pending scanner permanently and require manual intervention
+// even though the provider has collected the money.
+func (s *PaymentService) ReconcileFailedPaidPaymentOrders(ctx context.Context) (int, error) {
+	retryBefore := time.Now().Add(-paymentFulfillmentLeaseDuration)
+	orders, err := s.entClient.PaymentOrder.Query().
+		Where(
+			paymentorder.StatusEQ(OrderStatusFailed),
+			paymentorder.PaidAtNotNil(),
+			paymentorder.OrderTypeIn(payment.OrderTypeBalance, payment.OrderTypeSubscription),
+			paymentorder.Or(
+				paymentorder.FailedAtIsNil(),
+				paymentorder.FailedAtLTE(retryBefore),
+			),
+		).
+		Order(dbent.Asc(paymentorder.FieldUpdatedAt)).
+		Limit(pendingPaymentReconcileLimit).
+		All(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("query failed paid payment orders: %w", err)
+	}
+
+	recovered := 0
+	for _, order := range orders {
+		if err := s.executeFulfillment(ctx, order.ID); err != nil {
+			slog.Warn("failed paid order fulfillment retry failed",
+				"orderID", order.ID,
+				"error", err,
+			)
+			continue
+		}
+		current, getErr := s.entClient.PaymentOrder.Get(ctx, order.ID)
+		if getErr == nil && current.Status == OrderStatusCompleted {
+			recovered++
+		}
+	}
+	return recovered, nil
+}
+
 // VerifyOrderPublic returns the currently persisted public order state without
 // triggering any upstream reconciliation. Signed resume-token recovery is the
 // only public recovery path allowed to query upstream state.

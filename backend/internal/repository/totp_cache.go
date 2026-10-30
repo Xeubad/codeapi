@@ -109,25 +109,29 @@ func (c *TotpCache) DeleteLoginSession(ctx context.Context, tempToken string) er
 	return c.rdb.Del(ctx, key).Err()
 }
 
-// IncrementVerifyAttempts increments the verify attempt counter
+// incrementVerifyAttemptsScript atomically reserves one verification attempt.
+// The TTL is only applied when the counter is first created (or is missing), so
+// repeated guesses cannot extend the lockout window indefinitely.
+var incrementVerifyAttemptsScript = redis.NewScript(`
+local n = redis.call('INCR', KEYS[1])
+if redis.call('PTTL', KEYS[1]) < 0 then
+  redis.call('PEXPIRE', KEYS[1], ARGV[1])
+end
+return n
+`)
+
+// IncrementVerifyAttempts atomically reserves one verification attempt and
+// returns the attempt number. Callers must compare the returned value against
+// their cap before evaluating the submitted secret.
 func (c *TotpCache) IncrementVerifyAttempts(ctx context.Context, userID int64) (int, error) {
 	key := fmt.Sprintf("%s%d", totpAttemptsKeyPrefix, userID)
 
-	// Use pipeline for atomic increment and set TTL
-	pipe := c.rdb.Pipeline()
-	incrCmd := pipe.Incr(ctx, key)
-	pipe.Expire(ctx, key, totpAttemptsTTL)
-
-	if _, err := pipe.Exec(ctx); err != nil {
+	count, err := incrementVerifyAttemptsScript.Run(ctx, c.rdb, []string{key}, totpAttemptsTTL.Milliseconds()).Int()
+	if err != nil {
 		return 0, fmt.Errorf("increment verify attempts: %w", err)
 	}
 
-	count, err := incrCmd.Result()
-	if err != nil {
-		return 0, fmt.Errorf("get increment result: %w", err)
-	}
-
-	return int(count), nil
+	return count, nil
 }
 
 // GetVerifyAttempts gets the current verify attempt count

@@ -36,21 +36,14 @@ export default {
       note: '登录后创建 API Key 即可调用；模型与价格在模型广场查看。'
     },
     gateway: {
-      live: 'GATEWAY / LIVE',
-      online: '在线',
+      panelTitle: 'GATEWAY / BASE URL',
       degraded: '连接异常',
-      latency: '实时往返',
-      protocol: '协议',
-      protocolValue: 'OpenAI/Anthropic',
-      billing: '计费',
-      billingValue: '按 token',
-      endpoints: '接入端点',
+      baseHint: '只替换 base_url，密钥与其余参数保持不变。',
+      copyBase: '复制 base_url',
       modelInfo: '模型与价格',
       modelInfoNote: '登录后在模型广场查看',
       modelInfoAction: '登录查看',
-      modelInfoActionAuthed: '进入控制台',
-      samples: '样本 {count}',
-      viewLatency: '查看实测延迟'
+      modelInfoActionAuthed: '进入控制台'
     },
     latency: {
       eyebrow: 'LIVE / 实测',

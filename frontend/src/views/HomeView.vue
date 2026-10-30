@@ -197,95 +197,88 @@
             </p>
           </div>
 
-          <!-- Gateway 面板：公开页只展示协议、端点与真实状态 -->
-          <div class="relative min-w-0 lg:pl-2">
+          <!-- Gateway 面板：只讲接入方式（base_url 与鉴权头），延迟交给下方实测区块 -->
+          <div class="relative min-w-0">
             <div
-              class="pointer-events-none absolute -inset-5 rounded-[2rem] bg-[radial-gradient(70%_70%_at_30%_20%,rgba(111,158,18,0.18),transparent_70%)] blur-2xl"
+              class="pointer-events-none absolute -inset-6 rounded-[2.25rem] bg-[radial-gradient(70%_70%_at_30%_20%,rgba(111,158,18,0.16),transparent_70%)] blur-2xl"
             ></div>
 
-            <div class="brand-ink-panel relative overflow-hidden">
-              <div class="flex items-center gap-1.5 border-b border-white/10 px-4 py-3">
-                <span class="h-2 w-2 rounded-full bg-white/15"></span>
-                <span class="h-2 w-2 rounded-full bg-white/15"></span>
-                <span class="h-2 w-2 rounded-full bg-white/15"></span>
-                <span class="ml-2 truncate font-mono text-[10px] uppercase tracking-[0.18em] text-gray-500">
-                  {{ t('home.gateway.live') }}
-                </span>
-                <span
-                  class="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 font-mono text-[9px]"
-                  :class="probeStatus === 'error'
-                    ? 'bg-amber-500/10 text-amber-300'
-                    : 'bg-emerald-500/10 text-emerald-300'"
-                >
-                  <span class="h-1 w-1 rounded-full" :class="probeStatus === 'error' ? 'bg-amber-400' : 'bg-emerald-400'"></span>
-                  {{ gatewayOnlineLabel }}
-                </span>
-              </div>
-
-              <div class="grid grid-cols-3 divide-x divide-white/[0.07] border-b border-white/10">
-                <div v-for="metric in gatewayMetrics" :key="metric.label" class="min-w-0 px-3 py-3">
-                  <p class="truncate text-[9px] uppercase tracking-[0.14em] text-gray-500">{{ metric.label }}</p>
-                  <p
-                    class="mt-1 truncate font-mono font-semibold tabular-nums"
-                    :class="[metric.accent ? 'text-primary-300' : 'text-gray-100', metric.compact ? 'text-[9px] sm:text-[10px]' : 'text-[17px]']"
-                  >
-                    {{ metric.value }}<span v-if="metric.unit" class="ml-0.5 text-[9px] font-normal text-gray-500">{{ metric.unit }}</span>
-                  </p>
-                </div>
-              </div>
-
-              <div class="px-4 py-3">
-                <div class="flex items-center justify-between gap-3">
-                  <p class="brand-eyebrow">{{ t('home.gateway.endpoints') }}</p>
-                  <span class="truncate font-mono text-[9px] text-gray-500">{{ t('home.gateway.protocolValue') }}</span>
-                </div>
-
-                <ul class="mt-2 space-y-1.5">
-                  <li
-                    v-for="endpoint in endpoints"
-                    :key="endpoint"
-                    class="flex items-center gap-2 rounded-lg border border-white/[0.06] bg-white/[0.03] px-2.5 py-2"
-                  >
-                    <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-primary-500/70"></span>
-                    <span class="min-w-0 flex-1 truncate font-mono text-[10.5px] text-gray-300">{{ endpoint }}</span>
-                  </li>
-                </ul>
-
-                <div class="mt-3 flex items-center justify-between gap-3 rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-2.5">
-                  <div class="min-w-0">
-                    <p class="text-[9px] uppercase tracking-[0.12em] text-gray-500">{{ t('home.gateway.modelInfo') }}</p>
-                    <p class="mt-0.5 truncate text-[10.5px] text-gray-400">{{ t('home.gateway.modelInfoNote') }}</p>
-                  </div>
-                  <router-link
-                    :to="modelInfoCta.to"
-                    class="inline-flex shrink-0 items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-medium text-primary-300 transition-colors hover:bg-white/10"
-                  >
-                    {{ modelInfoCta.label }}
-                    <Icon name="arrowRight" size="xs" />
-                  </router-link>
-                </div>
-              </div>
-
-              <div class="border-t border-white/10 px-4 py-3">
-                <div class="flex items-end gap-3">
-                  <svg
-                    v-if="spark"
-                    viewBox="0 0 640 150"
-                    preserveAspectRatio="none"
-                    class="h-8 min-w-0 flex-1"
-                    aria-hidden="true"
-                  >
-                    <path :d="spark.line" fill="none" stroke="#6f9e12" stroke-width="2" vector-effect="non-scaling-stroke" />
-                  </svg>
-                  <span v-else class="min-w-0 flex-1 font-mono text-[9px] text-gray-600">{{ t('home.latency.waiting') }}</span>
-                  <span class="shrink-0 font-mono text-[9px] tabular-nums text-gray-500">
-                    {{ t('home.gateway.samples', { count: probeSamples.length }) }}
+            <div class="relative rounded-[24px] border border-white/60 bg-white/35 p-2 shadow-[0_30px_80px_-32px_rgba(17,22,32,0.45)] backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04]">
+              <div class="brand-ink-panel relative overflow-hidden">
+                <div class="flex items-center gap-1.5 border-b border-white/10 px-4 py-3">
+                  <span class="h-2 w-2 rounded-full bg-white/15"></span>
+                  <span class="h-2 w-2 rounded-full bg-white/15"></span>
+                  <span class="h-2 w-2 rounded-full bg-white/15"></span>
+                  <span class="ml-2 truncate font-mono text-[10px] uppercase tracking-[0.18em] text-gray-500">
+                    {{ t('home.gateway.panelTitle') }}
+                  </span>
+                  <span class="ml-auto shrink-0 truncate font-mono text-[9px] text-gray-600">
+                    {{ siteHost }}
                   </span>
                 </div>
-                <a href="#latency" class="mt-2 inline-flex items-center gap-1 font-mono text-[9px] text-gray-500 hover:text-gray-300">
-                  {{ t('home.gateway.viewLatency') }}
-                  <Icon name="arrowRight" size="xs" />
-                </a>
+
+                <div class="px-4 py-3.5">
+                  <div class="space-y-2.5">
+                    <div
+                      v-for="row in baseUrlRows"
+                      :key="row.protocol"
+                      class="rounded-xl border border-white/[0.06] bg-white/[0.03] px-3 py-2.5"
+                    >
+                      <div class="flex items-center gap-2">
+                        <span class="shrink-0 font-mono text-[9px] uppercase tracking-[0.16em] text-primary-300">
+                          {{ row.protocol }}
+                        </span>
+                        <span class="h-px min-w-0 flex-1 bg-white/[0.07]"></span>
+                        <button
+                          type="button"
+                          class="inline-flex shrink-0 items-center gap-1 rounded-md border border-white/10 bg-white/5 px-1.5 py-0.5 font-mono text-[9px] text-gray-400 transition-colors hover:bg-white/10 hover:text-gray-200"
+                          :aria-label="t('home.gateway.copyBase')"
+                          @click="copyBaseUrl(row)"
+                        >
+                          <Icon :name="copiedBaseUrl === row.after ? 'check' : 'copy'" size="xs" />
+                          <span>{{ copiedBaseUrl === row.after ? t('home.integration.copied') : t('home.integration.copy') }}</span>
+                        </button>
+                      </div>
+
+                      <p class="mt-2 flex items-start gap-2 font-mono text-[10.5px] leading-relaxed text-gray-600">
+                        <span class="shrink-0 select-none">-</span>
+                        <span class="min-w-0 break-all">{{ row.before }}</span>
+                      </p>
+                      <p class="mt-1 flex items-start gap-2 font-mono text-[10.5px] leading-relaxed text-gray-100">
+                        <span class="shrink-0 select-none text-primary-400">+</span>
+                        <span class="min-w-0 break-all">{{ row.after }}</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div class="mt-3 space-y-1 rounded-xl border border-white/[0.06] bg-white/[0.03] px-3 py-2.5">
+                    <p
+                      v-for="header in authHeaders"
+                      :key="header.protocol"
+                      class="flex items-baseline gap-2 font-mono text-[10px] leading-relaxed"
+                    >
+                      <span class="w-[4.5rem] shrink-0 text-gray-500">{{ header.protocol }}</span>
+                      <span class="min-w-0 break-all text-gray-300">{{ header.value }}</span>
+                    </p>
+                  </div>
+
+                  <p class="mt-3 text-[10.5px] leading-relaxed text-gray-500">{{ t('home.gateway.baseHint') }}</p>
+
+                  <div class="mt-3 flex items-center justify-between gap-3 rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-2.5">
+                    <div class="min-w-0">
+                      <p class="text-[9px] uppercase tracking-[0.12em] text-gray-500">{{ t('home.gateway.modelInfo') }}</p>
+                      <p class="mt-0.5 truncate text-[10.5px] text-gray-400">{{ t('home.gateway.modelInfoNote') }}</p>
+                    </div>
+                    <router-link
+                      :to="modelInfoCta.to"
+                      class="inline-flex shrink-0 items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-medium text-primary-300 transition-colors hover:bg-white/10"
+                    >
+                      {{ modelInfoCta.label }}
+                      <Icon name="arrowRight" size="xs" />
+                    </router-link>
+                  </div>
+                </div>
+
               </div>
             </div>
           </div>
@@ -724,34 +717,6 @@ const heroStatusLabel = computed(() =>
   probeStatus.value === 'error' ? t('home.gateway.degraded') : t('home.hero.statusLabel')
 )
 
-const gatewayOnlineLabel = computed(() =>
-  probeStatus.value === 'error' ? t('home.gateway.degraded') : t('home.gateway.online')
-)
-
-const gatewayMetrics = computed(() => [
-  {
-    label: t('home.gateway.latency'),
-    value: currentMsText.value,
-    unit: 'ms',
-    accent: true,
-    compact: false
-  },
-  {
-    label: t('home.gateway.protocol'),
-    value: t('home.gateway.protocolValue'),
-    unit: '',
-    accent: false,
-    compact: true
-  },
-  {
-    label: t('home.gateway.billing'),
-    value: t('home.gateway.billingValue'),
-    unit: '',
-    accent: false,
-    compact: true
-  }
-])
-
 const latencyMetrics = computed(() => {
   const values = windowSamples.value.map((sample) => sample.ms)
   const avg = values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null
@@ -892,6 +857,18 @@ function formatClock(at: number): string {
 // ==================== Integration snippet ====================
 
 const siteOrigin = typeof window === 'undefined' ? '' : window.location.origin
+const siteHost = typeof window === 'undefined' ? '' : window.location.host
+
+// OpenAI SDK 的 base_url 带 /v1；Anthropic SDK 用站点根地址（SDK 自己补 /v1/messages）。
+const baseUrlRows = computed(() => [
+  { protocol: 'OpenAI', before: 'https://api.openai.com/v1', after: `${siteOrigin}/v1` },
+  { protocol: 'Anthropic', before: 'https://api.anthropic.com', after: siteOrigin }
+])
+
+const authHeaders = computed(() => [
+  { protocol: 'OpenAI', value: 'Authorization: Bearer <key>' },
+  { protocol: 'Anthropic', value: 'x-api-key: <key>' }
+])
 
 const snippet = computed(() => [
   `curl "${siteOrigin}/v1/messages" \\`,
@@ -917,34 +894,36 @@ const integrationPoints = computed(() => [
 
 const codeCopied = ref(false)
 const codeCopyFailed = ref(false)
+const copiedBaseUrl = ref('')
 let copyResetTimer: number | undefined
+let baseUrlCopyTimer: number | undefined
+
+async function writeToClipboard(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text)
+    return true
+  } catch {
+    // 非安全上下文下 Clipboard API 不可用，回退到 execCommand
+  }
+
+  const textarea = document.createElement('textarea')
+  try {
+    textarea.value = text
+    textarea.setAttribute('readonly', '')
+    textarea.style.position = 'fixed'
+    textarea.style.opacity = '0'
+    document.body.appendChild(textarea)
+    textarea.select()
+    return document.execCommand('copy')
+  } catch {
+    return false
+  } finally {
+    textarea.remove()
+  }
+}
 
 async function copySnippet(): Promise<void> {
-  let copied = false
-
-  try {
-    await navigator.clipboard.writeText(snippet.value)
-    copied = true
-  } catch {
-    copied = false
-  }
-
-  if (!copied) {
-    const textarea = document.createElement('textarea')
-    try {
-      textarea.value = snippet.value
-      textarea.setAttribute('readonly', '')
-      textarea.style.position = 'fixed'
-      textarea.style.opacity = '0'
-      document.body.appendChild(textarea)
-      textarea.select()
-      copied = document.execCommand('copy')
-    } catch {
-      copied = false
-    } finally {
-      textarea.remove()
-    }
-  }
+  const copied = await writeToClipboard(snippet.value)
 
   codeCopied.value = copied
   codeCopyFailed.value = !copied
@@ -952,6 +931,16 @@ async function copySnippet(): Promise<void> {
   copyResetTimer = window.setTimeout(() => {
     codeCopied.value = false
     codeCopyFailed.value = false
+  }, 1600)
+}
+
+async function copyBaseUrl(row: { after: string }): Promise<void> {
+  if (!(await writeToClipboard(row.after))) return
+
+  copiedBaseUrl.value = row.after
+  window.clearTimeout(baseUrlCopyTimer)
+  baseUrlCopyTimer = window.setTimeout(() => {
+    copiedBaseUrl.value = ''
   }, 1600)
 }
 
@@ -998,5 +987,6 @@ onBeforeUnmount(() => {
   if (warmupTimer !== undefined) window.clearTimeout(warmupTimer)
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   window.clearTimeout(copyResetTimer)
+  window.clearTimeout(baseUrlCopyTimer)
 })
 </script>

@@ -36,21 +36,14 @@ export default {
       note: 'Create an API key after signing in. Models and pricing live in the model plaza.'
     },
     gateway: {
-      live: 'GATEWAY / LIVE',
-      online: 'Online',
+      panelTitle: 'GATEWAY / BASE URL',
       degraded: 'Connection issue',
-      latency: 'Round trip',
-      protocol: 'Protocol',
-      protocolValue: 'OpenAI/Anthropic',
-      billing: 'Billing',
-      billingValue: 'Per token',
-      endpoints: 'Endpoints',
+      baseHint: 'Swap only the base_url; your key and every other parameter stay the same.',
+      copyBase: 'Copy base_url',
       modelInfo: 'Models & pricing',
       modelInfoNote: 'Sign in, then open the model plaza',
       modelInfoAction: 'Sign in to view',
-      modelInfoActionAuthed: 'Open console',
-      samples: 'Samples {count}',
-      viewLatency: 'View live latency'
+      modelInfoActionAuthed: 'Open console'
     },
     latency: {
       eyebrow: 'LIVE / MEASURED',

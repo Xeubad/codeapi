@@ -172,6 +172,16 @@ describe('HomeView compact mode', () => {
     expect(modelPlazaDestination(wrapper)).toBeUndefined()
   })
 
+  it('renders the latency chart only in the measurement section', () => {
+    // 首屏 Gateway 面板只讲接入方式，延迟曲线只能出现在实测区块
+    const wrapper = mountHome()
+    const charts = wrapper.findAll('svg[viewBox="0 0 640 150"]')
+
+    expect(charts).toHaveLength(1)
+    expect(charts[0].element.closest('#latency')).not.toBeNull()
+    expect(wrapper.find('.brand-ink-panel svg[viewBox="0 0 640 150"]').exists()).toBe(false)
+  })
+
   it('hides the model plaza link when the feature is disabled', () => {
     const wrapper = mountHome({
       compact_home_enabled: true,

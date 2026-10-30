@@ -125,7 +125,7 @@
 
 - **2FA / TOTP**：`TotpService.VerifyCode` 改为在验证验证码前用 Redis 原子递增预留尝试次数，缓存写入失败时 fail-closed；`TotpCache` 用 Lua 脚本保证递增与 TTL 原子，并避免持续猜码无限延长锁定期；移除日志中的 TOTP 秘钥前缀。
 - **支付履约**：下单时支付渠道调用失败只允许把 `PENDING` 订单写成 `FAILED`，避免并发回调/补单把 `PAID/COMPLETED` 覆盖；余额/订阅已经到账后，返利失败只记审计，不再把订单打成 `FAILED`；新增 `ReconcileFailedPaidPaymentOrders` 定时补偿扫描，自动重试「已付款但履约失败」的余额/订阅订单。
-- **支付审计**：`payment_audit_logs` 的 `(order_id, action)` 冲突改为 `ON CONFLICT DO NOTHING`，消除重试期间的 ERROR 刷屏，同时保留首个事件作为幂等审计基准。
+- **支付审计**：`payment_audit_logs` 的重复写入只吞掉 `(order_id, action)` 唯一索引冲突，消除重试期间的 ERROR 刷屏，同时兼容未建唯一索引的测试库；保留首个事件作为幂等审计基准。
 - **在线更新**：release 归档匹配改为只接受当前平台的 `.tar.gz/.tgz/.tar`，拒绝 `.sig/.sha256/checksums.txt` sidecar；缺失 `checksums.txt` 直接失败，不再安装未校验二进制；下载客户端的 30x 跳转继续限制在 GitHub 下载域名；`.tgz` 修正为按 tar 解包。
 - **前端 URL / HTML 安全**：`PaymentQRCodeView` 的 `pay_url` 经 `sanitizeUrl` 后才进 `href`；首页 `home_content` 的 HTML 模式统一过 DOMPurify，iframe URL 也走 `sanitizeUrl`；管理端 Web 搜索结果链接加 URL 白名单校验与 `rel="noopener noreferrer"`。
 - **安装与部署**：`deploy/install.sh` 下载与 checksum 改为 `curl -fsSL`，checksum 缺失/不匹配直接中止；`install-github-token-test.sh` 改为可移植的 `sed '$d'`，并在 Bash 3.2 明确跳过；compose / Apple container / systemd / 文档统一指向 `Xeubad/codeapi` 与 `ghcr.io/xeubad/codeapi`。

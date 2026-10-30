@@ -119,6 +119,37 @@
 - `18639df09` feat(dashboard): 仪表板按角色分离改版
 - 本条日志随同一次 `docs(worklog)` 提交落地。
 
+**主题（同日第四次工作）**：安全检测与逻辑检测落地一批高价值修复
+
+### 改动
+
+- **2FA / TOTP**：`TotpService.VerifyCode` 改为在验证验证码前用 Redis 原子递增预留尝试次数，缓存写入失败时 fail-closed；`TotpCache` 用 Lua 脚本保证递增与 TTL 原子，并避免持续猜码无限延长锁定期；移除日志中的 TOTP 秘钥前缀。
+- **支付履约**：下单时支付渠道调用失败只允许把 `PENDING` 订单写成 `FAILED`，避免并发回调/补单把 `PAID/COMPLETED` 覆盖；余额/订阅已经到账后，返利失败只记审计，不再把订单打成 `FAILED`；新增 `ReconcileFailedPaidPaymentOrders` 定时补偿扫描，自动重试「已付款但履约失败」的余额/订阅订单。
+- **支付审计**：`payment_audit_logs` 的 `(order_id, action)` 冲突改为 `ON CONFLICT DO NOTHING`，消除重试期间的 ERROR 刷屏，同时保留首个事件作为幂等审计基准。
+- **在线更新**：release 归档匹配改为只接受当前平台的 `.tar.gz/.tgz/.tar`，拒绝 `.sig/.sha256/checksums.txt` sidecar；缺失 `checksums.txt` 直接失败，不再安装未校验二进制；下载客户端的 30x 跳转继续限制在 GitHub 下载域名；`.tgz` 修正为按 tar 解包。
+- **前端 URL / HTML 安全**：`PaymentQRCodeView` 的 `pay_url` 经 `sanitizeUrl` 后才进 `href`；首页 `home_content` 的 HTML 模式统一过 DOMPurify，iframe URL 也走 `sanitizeUrl`；管理端 Web 搜索结果链接加 URL 白名单校验与 `rel="noopener noreferrer"`。
+- **安装与部署**：`deploy/install.sh` 下载与 checksum 改为 `curl -fsSL`，checksum 缺失/不匹配直接中止；`install-github-token-test.sh` 改为可移植的 `sed '$d'`，并在 Bash 3.2 明确跳过；compose / Apple container / systemd / 文档统一指向 `Xeubad/codeapi` 与 `ghcr.io/xeubad/codeapi`。
+
+### 关键决策
+
+- **不改变既有产品语义的项**：固定默认管理员凭据、`security.trust_forwarded_ip_for_api_key_acl` 默认 true、API Key 明文存储、`TOTP_ENCRYPTION_KEY` 自动生成但不持久化、退款扣减窗口、usage billing `Apply` 失败无自动清偿，这些审计发现涉及部署兼容性或资金语义，本轮只记录不擅自改动，留待单独决策。
+- **返利失败不再阻断订单完成**：余额/订阅已经发放后再失败订单会诱导人工补款并造成双倍入账；返利本身有幂等审计，失败保留审计记录比伪造 `FAILED` 更安全。
+- **更新完整性改为 fail-closed**：release 没有 checksum 就拒绝安装，牺牲少量旧 release 兼容性换取供应链完整性。
+- **审计表唯一索引保持不变**：重复事件先保留首个 canonical 记录，不改迁移、不放宽幂等约束，只消除重复 ERROR 噪音。
+
+### 验证
+
+- 后端：`go build ./...`、`go vet ./...` 通过；`go test -tags=unit ./internal/service ./internal/repository ./internal/config ./internal/setup -count=1` 分包全绿（service 8476、repository 1062、config/setup 349）；`make build-backend` 通过。
+- 前端：`pnpm --dir frontend run lint:check`、`pnpm --dir frontend run typecheck` 通过；`pnpm --dir frontend run test:run` **379 文件 / 2879 用例**全绿；`pnpm --dir frontend run build` 成功并嵌入 `backend/internal/web/dist`。
+- 安装脚本测试 `bash deploy/tests/install-github-token-test.sh` 在 macOS Bash 3.2 上按脚本约定跳过；未运行 `golangci-lint`（本机未安装该二进制），这是 `make test` 当前唯一的非代码阻塞项。
+- `git diff --check` 干净。
+
+### 产出
+
+- `22713c0ab` fix(security): harden auth, payment, update and URL handling
+- `5c8943712` chore(deploy): point release artifacts at fork
+- 本条日志随同一次 `docs(worklog)` 提交落地。
+
 ---
 
 ## 2026年10月30日

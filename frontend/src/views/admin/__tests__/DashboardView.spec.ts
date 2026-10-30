@@ -2,32 +2,46 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 
-import type { DashboardStats } from '@/types'
+import type { Announcement, DashboardStats, TrendDataPoint } from '@/types'
 import DashboardView from '../DashboardView.vue'
 
-const { getSnapshotV2, getUserUsageTrend, getUserSpendingRanking } = vi.hoisted(() => ({
+const {
+  getSnapshotV2,
+  getUsageTrend,
+  getUserSpendingRanking,
+  listAnnouncements,
+  getDashboardOverview,
+  listAlertEvents
+} = vi.hoisted(() => ({
   getSnapshotV2: vi.fn(),
-  getUserUsageTrend: vi.fn(),
-  getUserSpendingRanking: vi.fn()
-}))
-
-vi.mock('vue-chartjs', () => ({
-  Line: { name: 'Line', props: ['data', 'options'], template: '<div class="line-chart" />' }
+  getUsageTrend: vi.fn(),
+  getUserSpendingRanking: vi.fn(),
+  listAnnouncements: vi.fn(),
+  getDashboardOverview: vi.fn(),
+  listAlertEvents: vi.fn()
 }))
 
 vi.mock('@/api/admin', () => ({
   adminAPI: {
     dashboard: {
       getSnapshotV2,
-      getUserUsageTrend,
+      getUsageTrend,
       getUserSpendingRanking
+    },
+    announcements: {
+      list: listAnnouncements
+    },
+    ops: {
+      getDashboardOverview,
+      listAlertEvents
     }
   }
 }))
 
 vi.mock('@/stores/app', () => ({
   useAppStore: () => ({
-    showError: vi.fn()
+    showError: vi.fn(),
+    cachedPublicSettings: null
   })
 }))
 
@@ -76,6 +90,7 @@ const createDashboardStats = (): DashboardStats => ({
   total_tokens: 0,
   total_cost: 0,
   total_actual_cost: 0,
+  total_account_cost: 0,
   today_requests: 0,
   today_input_tokens: 0,
   today_output_tokens: 0,
@@ -84,30 +99,67 @@ const createDashboardStats = (): DashboardStats => ({
   today_tokens: 0,
   today_cost: 0,
   today_actual_cost: 0,
+  today_account_cost: 0,
   average_duration_ms: 0,
   uptime: 0,
   rpm: 0,
   tpm: 0
 })
 
+const createTrendPoint = (date: string, tokens: number): TrendDataPoint => ({
+  date,
+  requests: 1,
+  input_tokens: tokens,
+  output_tokens: 0,
+  cache_creation_tokens: 0,
+  cache_read_tokens: 0,
+  total_tokens: tokens,
+  cost: 0,
+  actual_cost: 0
+})
+
+const createAnnouncement = (over: Partial<Announcement> & Pick<Announcement, 'id' | 'title'>): Announcement => ({
+  content: 'Body',
+  status: 'active',
+  notify_mode: 'silent',
+  targeting: {},
+  created_at: '2026-10-01T09:00:00Z',
+  updated_at: '2026-10-01T09:00:00Z',
+  ...over
+})
+
+const globalStubs = {
+  AppLayout: { template: '<div><slot /></div>' },
+  LoadingSpinner: true,
+  Icon: true,
+  DateRangePicker: true,
+  Select: true,
+  ModelDistributionChart: true,
+  TokenUsageTrend: true,
+  RouterLink: { template: '<a><slot /></a>' }
+}
+
 describe('admin DashboardView', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
 
     getSnapshotV2.mockReset()
-    getUserUsageTrend.mockReset()
+    getUsageTrend.mockReset()
     getUserSpendingRanking.mockReset()
+    listAnnouncements.mockReset()
+    getDashboardOverview.mockReset()
+    listAlertEvents.mockReset()
 
     getSnapshotV2.mockResolvedValue({
       stats: createDashboardStats(),
       trend: [],
       models: []
     })
-    getUserUsageTrend.mockResolvedValue({
+    getUsageTrend.mockResolvedValue({
       trend: [],
       start_date: '',
       end_date: '',
-      granularity: 'hour'
+      granularity: 'day'
     })
     getUserSpendingRanking.mockResolvedValue({
       ranking: [],
@@ -117,46 +169,68 @@ describe('admin DashboardView', () => {
       start_date: '',
       end_date: ''
     })
+    listAnnouncements.mockResolvedValue({
+      items: [],
+      total: 0,
+      page: 1,
+      page_size: 20,
+      pages: 0
+    })
+    getDashboardOverview.mockResolvedValue({
+      health_score: 98,
+      error_rate: 0.01,
+      duration: { p95_ms: 120 },
+      qps: { current: 2.5 }
+    })
+    listAlertEvents.mockResolvedValue([])
   })
 
-  it('switches metrics and ignores a stale tokens response', async () => {
-    let resolveTokens!: (value: any) => void
-    getUserUsageTrend.mockImplementationOnce(() => new Promise(resolve => { resolveTokens = resolve }))
-    getUserUsageTrend.mockResolvedValueOnce({ trend: [{ date: '2026-01-01', user_id: 2, username: 'spender', email: '', requests: 1, tokens: 10, cost: 5, actual_cost: 5 }] })
+  it('loads ops health, alerts, ranking and only live announcements', async () => {
+    getUsageTrend.mockResolvedValue({
+      trend: [createTrendPoint('2026-10-01', 1000)],
+      start_date: '2026-10-14',
+      end_date: '2026-10-15',
+      granularity: 'day'
+    })
+    getUserSpendingRanking.mockResolvedValue({
+      ranking: [{ user_id: 7, email: 'top@example.com', username: 'top', actual_cost: 12, requests: 3, tokens: 900 }],
+      total_actual_cost: 12,
+      total_requests: 3,
+      total_tokens: 900,
+      start_date: '2026-10-01',
+      end_date: '2026-10-15'
+    })
+    listAnnouncements.mockResolvedValue({
+      items: [
+        createAnnouncement({ id: 1, title: 'Live announcement' }),
+        createAnnouncement({ id: 2, title: 'Scheduled announcement', starts_at: '2099-01-01T00:00:00Z' }),
+        createAnnouncement({ id: 3, title: 'Ended announcement', ends_at: '2020-01-01T00:00:00Z' })
+      ],
+      total: 3,
+      page: 1,
+      page_size: 20,
+      pages: 1
+    })
+
     const wrapper = mount(DashboardView, {
-      global: { stubs: {
-        AppLayout: { template: '<div><slot /></div>' }, LoadingSpinner: true,
-        Icon: true, DateRangePicker: true, Select: true, ModelDistributionChart: true,
-        TokenUsageTrend: true
-      } }
+      global: { stubs: globalStubs }
     })
     await flushPromises()
-    expect(getUserUsageTrend).toHaveBeenCalledWith(expect.objectContaining({ metric: 'tokens', limit: 12 }))
-    await wrapper.findAll('button').find(button => button.text() === 'admin.dashboard.actualSpending')!.trigger('click')
-    expect(getUserUsageTrend).toHaveBeenCalledWith(expect.objectContaining({ metric: 'actual_cost', limit: 12 }))
-    await flushPromises()
-    const chart = wrapper.findComponent({ name: 'Line' })
-    expect(chart.props('data').datasets[0].data).toEqual([5])
-    expect(chart.props('options').scales.y.ticks.callback(5)).toBe('$5.00')
-    resolveTokens({ trend: [{ date: '2026-01-01', user_id: 1, username: 'tokens', email: '', requests: 1, tokens: 100, cost: 1, actual_cost: 1 }] })
-    await flushPromises()
-    expect(chart.props('data').datasets[0].data).toEqual([5])
+
+    expect(getUsageTrend).toHaveBeenCalledWith(expect.objectContaining({ granularity: 'day' }))
+    expect(getDashboardOverview).toHaveBeenCalledWith({ time_range: '24h' })
+    expect(listAlertEvents).toHaveBeenCalledWith({ status: 'firing', limit: 5 })
+    expect(listAnnouncements).toHaveBeenCalledWith(1, 20, { status: 'active' })
+    expect(wrapper.findAll('[data-month]')).toHaveLength(0)
+    expect(wrapper.find('[data-announcement-id="1"]').exists()).toBe(true)
+    expect(wrapper.find('[data-announcement-id="2"]').exists()).toBe(false)
+    expect(wrapper.find('[data-announcement-id="3"]').exists()).toBe(false)
+    expect(wrapper.find('[data-user-id="7"]').exists()).toBe(true)
   })
 
   it('uses last 24 hours as default dashboard range', async () => {
     mount(DashboardView, {
-      global: {
-        stubs: {
-          AppLayout: { template: '<div><slot /></div>' },
-          LoadingSpinner: true,
-          Icon: true,
-          DateRangePicker: true,
-          Select: true,
-          ModelDistributionChart: true,
-          TokenUsageTrend: true,
-          Line: true
-        }
-      }
+      global: { stubs: globalStubs }
     })
 
     await flushPromises()

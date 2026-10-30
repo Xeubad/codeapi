@@ -1,144 +1,163 @@
 <template>
-  <!-- Row 1: Core Stats -->
-  <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
-    <!-- Balance -->
-    <div v-if="!isSimple" class="card p-4">
-      <div class="flex items-center gap-3">
-        <div class="rounded-lg bg-emerald-100 p-2 dark:bg-emerald-900/30">
-          <svg class="h-5 w-5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z" />
-          </svg>
+  <!-- KPI Cards -->
+  <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <MetricCard v-if="!isSimple" :label="t('dashboard.balance')" icon="dollar" tone="emerald">
+      <template #value>
+        <p class="text-3xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">${{ formatBalance(balance) }}</p>
+      </template>
+      <template #meta>
+        <p class="text-[11px] text-gray-500 dark:text-gray-400">{{ t('common.available') }}</p>
+      </template>
+      <template #footer>
+        <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+          <span>{{ t('dashboard.cumulative.today', { value: `$${formatCost(stats?.today_actual_cost || 0)}` }) }}</span>
         </div>
-        <div>
-          <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('dashboard.balance') }}</p>
-          <p class="text-xl font-bold text-emerald-600 dark:text-emerald-400">${{ formatBalance(balance) }}</p>
-          <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('common.available') }}</p>
-        </div>
-      </div>
-    </div>
+      </template>
+    </MetricCard>
 
-    <!-- API Keys -->
-    <div class="card p-4">
-      <div class="flex items-center gap-3">
-        <div class="rounded-lg bg-blue-100 p-2 dark:bg-blue-900/30">
-          <Icon name="key" size="md" class="text-blue-600 dark:text-blue-400" :stroke-width="2" />
+    <MetricCard :label="t('dashboard.apiKeys')" icon="key" tone="blue">
+      <template #value>
+        <p class="text-3xl font-bold tabular-nums text-gray-900 dark:text-white">{{ stats?.total_api_keys || 0 }}</p>
+      </template>
+      <template #meta>
+        <p class="text-[11px] text-gray-500 dark:text-gray-400">{{ stats?.active_api_keys || 0 }} {{ t('dashboard.activeKeys') }}</p>
+      </template>
+      <template #footer>
+        <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+          <span>{{ t('dashboard.activeRate') }}</span>
+          <span class="font-semibold tabular-nums text-gray-900 dark:text-white">{{ activeKeyRate }}%</span>
         </div>
-        <div>
-          <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('dashboard.apiKeys') }}</p>
-          <p class="text-xl font-bold text-gray-900 dark:text-white">{{ stats?.total_api_keys || 0 }}</p>
-          <p class="text-xs text-green-600 dark:text-green-400">{{ stats?.active_api_keys || 0 }} {{ t('common.active') }}</p>
+        <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-gray-100 dark:bg-dark-700">
+          <div class="h-full rounded-full bg-blue-500" :style="{ width: `${activeKeyRate}%` }"></div>
         </div>
-      </div>
-    </div>
+      </template>
+    </MetricCard>
 
-    <!-- Today Requests -->
-    <div class="card p-4">
-      <div class="flex items-center gap-3">
-        <div class="rounded-lg bg-green-100 p-2 dark:bg-green-900/30">
-          <Icon name="chart" size="md" class="text-green-600 dark:text-green-400" :stroke-width="2" />
+    <MetricCard
+      :label="t('dashboard.todayRequests')"
+      icon="chart"
+      tone="green"
+      :delta-current="stats?.today_requests || 0"
+      :delta-previous="previousDay?.requests ?? null"
+    >
+      <template #value>
+        <p class="text-3xl font-bold tabular-nums text-gray-900 dark:text-white">{{ stats?.today_requests || 0 }}</p>
+      </template>
+      <template #footer>
+        <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+          <span>{{ t('dashboard.cumulative.requests') }}</span>
+          <span class="font-semibold tabular-nums text-gray-900 dark:text-white">{{ formatNumber(stats?.total_requests || 0) }}</span>
         </div>
-        <div>
-          <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('dashboard.todayRequests') }}</p>
-          <p class="text-xl font-bold text-gray-900 dark:text-white">{{ stats?.today_requests || 0 }}</p>
-          <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('common.total') }}: {{ formatNumber(stats?.total_requests || 0) }}</p>
-        </div>
-      </div>
-    </div>
+      </template>
+    </MetricCard>
 
-    <!-- Today Cost -->
-    <div class="card p-4">
-      <div class="flex items-center gap-3">
-        <div class="rounded-lg bg-purple-100 p-2 dark:bg-purple-900/30">
-          <Icon name="dollar" size="md" class="text-purple-600 dark:text-purple-400" :stroke-width="2" />
+    <MetricCard
+      :label="t('dashboard.todayCost')"
+      icon="dollar"
+      tone="purple"
+      :delta-current="stats?.today_actual_cost || 0"
+      :delta-previous="previousDay?.cost ?? null"
+      :delta-positive-is-good="false"
+    >
+      <template #value>
+        <p class="text-3xl font-bold tabular-nums text-purple-600 dark:text-purple-400">${{ formatCost(stats?.today_actual_cost || 0) }}</p>
+      </template>
+      <template #meta>
+        <p class="text-[11px] text-gray-500 dark:text-gray-400">{{ t('dashboard.standard') }} ${{ formatCost(stats?.today_cost || 0) }}</p>
+      </template>
+      <template #footer>
+        <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
+          <span>{{ t('dashboard.cumulative.spend') }} <span class="font-semibold tabular-nums text-gray-900 dark:text-white">${{ formatCost(stats?.total_actual_cost || 0) }}</span></span>
+          <span>{{ t('dashboard.standard') }} <span class="tabular-nums text-gray-700 dark:text-gray-300">${{ formatCost(stats?.total_cost || 0) }}</span></span>
         </div>
-        <div>
-          <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('dashboard.todayCost') }}</p>
-          <p class="text-xl font-bold text-gray-900 dark:text-white">
-            <span class="text-purple-600 dark:text-purple-400" :title="t('dashboard.actual')">${{ formatCost(stats?.today_actual_cost || 0) }}</span>
-            <span class="text-sm font-normal text-gray-400 dark:text-gray-500" :title="t('dashboard.standard')"> / ${{ formatCost(stats?.today_cost || 0) }}</span>
-          </p>
-          <p class="text-xs">
-            <span class="text-gray-500 dark:text-gray-400">{{ t('common.total') }}: </span>
-            <span class="text-purple-600 dark:text-purple-400" :title="t('dashboard.actual')">${{ formatCost(stats?.total_actual_cost || 0) }}</span>
-            <span class="text-gray-400 dark:text-gray-500" :title="t('dashboard.standard')"> / ${{ formatCost(stats?.total_cost || 0) }}</span>
-          </p>
-        </div>
-      </div>
-    </div>
-  </div>
+      </template>
+    </MetricCard>
 
-  <!-- Row 2: Token Stats -->
-  <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
-    <!-- Today Tokens -->
-    <div class="card p-4">
-      <div class="flex items-center gap-3">
-        <div class="rounded-lg bg-amber-100 p-2 dark:bg-amber-900/30">
-          <Icon name="cube" size="md" class="text-amber-600 dark:text-amber-400" :stroke-width="2" />
+    <MetricCard
+      :label="t('dashboard.todayTokens')"
+      icon="cube"
+      tone="amber"
+      :delta-current="stats?.today_tokens || 0"
+      :delta-previous="previousDay?.tokens ?? null"
+    >
+      <template #value>
+        <p class="text-3xl font-bold tabular-nums text-gray-900 dark:text-white">{{ formatTokens(stats?.today_tokens || 0) }}</p>
+      </template>
+      <template #meta>
+        <p class="text-[11px] leading-5 text-gray-500 dark:text-gray-400">
+          {{ t('dashboard.input') }} {{ formatTokens(stats?.today_input_tokens || 0) }} ·
+          {{ t('dashboard.output') }} {{ formatTokens(stats?.today_output_tokens || 0) }} ·
+          {{ t('dashboard.cache') }} {{ formatTokens((stats?.today_cache_creation_tokens || 0) + (stats?.today_cache_read_tokens || 0)) }}
+        </p>
+      </template>
+      <template #footer>
+        <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+          <span>{{ t('dashboard.cumulative.tokens') }}</span>
+          <span class="font-semibold tabular-nums text-gray-900 dark:text-white">{{ formatTokens(stats?.total_tokens || 0) }}</span>
         </div>
-        <div>
-          <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('dashboard.todayTokens') }}</p>
-          <p class="text-xl font-bold text-gray-900 dark:text-white">{{ formatTokens(stats?.today_tokens || 0) }}</p>
-          <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('dashboard.input') }}: {{ formatTokens(stats?.today_input_tokens || 0) }} / {{ t('dashboard.output') }}: {{ formatTokens(stats?.today_output_tokens || 0) }} / {{ t('dashboard.cache') }}: {{ formatTokens((stats?.today_cache_creation_tokens || 0) + (stats?.today_cache_read_tokens || 0)) }}</p>
-        </div>
-      </div>
-    </div>
+      </template>
+    </MetricCard>
 
-    <!-- Total Tokens -->
-    <div class="card p-4">
-      <div class="flex items-center gap-3">
-        <div class="rounded-lg bg-indigo-100 p-2 dark:bg-indigo-900/30">
-          <Icon name="database" size="md" class="text-indigo-600 dark:text-indigo-400" :stroke-width="2" />
+    <MetricCard
+      :label="t('dashboard.cacheHitRate')"
+      icon="database"
+      tone="indigo"
+      :delta-current="cacheHitRateToday"
+      :delta-previous="previousDay?.cacheHitRate ?? null"
+      delta-mode="points"
+    >
+      <template #value>
+        <p class="text-3xl font-bold tabular-nums text-gray-900 dark:text-white">{{ cacheHitRateToday.toFixed(1) }}%</p>
+      </template>
+      <template #footer>
+        <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+          <span>{{ t('dashboard.cache') }}</span>
+          <span class="font-semibold tabular-nums text-gray-900 dark:text-white">{{ formatTokens(stats?.today_cache_read_tokens || 0) }}</span>
         </div>
-        <div>
-          <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('dashboard.totalTokens') }}</p>
-          <p class="text-xl font-bold text-gray-900 dark:text-white">{{ formatTokens(stats?.total_tokens || 0) }}</p>
-          <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('dashboard.input') }}: {{ formatTokens(stats?.total_input_tokens || 0) }} / {{ t('dashboard.output') }}: {{ formatTokens(stats?.total_output_tokens || 0) }} / {{ t('dashboard.cache') }}: {{ formatTokens((stats?.total_cache_creation_tokens || 0) + (stats?.total_cache_read_tokens || 0)) }}</p>
-        </div>
-      </div>
-    </div>
+      </template>
+    </MetricCard>
 
-    <!-- Performance (RPM/TPM) -->
-    <div class="card p-4">
-      <div class="flex items-center gap-3">
-        <div class="rounded-lg bg-violet-100 p-2 dark:bg-violet-900/30">
-          <Icon name="bolt" size="md" class="text-violet-600 dark:text-violet-400" :stroke-width="2" />
+    <MetricCard :label="t('dashboard.performance')" icon="bolt" tone="violet">
+      <template #value>
+        <p class="flex items-baseline gap-1.5 text-3xl font-bold tabular-nums text-gray-900 dark:text-white">
+          {{ formatTokens(stats?.rpm || 0) }}<span class="text-xs font-medium text-gray-500 dark:text-gray-400">RPM</span>
+        </p>
+      </template>
+      <template #meta>
+        <p class="text-[11px] text-gray-500 dark:text-gray-400">TPM <span class="font-semibold tabular-nums text-violet-600 dark:text-violet-400">{{ formatTokens(stats?.tpm || 0) }}</span></p>
+      </template>
+      <template #footer>
+        <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+          <span>{{ t('dashboard.realtime') }}</span>
+          <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
         </div>
-        <div class="flex-1">
-          <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('dashboard.performance') }}</p>
-          <div class="flex items-baseline gap-2">
-            <p class="text-xl font-bold text-gray-900 dark:text-white">{{ formatTokens(stats?.rpm || 0) }}</p>
-            <span class="text-xs text-gray-500 dark:text-gray-400">RPM</span>
-          </div>
-          <div class="flex items-baseline gap-2">
-            <p class="text-sm font-semibold text-violet-600 dark:text-violet-400">{{ formatTokens(stats?.tpm || 0) }}</p>
-            <span class="text-xs text-gray-500 dark:text-gray-400">TPM</span>
-          </div>
-        </div>
-      </div>
-    </div>
+      </template>
+    </MetricCard>
 
-    <!-- Avg Response Time -->
-    <div class="card p-4">
-      <div class="flex items-center gap-3">
-        <div class="rounded-lg bg-rose-100 p-2 dark:bg-rose-900/30">
-          <Icon name="clock" size="md" class="text-rose-600 dark:text-rose-400" :stroke-width="2" />
+    <MetricCard :label="t('dashboard.avgResponse')" icon="clock" tone="rose">
+      <template #value>
+        <p class="text-3xl font-bold tabular-nums text-gray-900 dark:text-white">{{ formatDuration(stats?.average_duration_ms || 0) }}</p>
+      </template>
+      <template #footer>
+        <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+          <span>{{ t('dashboard.averageTime') }}</span>
         </div>
-        <div>
-          <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('dashboard.avgResponse') }}</p>
-          <p class="text-xl font-bold text-gray-900 dark:text-white">{{ formatDuration(stats?.average_duration_ms || 0) }}</p>
-          <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('dashboard.averageTime') }}</p>
-        </div>
-      </div>
-    </div>
+      </template>
+    </MetricCard>
   </div>
 
   <!-- Row 3: Per-platform breakdown -->
   <div v-if="!isSimple && platformCards.length > 0" class="card p-4">
     <div class="mb-3 flex items-center justify-between">
       <h3 class="text-sm font-semibold text-gray-900 dark:text-white">{{ t('dashboard.platformBreakdown') }}</h3>
-      <span class="text-xs text-gray-500 dark:text-gray-400">
-        {{ t('dashboard.platformCount', { count: platformCount }) }}
-      </span>
+      <div class="flex items-center gap-3">
+        <span class="text-xs text-gray-500 dark:text-gray-400">
+          {{ t('dashboard.platformCount', { count: platformCount }) }}
+        </span>
+        <RouterLink to="/usage" class="text-xs font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300">
+          {{ t('dashboard.viewAllUsage') }} →
+        </RouterLink>
+      </div>
     </div>
     <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
       <div
@@ -227,9 +246,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import Icon from '@/components/icons/Icon.vue'
+import MetricCard from '@/components/dashboard/MetricCard.vue'
 import type { PlatformDashboardStats, UserDashboardStats as UserStatsType } from '@/api/usage'
 import type { PlatformQuotaItem } from '@/types'
+import type { DaySnapshot } from '@/utils/dashboardMetrics'
+import { computeCacheHitRate } from '@/utils/dashboardMetrics'
 
 interface FusedPlatformCard {
   platform: string
@@ -246,8 +267,21 @@ const props = defineProps<{
   balance: number
   isSimple: boolean
   platformQuotas?: PlatformQuotaItem[] | null
+  previousDay?: DaySnapshot | null
 }>()
 const { t } = useI18n()
+
+const cacheHitRateToday = computed(() => computeCacheHitRate(
+  props.stats?.today_input_tokens ?? 0,
+  props.stats?.today_cache_read_tokens ?? 0,
+  props.stats?.today_cache_creation_tokens ?? 0,
+))
+
+const activeKeyRate = computed(() => {
+  const total = props.stats?.total_api_keys ?? 0
+  if (total <= 0) return 0
+  return Math.round(((props.stats?.active_api_keys ?? 0) / total) * 100)
+})
 
 const PLATFORM_LABELS: Record<string, string> = {
   anthropic: 'Claude',

@@ -10,6 +10,7 @@ export const useAnnouncementStore = defineStore('announcements', () => {
   const announcements = ref<UserAnnouncement[]>([])
   const loading = ref(false)
   const lastFetchTime = ref(0)
+  const listOpen = ref(false)
   const popupQueue = ref<UserAnnouncement[]>([])
   const currentPopup = ref<UserAnnouncement | null>(null)
 
@@ -127,16 +128,26 @@ export const useAnnouncementStore = defineStore('announcements', () => {
     fetchGeneration++
     announcements.value = []
     lastFetchTime.value = 0
+    listOpen.value = false
     shownPopupIds = new Set()
     popupQueue.value = []
     currentPopup.value = null
     loading.value = false
   }
 
+  function openListModal() {
+    listOpen.value = true
+  }
+
+  function closeListModal() {
+    listOpen.value = false
+  }
+
   return {
     // State
     announcements,
     loading,
+    listOpen,
     currentPopup,
     // Getters
     unreadCount,
@@ -145,6 +156,8 @@ export const useAnnouncementStore = defineStore('announcements', () => {
     dismissPopup,
     markAsRead,
     markAllAsRead,
+    openListModal,
+    closeListModal,
     reset,
   }
 })

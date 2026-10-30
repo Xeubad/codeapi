@@ -72,7 +72,7 @@ function quota(over: Partial<PlatformQuotaItem> & { platform: string }): Platfor
 function mountStats(stats: UserStatsType, platformQuotas: PlatformQuotaItem[] | null = null, isSimple = false) {
   return mount(UserDashboardStats, {
     props: { stats, balance: 0, isSimple, platformQuotas },
-    global: { stubs: { Icon: true } },
+    global: { stubs: { Icon: true, RouterLink: { template: '<a><slot /></a>' } } },
   })
 }
 

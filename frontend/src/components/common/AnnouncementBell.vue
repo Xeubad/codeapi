@@ -338,8 +338,17 @@ marked.setOptions({
 const { announcements, loading } = storeToRefs(announcementStore)
 const unreadCount = computed(() => announcementStore.unreadCount)
 
-// Local modal state
-const isModalOpen = ref(false)
+// 列表弹窗状态由 store 持有，便于仪表板等页面复用入口
+const isModalOpen = computed({
+  get: () => announcementStore.listOpen,
+  set: (value: boolean) => {
+    if (value) {
+      announcementStore.openListModal()
+    } else {
+      announcementStore.closeListModal()
+    }
+  },
+})
 const detailModalOpen = ref(false)
 const selectedAnnouncement = ref<UserAnnouncement | null>(null)
 
@@ -351,11 +360,11 @@ function renderMarkdown(content: string): string {
 }
 
 function openModal() {
-  isModalOpen.value = true
+  announcementStore.openListModal()
 }
 
 function closeModal() {
-  isModalOpen.value = false
+  announcementStore.closeListModal()
 }
 
 function openDetail(announcement: UserAnnouncement) {

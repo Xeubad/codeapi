@@ -9,18 +9,24 @@ import type { UserSubscription, SubscriptionProgress } from '@/types'
 /**
  * Subscription summary for user dashboard
  */
+export interface SubscriptionSummaryItem {
+  id: number
+  group_id: number
+  group_name: string
+  status: string
+  daily_used_usd?: number
+  daily_limit_usd?: number
+  weekly_used_usd?: number
+  weekly_limit_usd?: number
+  monthly_used_usd?: number
+  monthly_limit_usd?: number
+  expires_at?: string
+}
+
 export interface SubscriptionSummary {
   active_count: number
-  subscriptions: Array<{
-    id: number
-    group_name: string
-    status: string
-    daily_progress: number | null
-    weekly_progress: number | null
-    monthly_progress: number | null
-    expires_at: string | null
-    days_remaining: number | null
-  }>
+  total_used_usd?: number
+  subscriptions: SubscriptionSummaryItem[]
 }
 
 /**

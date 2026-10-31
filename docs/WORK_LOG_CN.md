@@ -150,6 +150,30 @@
 - `5c8943712` chore(deploy): point release artifacts at fork
 - 本条日志随同一次 `docs(worklog)` 提交落地。
 
+**主题（同日第五次工作）**：资源与连接池只读分析、确认应用的开发手册
+
+### 改动
+
+- 新增 `docs/RESOURCE_TUNING_DEVELOPMENT_CN.md`，明确采集范围、推荐依据、数据不足处理、管理员预览确认、待重启/实际生效状态、配置来源优先级、审计与回滚、部署适配和验收测试。
+- `.gitignore` 将该文档加入既有 `docs/*` 白名单，确保手册受版本管理。
+
+### 关键决策
+
+- 首期设计限定应用侧 PostgreSQL/Redis 连接池；服务端参数、上游连接池和业务并发只诊断不修改。多副本或共享依赖预算不明时不自动写入。
+- 只读分析和预览不修改运行配置；候选托管覆盖需部署者显式启用，管理员确认后才保存待生效版本，重启和生效验证分离，不挂载 Docker socket。
+- 推荐阈值为待验证候选，不把机器规格或单次瞬时值当作最优连接数；本次仅出手册，业务开发停在用户确认门。
+
+### 验证
+
+- `git fetch --prune origin` 直连超时；使用环境中既有本地 HTTP 代理重试成功，`main...origin/main` 为 `0 0`。
+- 逐项核对现有配置默认值、Compose 入口、cgroup 与连接池指标口径；手册本地相对链接 9 个均存在，`git diff --cached --check` 通过。
+- 未运行代码测试或构建：本次仅新增设计文档与 `.gitignore` 白名单，未改业务代码。
+
+### 产出
+
+- `17a4d97` docs(tuning): design resource analysis and confirmation flow
+- 本条日志随同独立的 `docs(worklog)` 提交落地。
+
 ---
 
 ## 2026年10月30日

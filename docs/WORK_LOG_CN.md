@@ -174,6 +174,37 @@
 - `17a4d97` docs(tuning): design resource analysis and confirmation flow
 - 本条日志随同独立的 `docs(worklog)` 提交落地。
 
+**主题（同日第六次工作）**：中转站上游余额台账、条目倍率与厂家消耗展示
+
+### 改动
+
+- 条目新增/编辑支持 `rate_multiplier`（复用账号成本倍率，`account_cost = total_cost × 倍率`）与「自动同步上游倍率」开关；同步开启时后端拒绝手改倍率。
+- 条目创建可填写上游初始余额（写入 `extra.upstream_balance_initial` / `upstream_balance_set_at`，只写一次）；新增 `PUT /admin/upstream-entries/:id/balance` 供历史条目首次补录，重复设置返回 409。
+- 新增 `SumAccountConsumption` 批量汇总 `usage_logs` 的账号成本（自余额设置时间以来 / 今日），条目与厂家 DTO 增加余额、消耗、估算剩余字段；厂家列表与详情展示初始/已用/今日和配置条数。
+- Hub 页面条目弹窗新增琥珀色余额提示、余额输入/只读态、倍率与自动同步；厂家表、条目详情表新增余额与消耗列；zh/en i18n。
+- 依赖：`follow-redirects` override 升至 1.16.2（GHSA-mrwp-f3q8-3g9p）。
+
+### 关键决策
+
+- 余额采用「首次手填 + 本地成本扣减」的展示型台账，不做外部余额探测与实时对账；上游实际扣费仍由上游完成，避免不同中转商余额接口差异和探测失败带来的假数据。
+- 余额写一次不可改，符合“配置前提示、后续不得修改”；历史条目只能通过专用端点首次补录，已配置的条目没有修改入口。
+- 倍率复用账号 `rate_multiplier`，不新建结算字段；自动同步依赖现有 sub2api 上游倍率探测，开启后手填与自动写回互斥。
+- 消耗直接聚合 `usage_logs`，口径与 dashboard 的 `account_cost` 一致；不新增流水表，日志清理会抬高估算剩余（已写入已知缺口）。
+
+### 验证
+
+- 后端：`go test ./internal/service/ ./internal/repository/ ./internal/server/routes/ ./internal/handler/admin/` 全绿（145.7s / 8.9s / 13.4s / 2.9s）；新增创建倍率/初始余额、同步开关、余额写一次、倍率冲突、厂家汇总与 repo SQL 单测。
+- 前端：`check:i18n`、`vue-tsc --noEmit`、`vite build` 通过；全量 379 文件 / 2879 用例全绿。
+- 本地 8080 实测：rate 1.5 + 初始余额 100；写入一条 `total_cost=2.5` 的 usage_log 后，条目 consumed=3.75、remaining=96.25，厂家汇总 200 / 3.75 / 196.25；测试条目与日志已清理。
+- Security Scan：`follow-redirects` override 1.16.2 后恢复全绿。
+- 历史说明：本次工作期间分支曾被外部重写，早前提交的短 SHA 不再出现在 `main` 历史；功能内容已包含在当前基线与 `7b95f2b66` 及更早提交中，本条只记录当前可达的 SHA。
+
+### 产出
+
+- `5d8a12f0e` feat(upstream-hub): add entry rate and a write-once balance ledger
+- `4baa2cc23` chore(deps): raise follow-redirects override to 1.16.2
+- 本条日志随同 docs 提交落地。
+
 ---
 
 ## 2026年10月30日

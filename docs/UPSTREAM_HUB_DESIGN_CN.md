@@ -193,7 +193,7 @@ DI 走 google/wire（`cmd/server/wire_gen.go` 手工补丁，本机无 wire CLI 
 
 ## 九、当前状态与已知缺口（截至 2026-10-28）
 
-**已上线可用**（2026-10-30 更新）：厂家台账（预算/超限硬阻断）、条目增删改复制、并发+优先级、分组绑定（含 composite 综合分组）与每分组「暂不调用」、全局可调度开关、调度与统计尊重 enabled、`/admin/upstream-hub` 与 `/admin/aggregation` 两个界面（zh/en）、**上游模型探测 + 勾选落库**（折叠面板）、归一模型表（参数完整 + 行内编辑 + 跨平台优先级回退链）、聚合单元弹窗管理/重命名/删除、供给按厂家折叠、链路视图真实客户 Key、账号管理只读标记与「纳入上游聚合」。
+**已上线可用**（2026-10-30 更新）：厂家台账（预算/超限硬阻断）、条目增删改复制、并发+优先级、分组绑定（含 composite 综合分组）与每分组「暂不调用」、全局可调度开关、调度与统计尊重 enabled、`/admin/upstream-hub` 与 `/admin/aggregation` 两个界面（zh/en）、**上游模型探测 + 勾选落库**（折叠面板）、归一模型表（参数完整 + 行内编辑 + 跨平台优先级回退链）、聚合单元弹窗管理/重命名/删除、供给按厂家折叠、链路视图真实客户 Key、账号管理只读标记与「纳入上游聚合」、条目上游倍率与余额/消耗台账。
 
 **已知缺口**：
 
@@ -214,6 +214,8 @@ DI 走 google/wire（`cmd/server/wire_gen.go` 手工补丁，本机无 wire CLI 
 15. ~~聚合单元没有重命名/删除入口~~ → **已解决**（第五轮）：聚合页可直接重命名/删除单元（删除级联路由与挂载，条目保留）。
 16. 回退链选路会按链逐平台探测可调度账号，首条命中即停；无缓存，极端多路由时单次请求会多几次账号列表查询。
 17. TypeSafe/Codex 模型过滤仍按单条最高优先级路由判断，未按整条链聚合。
+18. **上游余额是本地估算**：初始余额首次手填后不可修改，剩余值 = 初始余额 − 本平台记录的调用成本；不会读取或核对上游实际余额，也不处理上游充值/赠送/其他客户端消费。需要充值或修正时只能新建条目或做前向数据修正。
+19. 余额消耗依赖 `usage_logs` 保留期；日志被清理后，估算剩余会偏高。
 
 **后续实施顺序**：真实上游复测 → 探活三级 + 预算槽位接缝 → 运行期跨平台重放（待定）→ 意图路由（待定）。
 
@@ -313,6 +315,14 @@ DI 走 google/wire（`cmd/server/wire_gen.go` 手工补丁，本机无 wire CLI 
 - **归一模型跨平台回退链**：迁移 `910_xeu_composite_route_chain.sql` 删除唯一索引、改建链式非唯一索引，同一对外模型可以有多条跨平台路由。新增 `ResolveWithFallback`：按匹配强度/端点/前缀/优先级/ID 排序，逐条用 `HasSchedulableAccountForModel` 探测可调度账号（复用调度快照、混合调度与瞬时状态过滤），选中第一个有号的平台；全部无号时回落最高优先级并保留原报错。gateway 中间件、Gemini 中间件、WebSocket responses、调度侧解析统一走该方法；管理端预览仍用静态 `Resolve`。`/v1/models` 对同一模型去重；聚合页恢复优先级输入与列，按「对外模型 + 优先级」排序。
 - **依赖安全**：`golang.org/x/net` 升至 v0.62.0（GO-2026-6860）、`vue-i18n` 升至 11.4.16 + `@intlify/message-compiler` 同步（GHSA-83rm-6c8r-g728，v9 线已无修复）；筛选出 `@lobehub/icons` 全仓未 import、未进 bundle，直接移除（连带 532 个包），消除 query-string/decode-uri-component 审计命中。
 - **边界**：回退链只在选路阶段生效，不做运行期跨平台请求重放；该限制已写入已知缺口。
+
+### 第六轮修正（2026-10-31）：上游余额台账与条目倍率
+
+- **条目倍率**：条目新增/编辑支持 `rate_multiplier`，直接复用账号的 `account_rate_multiplier` 口径（`account_cost = total_cost × 倍率`），并可选开启「自动同步上游倍率」（写入 `upstream_billing_probe_enabled` + `upstream_billing_rate_sync_enabled`，仅 sub2api 系上游的 `/v1/sub2api/billing` 可用）。两者互斥：同步开启时后端拒绝手改倍率，错误可读。
+- **余额写一次**：条目创建时可填 `initial_balance`；服务端写入 `accounts.extra.upstream_balance_initial` 与 `upstream_balance_set_at`，之后不可修改。历史条目可通过 `PUT /admin/upstream-entries/:id/balance` 首次补录，已配置再次提交返回 409。UI 在输入前用琥珀提示说明「首次保存后不可修改」。
+- **本地扣减台账**：不新增流水表。按 `usage_logs` 的账号成本口径（`COALESCE(account_stats_cost, total_cost) × COALESCE(account_rate_multiplier,1)`）批量汇总「自余额设置时间以来」和「今日」的消耗；条目展示估算剩余 = 初始余额 − 已消耗，厂家卡片汇总初始/已用/今日与配置条数。余额不做外部探测、不与上游实时对账，上游实际扣费仍由上游完成。
+- **展示范围**：余额与消耗只在「上游聚合」页面展示，不进入账号管理、仪表板或客户可见 DTO；聚合调度页的 `ListAllEntries` 不附加消耗汇总，避免增加其查询成本。
+- **安全依赖**：`follow-redirects` override 升至 1.16.2（GHSA-mrwp-f3q8-3g9p，影响 1.16.0–1.16.1）。
 
 ### 验证口径
 

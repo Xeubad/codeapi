@@ -27,14 +27,21 @@ type upstreamVendorRequest struct {
 }
 
 type upstreamEntryRequest struct {
-	Name        string   `json:"name"`
-	Platform    string   `json:"platform"`
-	BaseURL     string   `json:"base_url"`
-	APIKey      string   `json:"api_key"`
-	Concurrency *int     `json:"concurrency"`
-	Priority    *int     `json:"priority"`
-	Schedulable *bool    `json:"schedulable"`
-	BaseURLs    []string `json:"base_urls"`
+	Name            string   `json:"name"`
+	Platform        string   `json:"platform"`
+	BaseURL         string   `json:"base_url"`
+	APIKey          string   `json:"api_key"`
+	Concurrency     *int     `json:"concurrency"`
+	Priority        *int     `json:"priority"`
+	Schedulable     *bool    `json:"schedulable"`
+	BaseURLs        []string `json:"base_urls"`
+	RateMultiplier  *float64 `json:"rate_multiplier"`
+	RateSyncEnabled *bool    `json:"upstream_billing_rate_sync_enabled"`
+	InitialBalance  *float64 `json:"initial_balance"`
+}
+
+type upstreamEntryBalanceRequest struct {
+	InitialBalance float64 `json:"initial_balance"`
 }
 
 type upstreamEntryGroupEnabledRequest struct {
@@ -177,14 +184,17 @@ func (h *UpstreamHubHandler) CreateEntry(c *gin.Context) {
 		priority = *req.Priority
 	}
 	entry, err := h.svc.CreateEntry(c.Request.Context(), vendorID, service.CreateUpstreamEntryInput{
-		Name:        req.Name,
-		Platform:    req.Platform,
-		BaseURL:     req.BaseURL,
-		APIKey:      req.APIKey,
-		Concurrency: concurrency,
-		Priority:    priority,
-		Schedulable: req.Schedulable,
-		BaseURLs:    req.BaseURLs,
+		Name:            req.Name,
+		Platform:        req.Platform,
+		BaseURL:         req.BaseURL,
+		APIKey:          req.APIKey,
+		Concurrency:     concurrency,
+		Priority:        priority,
+		Schedulable:     req.Schedulable,
+		BaseURLs:        req.BaseURLs,
+		RateMultiplier:  req.RateMultiplier,
+		RateSyncEnabled: req.RateSyncEnabled,
+		InitialBalance:  req.InitialBalance,
 	})
 	if err != nil {
 		writeUpstreamHubError(c, err)
@@ -204,14 +214,36 @@ func (h *UpstreamHubHandler) UpdateEntry(c *gin.Context) {
 		return
 	}
 	entry, err := h.svc.UpdateEntry(c.Request.Context(), accountID, service.UpdateUpstreamEntryInput{
-		Name:        req.Name,
-		BaseURL:     req.BaseURL,
-		APIKey:      req.APIKey,
-		Concurrency: req.Concurrency,
-		Priority:    req.Priority,
-		Schedulable: req.Schedulable,
-		BaseURLs:    req.BaseURLs,
+		Name:            req.Name,
+		BaseURL:         req.BaseURL,
+		APIKey:          req.APIKey,
+		Concurrency:     req.Concurrency,
+		Priority:        req.Priority,
+		Schedulable:     req.Schedulable,
+		BaseURLs:        req.BaseURLs,
+		RateMultiplier:  req.RateMultiplier,
+		RateSyncEnabled: req.RateSyncEnabled,
 	})
+	if err != nil {
+		writeUpstreamHubError(c, err)
+		return
+	}
+	response.Success(c, entry)
+}
+
+// SetEntryInitialBalance 首次配置条目余额；已配置过的条目返回 409。
+// PUT /api/v1/admin/upstream-entries/:id/balance
+func (h *UpstreamHubHandler) SetEntryInitialBalance(c *gin.Context) {
+	accountID, ok := parseIDParam(c, "id")
+	if !ok {
+		return
+	}
+	var req upstreamEntryBalanceRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	entry, err := h.svc.SetEntryInitialBalance(c.Request.Context(), accountID, req.InitialBalance)
 	if err != nil {
 		writeUpstreamHubError(c, err)
 		return
@@ -438,7 +470,9 @@ func writeUpstreamHubError(c *gin.Context, err error) {
 	case errors.Is(err, service.ErrUpstreamAccountIneligible):
 		response.BadRequest(c, err.Error())
 	case errors.Is(err, service.ErrUpstreamAccountAlreadyOwned),
-		errors.Is(err, service.ErrUpstreamVendorNotEmpty):
+		errors.Is(err, service.ErrUpstreamVendorNotEmpty),
+		errors.Is(err, service.ErrUpstreamBalanceAlreadySet),
+		errors.Is(err, service.ErrUpstreamRateSyncConflict):
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 	default:
 		response.ErrorFrom(c, err)

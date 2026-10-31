@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/domain"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
 )
 
 // UpstreamVendorIDExtraKey 是 accounts.extra 中记录所属上游厂家的键。
@@ -18,17 +19,24 @@ const UpstreamVendorIDExtraKey = "upstream_vendor_id"
 
 // 上游聚合领域类型。
 type UpstreamVendor struct {
-	ID                   int64     `json:"id"`
-	Name                 string    `json:"name"`
-	ConcurrencyBudget    int       `json:"concurrency_budget"`
-	Notes                string    `json:"notes"`
-	BaseURLs             []string  `json:"base_urls"`
-	EntryCount           int       `json:"entry_count"`
-	AllocatedConcurrency int       `json:"allocated_concurrency"`
-	ReferencedGroupCount int       `json:"referenced_group_count"`
-	OverBudget           bool      `json:"over_budget"`
-	CreatedAt            time.Time `json:"created_at"`
-	UpdatedAt            time.Time `json:"updated_at"`
+	ID                   int64    `json:"id"`
+	Name                 string   `json:"name"`
+	ConcurrencyBudget    int      `json:"concurrency_budget"`
+	Notes                string   `json:"notes"`
+	BaseURLs             []string `json:"base_urls"`
+	EntryCount           int      `json:"entry_count"`
+	AllocatedConcurrency int      `json:"allocated_concurrency"`
+	ReferencedGroupCount int      `json:"referenced_group_count"`
+	OverBudget           bool     `json:"over_budget"`
+	// 余额台账只统计已配置初始余额的条目。
+	BalanceInitialTotal      float64 `json:"balance_initial_total"`
+	BalanceConsumedTotal     float64 `json:"balance_consumed_total"`
+	BalanceRemainingTotal    float64 `json:"balance_remaining_total"`
+	BalanceConfiguredEntries int     `json:"balance_configured_entries"`
+	// ConsumedTodayTotal 是全部条目的今日账号成本合计（不要求已配置余额）。
+	ConsumedTodayTotal float64   `json:"consumed_today_total"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
 }
 
 type UpstreamEntryGroupRef struct {
@@ -54,6 +62,19 @@ type UpstreamEntry struct {
 	// Models 是 credentials.model_mapping 的键（已登记的对外模型名，排序后）。
 	// 网关的 /v1/models 与 composite 归属解析都只认这份映射，为空即无模型可暴露。
 	Models []string `json:"models"`
+	// RateMultiplier 是账号成本倍率（account_cost = total_cost × 该值），与账号管理共用同一字段。
+	RateMultiplier float64 `json:"rate_multiplier"`
+	// RateSyncEnabled 表示是否由上游倍率探测自动写回 RateMultiplier。
+	RateSyncEnabled bool `json:"upstream_billing_rate_sync_enabled"`
+	// BalanceInitial 是首次配置的上游余额；配置后不可修改。
+	BalanceInitial *float64 `json:"balance_initial,omitempty"`
+	// BalanceSetAt 是初始余额的配置时间，本地消耗从该时间起算。
+	BalanceSetAt *time.Time `json:"balance_set_at,omitempty"`
+	// ConsumedCost 是自 BalanceSetAt 以来的账号成本汇总；ConsumedToday 是今日成本。
+	ConsumedCost  float64 `json:"consumed_cost"`
+	ConsumedToday float64 `json:"consumed_today"`
+	// BalanceRemaining 是 BalanceInitial - ConsumedCost 的估算值（可能为负）。
+	BalanceRemaining *float64 `json:"balance_remaining,omitempty"`
 }
 
 // UpstreamEntryModelProbe 是探测上游模型列表的结果（只读，不落库）。
@@ -94,17 +115,31 @@ type CreateUpstreamEntryInput struct {
 	Schedulable *bool
 	// BaseURLs 是厂家的候选地址；>=2 个时保存前实测延迟，只固化最快的一个。
 	BaseURLs []string
+	// RateMultiplier 是账号成本倍率；与 RateSyncEnabled 互斥（自动同步时由探测写回）。
+	RateMultiplier  *float64
+	RateSyncEnabled *bool
+	// InitialBalance 是首次配置的上游余额；配置后不可修改。
+	InitialBalance *float64
 }
 
 type UpdateUpstreamEntryInput struct {
-	Name        string
-	BaseURL     string
-	APIKey      string // 空表示保持不变
-	Concurrency *int
-	Priority    *int
-	Schedulable *bool
-	BaseURLs    []string
+	Name            string
+	BaseURL         string
+	APIKey          string // 空表示保持不变
+	Concurrency     *int
+	Priority        *int
+	Schedulable     *bool
+	BaseURLs        []string
+	RateMultiplier  *float64
+	RateSyncEnabled *bool
 }
+
+const (
+	// UpstreamBalanceInitialExtraKey 保存条目首次配置的上游余额（只写一次）。
+	UpstreamBalanceInitialExtraKey = "upstream_balance_initial"
+	// UpstreamBalanceSetAtExtraKey 记录初始余额的配置时间，用作本地消耗台账的起点。
+	UpstreamBalanceSetAtExtraKey = "upstream_balance_set_at"
+)
 
 var (
 	ErrUpstreamVendorNotFound      = errors.New("upstream vendor not found")
@@ -113,7 +148,15 @@ var (
 	ErrUpstreamGroupInvalid        = errors.New("group platform does not match entry platform")
 	ErrUpstreamAccountIneligible   = errors.New("account is not eligible to join the upstream hub")
 	ErrUpstreamAccountAlreadyOwned = errors.New("account already belongs to an upstream vendor")
+	ErrUpstreamBalanceAlreadySet   = errors.New("upstream balance is already configured and cannot be changed")
+	ErrUpstreamRateSyncConflict    = errors.New("manual rate multiplier cannot be changed while upstream rate sync is enabled")
 )
+
+// AccountConsumption 是条目自初始余额设置以来的成本汇总。
+type AccountConsumption struct {
+	SinceSet float64
+	Today    float64
+}
 
 // UpstreamVendorRepository 上游厂家与条目（accounts.extra 归属）的持久化接口。
 type UpstreamVendorRepository interface {
@@ -127,6 +170,7 @@ type UpstreamVendorRepository interface {
 	SetEntryGroupEnabled(ctx context.Context, accountID, groupID int64, enabled bool) error
 	SetEntryGroups(ctx context.Context, accountID int64, groupIDs []int64) error
 	CountCompositeRoutesByGroup(ctx context.Context) (map[int64]int, error)
+	SumAccountConsumption(ctx context.Context, accountIDs []int64, todayStart time.Time) (map[int64]AccountConsumption, error)
 }
 
 // upstreamModelProber 是「读取上游真实模型列表」的能力，由 *AccountTestService 实现。
@@ -207,12 +251,23 @@ func (s *UpstreamHubService) ListVendors(ctx context.Context) ([]UpstreamVendor,
 	if err != nil {
 		return nil, err
 	}
+	type entryRange struct{ start, end int }
+	ranges := make([]entryRange, len(vendors))
+	allEntries := make([]UpstreamEntry, 0)
 	for i := range vendors {
 		entries, err := s.repo.ListEntries(ctx, vendors[i].ID)
 		if err != nil {
 			return nil, err
 		}
-		enrichUpstreamVendor(&vendors[i], entries)
+		ranges[i] = entryRange{start: len(allEntries), end: len(allEntries) + len(entries)}
+		allEntries = append(allEntries, entries...)
+	}
+	if err := s.attachEntryConsumption(ctx, allEntries); err != nil {
+		return nil, err
+	}
+	for i := range vendors {
+		rangeRef := ranges[i]
+		enrichUpstreamVendor(&vendors[i], allEntries[rangeRef.start:rangeRef.end])
 	}
 	return vendors, nil
 }
@@ -290,6 +345,9 @@ func (s *UpstreamHubService) GetVendorDetail(ctx context.Context, id int64) (*Up
 	}
 	entries, err := s.repo.ListEntries(ctx, id)
 	if err != nil {
+		return nil, err
+	}
+	if err := s.attachEntryConsumption(ctx, entries); err != nil {
 		return nil, err
 	}
 	enrichUpstreamVendor(vendor, entries)
@@ -430,6 +488,29 @@ func (s *UpstreamHubService) CreateEntry(ctx context.Context, vendorID int64, in
 	if input.Schedulable != nil {
 		schedulable = *input.Schedulable
 	}
+	rateMultiplier := 1.0
+	if input.RateMultiplier != nil {
+		if *input.RateMultiplier < 0 {
+			return nil, fmt.Errorf("rate multiplier must be >= 0")
+		}
+		rateMultiplier = *input.RateMultiplier
+	}
+	rateSyncEnabled := input.RateSyncEnabled != nil && *input.RateSyncEnabled
+	if rateSyncEnabled && input.RateMultiplier != nil {
+		return nil, ErrUpstreamRateSyncConflict
+	}
+	extra := map[string]any{UpstreamVendorIDExtraKey: vendorID}
+	if rateSyncEnabled {
+		extra[UpstreamBillingProbeEnabledExtraKey] = true
+		extra[UpstreamBillingRateSyncEnabledExtraKey] = true
+	}
+	if input.InitialBalance != nil {
+		if *input.InitialBalance < 0 {
+			return nil, fmt.Errorf("initial balance must be >= 0")
+		}
+		extra[UpstreamBalanceInitialExtraKey] = *input.InitialBalance
+		extra[UpstreamBalanceSetAtExtraKey] = time.Now().UTC().Format(time.RFC3339)
+	}
 	account, err := s.admin.CreateAccount(ctx, &CreateAccountInput{
 		Name:     name,
 		Platform: platform,
@@ -438,11 +519,10 @@ func (s *UpstreamHubService) CreateEntry(ctx context.Context, vendorID int64, in
 			"api_key":  apiKey,
 			"base_url": baseURL,
 		},
-		Extra: map[string]any{
-			UpstreamVendorIDExtraKey: vendorID,
-		},
+		Extra:                extra,
 		Concurrency:          input.Concurrency,
 		Priority:             input.Priority,
+		RateMultiplier:       &rateMultiplier,
 		SkipDefaultGroupBind: true,
 	})
 	if err != nil {
@@ -496,16 +576,43 @@ func (s *UpstreamHubService) UpdateEntry(ctx context.Context, accountID int64, i
 	if apiKey := strings.TrimSpace(input.APIKey); apiKey != "" {
 		credentials["api_key"] = apiKey
 	}
+	rateSyncEnabled := upstreamEntryRateSyncEnabled(current)
+	if input.RateSyncEnabled != nil && !*input.RateSyncEnabled && rateSyncEnabled {
+		if err := s.admin.UpdateAccountExtra(ctx, accountID, map[string]any{
+			UpstreamBillingProbeEnabledExtraKey:    false,
+			UpstreamBillingRateSyncEnabledExtraKey: false,
+		}); err != nil {
+			return nil, err
+		}
+		rateSyncEnabled = false
+	}
+	if input.RateMultiplier != nil {
+		if *input.RateMultiplier < 0 {
+			return nil, fmt.Errorf("rate multiplier must be >= 0")
+		}
+		if rateSyncEnabled || (input.RateSyncEnabled != nil && *input.RateSyncEnabled) {
+			return nil, ErrUpstreamRateSyncConflict
+		}
+	}
 	update := &UpdateAccountInput{
 		Name:                  name,
 		Type:                  AccountTypeAPIKey,
 		Credentials:           credentials,
 		Concurrency:           input.Concurrency,
 		Priority:              input.Priority,
+		RateMultiplier:        input.RateMultiplier,
 		SkipMixedChannelCheck: true,
 	}
 	if _, err := s.admin.UpdateAccount(ctx, accountID, update); err != nil {
 		return nil, err
+	}
+	if input.RateSyncEnabled != nil && *input.RateSyncEnabled {
+		if err := s.admin.UpdateAccountExtra(ctx, accountID, map[string]any{
+			UpstreamBillingProbeEnabledExtraKey:    true,
+			UpstreamBillingRateSyncEnabledExtraKey: true,
+		}); err != nil {
+			return nil, err
+		}
 	}
 	if input.Schedulable != nil {
 		if _, err := s.admin.SetAccountSchedulable(ctx, accountID, *input.Schedulable); err != nil {
@@ -513,6 +620,64 @@ func (s *UpstreamHubService) UpdateEntry(ctx context.Context, accountID int64, i
 		}
 	}
 	return s.getEntry(ctx, accountID)
+}
+
+func upstreamEntryRateSyncEnabled(account *Account) bool {
+	if account == nil || account.Extra == nil {
+		return false
+	}
+	probeEnabled, _ := account.Extra[UpstreamBillingProbeEnabledExtraKey].(bool)
+	syncEnabled, _ := account.Extra[UpstreamBillingRateSyncEnabledExtraKey].(bool)
+	return probeEnabled && syncEnabled
+}
+
+// SetEntryInitialBalance 首次配置条目的上游余额；一旦写入不可修改。
+func (s *UpstreamHubService) SetEntryInitialBalance(ctx context.Context, accountID int64, amount float64) (*UpstreamEntry, error) {
+	account, err := s.admin.GetAccount(ctx, accountID)
+	if err != nil {
+		return nil, err
+	}
+	if _, ok := upstreamVendorIDFromExtra(account.Extra); !ok {
+		return nil, ErrUpstreamEntryNotFound
+	}
+	if amount < 0 {
+		return nil, fmt.Errorf("initial balance must be >= 0")
+	}
+	if _, exists := account.Extra[UpstreamBalanceInitialExtraKey]; exists {
+		return nil, ErrUpstreamBalanceAlreadySet
+	}
+	if err := s.admin.UpdateAccountExtra(ctx, accountID, map[string]any{
+		UpstreamBalanceInitialExtraKey: amount,
+		UpstreamBalanceSetAtExtraKey:   time.Now().UTC().Format(time.RFC3339),
+	}); err != nil {
+		return nil, err
+	}
+	return s.getEntry(ctx, accountID)
+}
+
+// attachEntryConsumption 为条目填充「自初始余额以来的成本」和「今日成本」。
+func (s *UpstreamHubService) attachEntryConsumption(ctx context.Context, entries []UpstreamEntry) error {
+	if len(entries) == 0 {
+		return nil
+	}
+	accountIDs := make([]int64, 0, len(entries))
+	for _, entry := range entries {
+		accountIDs = append(accountIDs, entry.AccountID)
+	}
+	consumption, err := s.repo.SumAccountConsumption(ctx, accountIDs, timezone.StartOfDay(timezone.Now()))
+	if err != nil {
+		return err
+	}
+	for i := range entries {
+		sum := consumption[entries[i].AccountID]
+		entries[i].ConsumedCost = sum.SinceSet
+		entries[i].ConsumedToday = sum.Today
+		if entries[i].BalanceInitial != nil {
+			remaining := *entries[i].BalanceInitial - sum.SinceSet
+			entries[i].BalanceRemaining = &remaining
+		}
+	}
+	return nil
 }
 
 // DuplicateEntry 以现有条目为模板新建条目（同厂家）：服务端复制凭据，
@@ -843,7 +1008,11 @@ func (s *UpstreamHubService) getEntry(ctx context.Context, accountID int64) (*Up
 	}
 	for _, entry := range entries {
 		if entry.AccountID == accountID {
-			return &entry, nil
+			matched := []UpstreamEntry{entry}
+			if err := s.attachEntryConsumption(ctx, matched); err != nil {
+				return nil, err
+			}
+			return &matched[0], nil
 		}
 	}
 	return nil, ErrUpstreamEntryNotFound
@@ -862,6 +1031,26 @@ func enrichUpstreamVendor(vendor *UpstreamVendor, entries []UpstreamEntry) {
 	vendor.AllocatedConcurrency = allocated
 	vendor.ReferencedGroupCount = len(groupSeen)
 	vendor.OverBudget = vendor.ConcurrencyBudget > 0 && allocated > vendor.ConcurrencyBudget
+
+	var initialTotal, consumedTotal, remainingTotal, todayTotal float64
+	configured := 0
+	for _, entry := range entries {
+		todayTotal += entry.ConsumedToday
+		if entry.BalanceInitial == nil {
+			continue
+		}
+		configured++
+		initialTotal += *entry.BalanceInitial
+		consumedTotal += entry.ConsumedCost
+		if entry.BalanceRemaining != nil {
+			remainingTotal += *entry.BalanceRemaining
+		}
+	}
+	vendor.BalanceConfiguredEntries = configured
+	vendor.BalanceInitialTotal = initialTotal
+	vendor.BalanceConsumedTotal = consumedTotal
+	vendor.BalanceRemainingTotal = remainingTotal
+	vendor.ConsumedTodayTotal = todayTotal
 }
 
 func normalizeVendorName(name string) (string, error) {

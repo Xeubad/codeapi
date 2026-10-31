@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"sort"
 	"strconv"
 	"strings"
@@ -16,14 +17,16 @@ import (
 	dbgroup "github.com/Wei-Shaw/sub2api/ent/group"
 	dbupstreamvendor "github.com/Wei-Shaw/sub2api/ent/upstreamvendor"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/lib/pq"
 )
 
 type upstreamVendorRepository struct {
 	client *ent.Client
+	sql    *sql.DB
 }
 
-func NewUpstreamVendorRepository(client *ent.Client) service.UpstreamVendorRepository {
-	return &upstreamVendorRepository{client: client}
+func NewUpstreamVendorRepository(client *ent.Client, db *sql.DB) service.UpstreamVendorRepository {
+	return &upstreamVendorRepository{client: client, sql: db}
 }
 
 func (r *upstreamVendorRepository) List(ctx context.Context) ([]service.UpstreamVendor, error) {
@@ -139,19 +142,27 @@ func (r *upstreamVendorRepository) ListEntries(ctx context.Context, vendorID int
 		if !ok || owner != vendorID {
 			continue
 		}
+		rateMultiplier := row.RateMultiplier
+		if rateMultiplier < 0 {
+			rateMultiplier = 0
+		}
 		entry := service.UpstreamEntry{
-			Groups:      []service.UpstreamEntryGroupRef{},
-			AccountID:   row.ID,
-			VendorID:    owner,
-			Name:        row.Name,
-			Platform:    row.Platform,
-			BaseURL:     credentialString(row.Credentials, "base_url"),
-			HasAPIKey:   credentialString(row.Credentials, "api_key") != "",
-			Concurrency: row.Concurrency,
-			Priority:    row.Priority,
-			Schedulable: row.Schedulable,
-			Status:      row.Status,
-			Models:      storedModelMappingKeys(row.Credentials),
+			Groups:          []service.UpstreamEntryGroupRef{},
+			AccountID:       row.ID,
+			VendorID:        owner,
+			Name:            row.Name,
+			Platform:        row.Platform,
+			BaseURL:         credentialString(row.Credentials, "base_url"),
+			HasAPIKey:       credentialString(row.Credentials, "api_key") != "",
+			Concurrency:     row.Concurrency,
+			Priority:        row.Priority,
+			Schedulable:     row.Schedulable,
+			Status:          row.Status,
+			Models:          storedModelMappingKeys(row.Credentials),
+			RateMultiplier:  rateMultiplier,
+			RateSyncEnabled: boolExtra(row.Extra, service.UpstreamBillingRateSyncEnabledExtraKey),
+			BalanceInitial:  floatExtraPointer(row.Extra, service.UpstreamBalanceInitialExtraKey),
+			BalanceSetAt:    timeExtraPointer(row.Extra, service.UpstreamBalanceSetAtExtraKey),
 		}
 		byAccountID[row.ID] = len(entries)
 		entries = append(entries, entry)
@@ -314,6 +325,90 @@ func diffAccountGroupIDs(existing, desired []int64) (add, remove []int64) {
 		}
 	}
 	return add, remove
+}
+
+func boolExtra(extra map[string]any, key string) bool {
+	value, ok := extra[key].(bool)
+	return ok && value
+}
+
+func floatExtraPointer(extra map[string]any, key string) *float64 {
+	switch value := extra[key].(type) {
+	case float64:
+		return &value
+	case float32:
+		converted := float64(value)
+		return &converted
+	case int64:
+		converted := float64(value)
+		return &converted
+	case int:
+		converted := float64(value)
+		return &converted
+	}
+	return nil
+}
+
+func timeExtraPointer(extra map[string]any, key string) *time.Time {
+	value, ok := extra[key].(string)
+	if !ok || strings.TrimSpace(value) == "" {
+		return nil
+	}
+	parsed, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return nil
+	}
+	return &parsed
+}
+
+// SumAccountConsumption 汇总条目自「初始余额设置时间」以来的账号成本与今日成本。
+// 成本口径与 dashboard 一致：COALESCE(account_stats_cost, total_cost) * COALESCE(account_rate_multiplier,1)。
+func (r *upstreamVendorRepository) SumAccountConsumption(ctx context.Context, accountIDs []int64, todayStart time.Time) (map[int64]service.AccountConsumption, error) {
+	out := make(map[int64]service.AccountConsumption, len(accountIDs))
+	if len(accountIDs) == 0 {
+		return out, nil
+	}
+	if r.sql == nil {
+		return out, nil
+	}
+	rows, err := r.sql.QueryContext(ctx, `
+		WITH bounds AS (
+			SELECT id,
+			       COALESCE(NULLIF(extra->>'upstream_balance_set_at', '')::timestamptz, created_at) AS start_at
+			FROM accounts
+			WHERE id = ANY($1)
+		)
+		SELECT b.id,
+		       COALESCE(SUM(
+		           CASE WHEN ul.created_at >= b.start_at
+		                THEN COALESCE(ul.account_stats_cost, ul.total_cost) * COALESCE(ul.account_rate_multiplier, 1)
+		                ELSE 0 END
+		       ), 0) AS consumed_since,
+		       COALESCE(SUM(
+		           CASE WHEN ul.created_at >= $2
+		                THEN COALESCE(ul.account_stats_cost, ul.total_cost) * COALESCE(ul.account_rate_multiplier, 1)
+		                ELSE 0 END
+		       ), 0) AS consumed_today
+		FROM bounds b
+		LEFT JOIN usage_logs ul ON ul.account_id = b.id
+		GROUP BY b.id
+	`, pq.Array(accountIDs), todayStart)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var accountID int64
+		var since, today float64
+		if err := rows.Scan(&accountID, &since, &today); err != nil {
+			return nil, err
+		}
+		out[accountID] = service.AccountConsumption{SinceSet: since, Today: today}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func toServiceUpstreamVendor(row *ent.UpstreamVendor) service.UpstreamVendor {

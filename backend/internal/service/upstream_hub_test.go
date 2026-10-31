@@ -19,6 +19,7 @@ type stubUpstreamVendorRepo struct {
 	updated     *UpstreamVendor
 	deleted     int64
 	routeCounts map[int64]int
+	consumption map[int64]AccountConsumption
 }
 
 func (s *stubUpstreamVendorRepo) List(context.Context) ([]UpstreamVendor, error) {
@@ -68,6 +69,10 @@ func (s *stubUpstreamVendorRepo) SetEntryGroups(context.Context, int64, []int64)
 
 func (s *stubUpstreamVendorRepo) CountCompositeRoutesByGroup(context.Context) (map[int64]int, error) {
 	return s.routeCounts, nil
+}
+
+func (s *stubUpstreamVendorRepo) SumAccountConsumption(context.Context, []int64, time.Time) (map[int64]AccountConsumption, error) {
+	return s.consumption, nil
 }
 
 func TestUpstreamVendorIDFromExtra(t *testing.T) {
@@ -728,4 +733,123 @@ func TestListAggregationUnitsCountsAttachedEntriesAndRoutes(t *testing.T) {
 	require.Equal(t, 2, units[0].EntryCount)
 	require.Equal(t, 3, units[0].RouteCount)
 	require.Equal(t, 60, units[0].RPMLimit)
+}
+
+func TestCreateEntryStoresRateAndInitialBalance(t *testing.T) {
+	repo := &stubUpstreamVendorRepo{
+		vendors: []UpstreamVendor{{ID: 3, Name: "relay"}},
+		entries: map[int64][]UpstreamEntry{3: {{AccountID: 99, VendorID: 3, Name: "a"}}},
+	}
+	admin := &stubUpstreamAdmin{account: &Account{ID: 99, Type: AccountTypeAPIKey, Extra: map[string]any{UpstreamVendorIDExtraKey: int64(3)}}}
+	svc := NewUpstreamHubService(repo, admin, nil)
+
+	_, err := svc.CreateEntry(context.Background(), 3, CreateUpstreamEntryInput{
+		Name:           "a",
+		Platform:       PlatformOpenAI,
+		BaseURL:        "https://relay.example",
+		APIKey:         "sk-test",
+		Concurrency:    1,
+		RateMultiplier: float64Ptr(1.5),
+		InitialBalance: float64Ptr(100),
+	})
+	require.NoError(t, err)
+	require.NotNil(t, admin.created)
+	require.NotNil(t, admin.created.RateMultiplier)
+	require.Equal(t, 1.5, *admin.created.RateMultiplier)
+	require.Equal(t, 100.0, admin.created.Extra[UpstreamBalanceInitialExtraKey])
+	require.NotEmpty(t, admin.created.Extra[UpstreamBalanceSetAtExtraKey])
+	require.NotContains(t, admin.created.Extra, UpstreamBillingRateSyncEnabledExtraKey)
+}
+
+func TestCreateEntryEnablesRateSyncFlags(t *testing.T) {
+	repo := &stubUpstreamVendorRepo{
+		vendors: []UpstreamVendor{{ID: 3, Name: "relay"}},
+		entries: map[int64][]UpstreamEntry{3: {{AccountID: 99, VendorID: 3, Name: "a"}}},
+	}
+	admin := &stubUpstreamAdmin{account: &Account{ID: 99, Type: AccountTypeAPIKey, Extra: map[string]any{UpstreamVendorIDExtraKey: int64(3)}}}
+	svc := NewUpstreamHubService(repo, admin, nil)
+
+	_, err := svc.CreateEntry(context.Background(), 3, CreateUpstreamEntryInput{
+		Name:            "a",
+		Platform:        PlatformOpenAI,
+		BaseURL:         "https://relay.example",
+		APIKey:          "sk-test",
+		Concurrency:     1,
+		RateSyncEnabled: boolPtr(true),
+	})
+	require.NoError(t, err)
+	require.Equal(t, true, admin.created.Extra[UpstreamBillingProbeEnabledExtraKey])
+	require.Equal(t, true, admin.created.Extra[UpstreamBillingRateSyncEnabledExtraKey])
+	require.Equal(t, 1.0, *admin.created.RateMultiplier)
+}
+
+func TestSetEntryInitialBalanceIsWriteOnce(t *testing.T) {
+	repo := &stubUpstreamVendorRepo{
+		vendors: []UpstreamVendor{{ID: 3, Name: "relay"}},
+		entries: map[int64][]UpstreamEntry{3: {{AccountID: 5, VendorID: 3, Name: "a"}}},
+	}
+	admin := &stubUpstreamAdmin{account: &Account{ID: 5, Type: AccountTypeAPIKey, Extra: map[string]any{UpstreamVendorIDExtraKey: int64(3)}}}
+	svc := NewUpstreamHubService(repo, admin, nil)
+
+	_, err := svc.SetEntryInitialBalance(context.Background(), 5, 50)
+	require.NoError(t, err)
+	require.Equal(t, 50.0, admin.extraUpdates[UpstreamBalanceInitialExtraKey])
+
+	_, err = svc.SetEntryInitialBalance(context.Background(), 5, 60)
+	require.ErrorIs(t, err, ErrUpstreamBalanceAlreadySet)
+}
+
+func TestUpdateEntryRejectsManualRateWhileSyncEnabled(t *testing.T) {
+	repo := &stubUpstreamVendorRepo{
+		vendors: []UpstreamVendor{{ID: 3, Name: "relay"}},
+		entries: map[int64][]UpstreamEntry{3: {{AccountID: 5, VendorID: 3, Name: "a"}}},
+	}
+	admin := &stubUpstreamAdmin{account: &Account{
+		ID:   5,
+		Type: AccountTypeAPIKey,
+		Credentials: map[string]any{
+			"api_key":  "sk-test",
+			"base_url": "https://relay.example",
+		},
+		Extra: map[string]any{
+			UpstreamVendorIDExtraKey:               int64(3),
+			UpstreamBillingProbeEnabledExtraKey:    true,
+			UpstreamBillingRateSyncEnabledExtraKey: true,
+		},
+	}}
+	svc := NewUpstreamHubService(repo, admin, nil)
+
+	_, err := svc.UpdateEntry(context.Background(), 5, UpdateUpstreamEntryInput{
+		Name:           "a",
+		BaseURL:        "https://relay.example",
+		RateMultiplier: float64Ptr(2),
+	})
+	require.ErrorIs(t, err, ErrUpstreamRateSyncConflict)
+}
+
+func TestGetVendorDetailComputesBalanceLedger(t *testing.T) {
+	repo := &stubUpstreamVendorRepo{
+		vendors: []UpstreamVendor{{ID: 3, Name: "relay"}},
+		entries: map[int64][]UpstreamEntry{3: {{
+			AccountID:      5,
+			VendorID:       3,
+			Name:           "a",
+			BalanceInitial: float64Ptr(10),
+		}}},
+		consumption: map[int64]AccountConsumption{5: {SinceSet: 3, Today: 1}},
+	}
+	admin := &stubUpstreamAdmin{account: &Account{ID: 5, Type: AccountTypeAPIKey, Extra: map[string]any{UpstreamVendorIDExtraKey: int64(3)}}}
+	svc := NewUpstreamHubService(repo, admin, nil)
+
+	detail, err := svc.GetVendorDetail(context.Background(), 3)
+	require.NoError(t, err)
+	require.Len(t, detail.Entries, 1)
+	require.Equal(t, 3.0, detail.Entries[0].ConsumedCost)
+	require.Equal(t, 1.0, detail.Entries[0].ConsumedToday)
+	require.NotNil(t, detail.Entries[0].BalanceRemaining)
+	require.Equal(t, 7.0, *detail.Entries[0].BalanceRemaining)
+	require.Equal(t, 10.0, detail.Vendor.BalanceInitialTotal)
+	require.Equal(t, 3.0, detail.Vendor.BalanceConsumedTotal)
+	require.Equal(t, 7.0, detail.Vendor.BalanceRemainingTotal)
+	require.Equal(t, 1, detail.Vendor.BalanceConfiguredEntries)
 }

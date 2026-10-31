@@ -10,6 +10,11 @@ export interface UpstreamVendor {
   allocated_concurrency: number
   referenced_group_count: number
   over_budget: boolean
+  balance_initial_total: number
+  balance_consumed_total: number
+  balance_remaining_total: number
+  balance_configured_entries: number
+  consumed_today_total: number
   created_at: string
   updated_at: string
 }
@@ -35,6 +40,18 @@ export interface UpstreamEntry {
   status: string
   groups: UpstreamEntryGroupRef[]
   models: string[]
+  /** 账号成本倍率；account_cost = total_cost × 该值 */
+  rate_multiplier: number
+  /** 是否由上游倍率探测自动写回 rate_multiplier */
+  upstream_billing_rate_sync_enabled: boolean
+  /** 首次配置的上游余额；配置后不可修改 */
+  balance_initial?: number
+  balance_set_at?: string
+  /** 自初始余额配置以来的账号成本 */
+  consumed_cost: number
+  consumed_today: number
+  /** 初始余额 - 已消耗，可能为负 */
+  balance_remaining?: number
 }
 
 export interface UpstreamEntryModelProbe {
@@ -98,6 +115,10 @@ export interface UpstreamEntryRequest {
   schedulable?: boolean
   /** 厂家候选地址；>=2 个时服务端在保存前实测并只固化最快的一个 */
   base_urls?: string[]
+  rate_multiplier?: number
+  upstream_billing_rate_sync_enabled?: boolean
+  /** 仅创建时生效：首次配置的上游余额 */
+  initial_balance?: number
 }
 
 export async function listVendors(): Promise<UpstreamVendor[]> {
@@ -175,6 +196,13 @@ export async function setEntryGroups(accountId: number, groupIds: number[]): Pro
   return data
 }
 
+export async function setEntryInitialBalance(accountId: number, initialBalance: number): Promise<UpstreamEntry> {
+  const { data } = await apiClient.put<UpstreamEntry>(`/admin/upstream-entries/${accountId}/balance`, {
+    initial_balance: initialBalance
+  })
+  return data
+}
+
 export async function setEntryGroupEnabled(accountId: number, groupId: number, enabled: boolean): Promise<void> {
   await apiClient.put(`/admin/upstream-entries/${accountId}/groups/${groupId}/enabled`, { enabled })
 }
@@ -223,6 +251,7 @@ const upstreamHubAPI = {
   setEntrySchedulable,
   setEntryGroups,
   setEntryGroupEnabled,
+  setEntryInitialBalance,
   probeEntryModels,
   setEntryModels,
   measureBaseURLs,

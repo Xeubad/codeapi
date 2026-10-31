@@ -771,6 +771,7 @@ func registerUpstreamHubRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		entries.PUT("/:id/groups/:groupId/enabled", h.Admin.UpstreamHub.SetEntryGroupEnabled)
 		entries.POST("/:id/probe-models", h.Admin.UpstreamHub.ProbeEntryModels)
 		entries.PUT("/:id/models", h.Admin.UpstreamHub.SetEntryModels)
+		entries.PUT("/:id/balance", h.Admin.UpstreamHub.SetEntryInitialBalance)
 	}
 	admin.GET("/upstream-groups", h.Admin.UpstreamHub.ListGroups)
 	admin.GET("/aggregation/units", h.Admin.UpstreamHub.ListAggregationUnits)

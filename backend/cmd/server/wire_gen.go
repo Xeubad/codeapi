@@ -286,7 +286,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	auditLogRepository := repository.NewAuditLogRepository(db)
 	auditLogService := service.ProvideAuditLogService(auditLogRepository, settingService)
 	auditLogHandler := admin.NewAuditLogHandler(auditLogService, totpService)
-	upstreamVendorRepository := repository.NewUpstreamVendorRepository(client)
+	upstreamVendorRepository := repository.NewUpstreamVendorRepository(client, db)
 	upstreamHubService := service.NewUpstreamHubService(upstreamVendorRepository, adminService, accountTestService)
 	upstreamHubHandler := admin.NewUpstreamHubHandler(upstreamHubService)
 	upstreamBillingProbeService := service.ProvideUpstreamBillingProbeService(accountRepository, accountTestService, settingService, leaderLockCache, db)

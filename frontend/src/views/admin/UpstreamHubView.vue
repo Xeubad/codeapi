@@ -49,6 +49,7 @@
                   <th>{{ t('admin.upstreamHub.vendorName') }}</th>
                   <th>{{ t('admin.upstreamHub.budget') }}</th>
                   <th>{{ t('admin.upstreamHub.allocated') }}</th>
+                  <th>{{ t('admin.upstreamHub.balance') }}</th>
                   <th>{{ t('admin.upstreamHub.entriesCount') }}</th>
                   <th>{{ t('admin.upstreamHub.referencedGroups') }}</th>
                   <th>{{ t('common.status') }}</th>
@@ -68,6 +69,23 @@
                     </span>
                     <span v-if="vendor.concurrency_budget > 0" class="ml-1 text-xs text-gray-500">
                       / {{ vendor.concurrency_budget }}
+                    </span>
+                  </td>
+                  <td>
+                    <template v-if="vendor.balance_configured_entries > 0">
+                      <div :class="vendor.balance_remaining_total < 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-white'">
+                        ${{ formatMoney(vendor.balance_remaining_total) }}
+                      </div>
+                      <div class="text-xs text-gray-500 dark:text-gray-400">
+                        {{ t('admin.upstreamHub.balanceSummary', {
+                          initial: formatMoney(vendor.balance_initial_total),
+                          consumed: formatMoney(vendor.balance_consumed_total),
+                          today: formatMoney(vendor.consumed_today_total)
+                        }) }}
+                      </div>
+                    </template>
+                    <span v-else class="text-xs text-gray-400 dark:text-dark-400">
+                      {{ t('admin.upstreamHub.balanceNotConfigured') }}
                     </span>
                   </td>
                   <td>{{ vendor.entry_count }}</td>
@@ -165,7 +183,9 @@
                       <th>Base URL</th>
                       <th>{{ t('admin.upstreamHub.concurrency') }}</th>
                       <th>{{ t('admin.upstreamHub.priority') }}</th>
+                      <th>{{ t('admin.upstreamHub.rate') }}</th>
                       <th>{{ t('admin.upstreamHub.models') }}</th>
+                      <th>{{ t('admin.upstreamHub.balance') }}</th>
                       <th>{{ t('admin.upstreamHub.groups') }}</th>
                       <th>{{ t('admin.upstreamHub.schedulable') }}</th>
                     </tr>
@@ -181,6 +201,12 @@
                       <td>{{ entry.concurrency }}</td>
                       <td>{{ entry.priority }}</td>
                       <td>
+                        <div class="text-sm text-gray-900 dark:text-white">{{ entry.rate_multiplier }}</div>
+                        <span v-if="entry.upstream_billing_rate_sync_enabled" class="badge badge-primary">
+                          {{ t('admin.upstreamHub.rateAutoBadge') }}
+                        </span>
+                      </td>
+                      <td>
                         <span
                           class="text-sm"
                           :class="
@@ -190,6 +216,23 @@
                           "
                         >
                           {{ t('admin.upstreamHub.modelsRegistered', { count: entry.models?.length || 0 }) }}
+                        </span>
+                      </td>
+                      <td>
+                        <template v-if="entry.balance_initial != null">
+                          <div :class="(entry.balance_remaining ?? 0) < 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-white'">
+                            ${{ formatMoney(entry.balance_remaining) }}
+                          </div>
+                          <div class="text-xs text-gray-500 dark:text-gray-400">
+                            {{ t('admin.upstreamHub.balanceSummary', {
+                              initial: formatMoney(entry.balance_initial),
+                              consumed: formatMoney(entry.consumed_cost),
+                              today: formatMoney(entry.consumed_today)
+                            }) }}
+                          </div>
+                        </template>
+                        <span v-else class="text-xs text-gray-400 dark:text-dark-400">
+                          {{ t('admin.upstreamHub.balanceNotConfigured') }}
                         </span>
                       </td>
                       <td>
@@ -253,6 +296,9 @@
     <BaseDialog :show="showEntryDialog" :title="t('admin.upstreamHub.addOrEdit')" width="max" @close="closeEntriesDialog">
       <div v-if="anyRowDropdownOpen" class="fixed inset-0 z-30" @click="closeAllDropdowns"></div>
       <div class="space-y-3">
+        <div class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
+          {{ t('admin.upstreamHub.balanceNotice') }}
+        </div>
         <div class="table-container">
           <table class="table">
             <thead>
@@ -262,6 +308,8 @@
                 <th class="min-w-[10rem] whitespace-nowrap">{{ t('admin.upstreamHub.apiKey') }}</th>
                 <th class="min-w-[6rem] whitespace-nowrap">{{ t('admin.upstreamHub.concurrency') }}</th>
                 <th class="min-w-[8.5rem] whitespace-nowrap">{{ t('admin.upstreamHub.priority') }}</th>
+                <th class="min-w-[9rem] whitespace-nowrap">{{ t('admin.upstreamHub.rate') }}</th>
+                <th class="min-w-[12rem] whitespace-nowrap">{{ t('admin.upstreamHub.balance') }}</th>
                 <th class="min-w-[9.5rem] whitespace-nowrap">{{ t('admin.upstreamHub.models') }}</th>
                 <th class="min-w-[9rem] whitespace-nowrap">{{ t('admin.upstreamHub.groups') }}</th>
                 <th class="whitespace-nowrap text-right">{{ t('common.actions') }}</th>
@@ -286,6 +334,50 @@
                   </td>
                   <td><input v-model.number="row.concurrency" class="input" type="number" min="1" /></td>
                   <td><input v-model.number="row.priority" class="input" type="number" /></td>
+                  <td>
+                    <input
+                      v-model.number="row.rateMultiplier"
+                      class="input"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      :disabled="row.rateSyncEnabled"
+                    />
+                    <label class="mt-1 flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+                      <input v-model="row.rateSyncEnabled" type="checkbox" class="cursor-pointer" />
+                      {{ t('admin.upstreamHub.rateAutoSync') }}
+                    </label>
+                  </td>
+                  <td>
+                    <template v-if="row.balanceInitial !== null">
+                      <div :class="(row.balanceRemaining ?? 0) < 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-white'">
+                        ${{ formatMoney(row.balanceRemaining) }}
+                      </div>
+                      <div class="text-xs text-gray-500 dark:text-gray-400">
+                        {{ t('admin.upstreamHub.balanceSummary', {
+                          initial: formatMoney(row.balanceInitial),
+                          consumed: formatMoney(row.consumedCost),
+                          today: formatMoney(row.consumedToday)
+                        }) }}
+                      </div>
+                      <div v-if="row.balanceSetAt" class="text-[11px] text-gray-400 dark:text-dark-400">
+                        {{ t('admin.upstreamHub.balanceSetAt', { time: formatDateTime(row.balanceSetAt) }) }}
+                      </div>
+                    </template>
+                    <template v-else>
+                      <input
+                        v-model.number="row.balanceInput"
+                        class="input"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        :placeholder="t('admin.upstreamHub.balancePlaceholder')"
+                      />
+                      <p class="mt-1 text-[11px] leading-4 text-amber-600 dark:text-amber-400">
+                        {{ t('admin.upstreamHub.balanceSetOnceHint') }}
+                      </p>
+                    </template>
+                  </td>
                   <td>
                     <span
                       class="text-sm"
@@ -593,6 +685,7 @@ import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import { extractApiErrorMessage } from '@/utils/apiError'
+import { formatDateTime } from '@/utils/format'
 import { syncUpstreamModelsPreview } from '@/api/admin/accounts'
 import proxiesAPI from '@/api/admin/proxies'
 import type { Proxy } from '@/types'
@@ -636,6 +729,14 @@ interface EntryRow {
   api_key: string
   concurrency: number
   priority: number
+  rateMultiplier: number
+  rateSyncEnabled: boolean
+  balanceInitial: number | null
+  balanceSetAt: string
+  consumedCost: number
+  consumedToday: number
+  balanceRemaining: number | null
+  balanceInput: number | string
   groupIds: number[]
   expanded: boolean
   dropdownTop: number
@@ -682,6 +783,11 @@ function groupRefs(entry: UpstreamEntry): UpstreamEntryGroupRef[] {
   return entry.groups || []
 }
 
+function formatMoney(value: number | null | undefined): string {
+  const amount = Number(value ?? 0)
+  return Number.isFinite(amount) ? amount.toFixed(2) : '0.00'
+}
+
 function entryToRow(entry: UpstreamEntry): EntryRow {
   return {
     accountId: entry.account_id,
@@ -691,6 +797,14 @@ function entryToRow(entry: UpstreamEntry): EntryRow {
     api_key: '',
     concurrency: entry.concurrency,
     priority: entry.priority,
+    rateMultiplier: entry.rate_multiplier ?? 1,
+    rateSyncEnabled: entry.upstream_billing_rate_sync_enabled === true,
+    balanceInitial: entry.balance_initial ?? null,
+    balanceSetAt: entry.balance_set_at || '',
+    consumedCost: entry.consumed_cost ?? 0,
+    consumedToday: entry.consumed_today ?? 0,
+    balanceRemaining: entry.balance_remaining ?? null,
+    balanceInput: '',
     groupIds: groupRefs(entry).map((group) => group.group_id),
     expanded: false,
     dropdownTop: 0,
@@ -815,6 +929,14 @@ function blankRow(): EntryRow {
     api_key: '',
     concurrency: 1,
     priority: 50,
+    rateMultiplier: 1,
+    rateSyncEnabled: false,
+    balanceInitial: null,
+    balanceSetAt: '',
+    consumedCost: 0,
+    consumedToday: 0,
+    balanceRemaining: null,
+    balanceInput: '',
     groupIds: [],
     expanded: false,
     dropdownTop: 0,
@@ -1014,6 +1136,12 @@ async function copyRow(row: EntryRow) {
     accountId: undefined,
     name: row.name ? `${row.name}-copy` : row.name,
     groupIds: [...row.groupIds],
+    balanceInitial: null,
+    balanceSetAt: '',
+    consumedCost: 0,
+    consumedToday: 0,
+    balanceRemaining: null,
+    balanceInput: '',
     models: [...row.models],
     modelsDirty: row.models.length > 0,
     modelDropdownOpen: false,
@@ -1197,6 +1325,15 @@ async function saveEntryRows() {
       if (!row.name.trim()) {
         throw new Error(t('admin.upstreamHub.fillRequiredFields'))
       }
+      const rate = Number(row.rateMultiplier)
+      if (!Number.isFinite(rate) || rate < 0) {
+        throw new Error(t('admin.upstreamHub.rateInvalid'))
+      }
+      const hasBalanceInput = row.balanceInput !== '' && row.balanceInput !== null && row.balanceInput !== undefined
+      const balanceInput = hasBalanceInput ? Number(row.balanceInput) : null
+      if (hasBalanceInput && (!Number.isFinite(balanceInput) || (balanceInput as number) < 0)) {
+        throw new Error(t('admin.upstreamHub.balanceInvalid'))
+      }
       if (row.accountId) {
         await upstreamHubAPI.updateEntry(row.accountId, {
           name: row.name,
@@ -1204,8 +1341,14 @@ async function saveEntryRows() {
           api_key: row.api_key,
           concurrency: Number(row.concurrency) || 1,
           priority: Number(row.priority) || 50,
-          base_urls: baseURLs
+          base_urls: baseURLs,
+          rate_multiplier: row.rateSyncEnabled ? undefined : rate,
+          upstream_billing_rate_sync_enabled: row.rateSyncEnabled
         })
+        // 初始余额写一次；已配置过的条目不允许再改。
+        if (row.balanceInitial === null && hasBalanceInput) {
+          await upstreamHubAPI.setEntryInitialBalance(row.accountId, balanceInput as number)
+        }
         await applyRowGroups(row.accountId, row)
         if (row.modelsDirty) {
           await upstreamHubAPI.setEntryModels(row.accountId, row.models)
@@ -1214,6 +1357,9 @@ async function saveEntryRows() {
         if (!row.api_key.trim()) {
           throw new Error(t('admin.upstreamHub.fillRequiredFields'))
         }
+        if (!hasBalanceInput) {
+          throw new Error(t('admin.upstreamHub.balanceRequired'))
+        }
         const created = await upstreamHubAPI.createEntry(detail.value.vendor.id, {
           name: row.name,
           platform: row.platform,
@@ -1221,7 +1367,10 @@ async function saveEntryRows() {
           api_key: row.api_key,
           concurrency: Number(row.concurrency) || 1,
           priority: Number(row.priority) || 50,
-          base_urls: baseURLs
+          base_urls: baseURLs,
+          rate_multiplier: row.rateSyncEnabled ? undefined : rate,
+          upstream_billing_rate_sync_enabled: row.rateSyncEnabled,
+          initial_balance: balanceInput as number
         })
         await applyRowGroups(created.account_id, row)
         if (row.models.length > 0) {

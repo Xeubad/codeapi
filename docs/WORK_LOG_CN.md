@@ -36,6 +36,33 @@
 
 ---
 
+## 2026年11月2日
+
+**主题**：资源调优手册明确仅面向 Docker 部署
+
+### 改动
+
+- 修订 `docs/RESOURCE_TUNING_DEVELOPMENT_CN.md`：支持范围明确为 Docker Compose 和独立 `docker run`，区分同机容器与外部 PostgreSQL/Redis；裸机/systemd、Kubernetes 和其他运行时不纳入功能范围。
+- 补充 Docker Desktop、cgroup 配额/CPU 集合及资源无限额时的口径，不能可靠确定宿主机或其他容器容量时显示未知；不挂 Docker socket，不自动重启或重建容器。
+- 更新部署适配、确认应用和验收清单，保留“只读分析 → 管理员确认 → 人工重启 → 验证”的流程与开发确认门。
+
+### 关键决策
+
+- 用户明确本功能专门针对 Docker；本轮是需求范围澄清，不是功能开发授权。
+- 应用容器可见资源不等于物理机或数据库/Redis 容器资源；Docker 身份、持久化挂载或单实例条件无法可靠确认时不得自动应用。
+
+### 验证
+
+- `git fetch --prune origin` 通过既有本地代理成功，修改前本地 `main` 与 `origin/main` 为 `0 0`；手册 9 个本地相对链接均存在，`git diff --check` 通过。
+- 未运行代码测试与构建：本轮仅修订文档，未改业务代码或部署配置。
+
+### 产出
+
+- `0c3e571` docs(tuning): scope resource analysis to Docker
+- 本条日志随独立 `docs(worklog)` 提交落地。
+
+---
+
 ## 2026年10月31日
 
 **主题**：全站 UI 重构调研的决策修订——用冲突面实测推翻「88 视图大爆炸迁移」

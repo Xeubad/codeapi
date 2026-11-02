@@ -6,6 +6,7 @@ import (
 	"io"
 	"os/exec"
 	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
@@ -147,6 +148,20 @@ func TestPgDumperDoesNotStartProcessWhenMigrationLockFails(t *testing.T) {
 	require.ErrorContains(t, err, "acquire backup migration lock")
 	require.False(t, commandCreated)
 	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestPgDumperRestoreStopsOnSQLFailure(t *testing.T) {
+	dumper, _ := newTestPgDumper(t, func(ctx context.Context, name string, args ...string) *exec.Cmd {
+		require.Equal(t, "psql", name)
+		require.Contains(t, args, "--single-transaction")
+		require.Contains(t, args, "--set=ON_ERROR_STOP=1")
+		require.Contains(t, args, "--no-psqlrc")
+		// Simulate psql reporting a SQL error and exiting nonzero with ON_ERROR_STOP.
+		return exec.CommandContext(ctx, "sh", "-c", "cat >/dev/null; echo 'ERROR: invalid SQL' >&2; exit 3")
+	})
+
+	err := dumper.Restore(context.Background(), strings.NewReader("invalid SQL;"))
+	require.ErrorContains(t, err, "ERROR: invalid SQL")
 }
 
 func TestPgDumperRejectsNilDatabase(t *testing.T) {

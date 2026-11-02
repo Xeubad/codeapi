@@ -45,21 +45,25 @@
 - 修订 `docs/RESOURCE_TUNING_DEVELOPMENT_CN.md`：支持范围明确为 Docker Compose 和独立 `docker run`，区分同机容器与外部 PostgreSQL/Redis；裸机/systemd、Kubernetes 和其他运行时不纳入功能范围。
 - 补充 Docker Desktop、cgroup 配额/CPU 集合及资源无限额时的口径，不能可靠确定宿主机或其他容器容量时显示未知；不挂 Docker socket，不自动重启或重建容器。
 - 更新部署适配、确认应用和验收清单，保留“只读分析 → 管理员确认 → 人工重启 → 验证”的流程与开发确认门。
+- 备份恢复的 `psql` 增加 `ON_ERROR_STOP` 和 `--no-psqlrc`，使 SQL 错误触发事务失败；跨站导入尚未实现，本地被忽略的导入设计稿已标注安全阻塞项。
 
 ### 关键决策
 
 - 用户明确本功能专门针对 Docker；本轮是需求范围澄清，不是功能开发授权。
 - 应用容器可见资源不等于物理机或数据库/Redis 容器资源；Docker 身份、持久化挂载或单实例条件无法可靠确认时不得自动应用。
+- 不可信 SQL 在 staging 恢复时即执行，事后检查不能作为隔离；源库恢复覆盖备份记录与存储配置，需独立设计隔离和数据库外的回滚信息。
 
 ### 验证
 
 - `git fetch --prune origin` 通过既有本地代理成功，修改前本地 `main` 与 `origin/main` 为 `0 0`；手册 9 个本地相对链接均存在，`git diff --check` 通过。
-- 未运行代码测试与构建：本轮仅修订文档，未改业务代码或部署配置。
+- 资源调优文档变更未运行代码测试与构建。
+- 备份恢复修复：`cd backend && GOPROXY=https://goproxy.cn,direct go test ./internal/repository -count=1` 通过；`git diff --check` 通过。默认 Go 代理连接超时，切换代理后通过；未进行真实 PostgreSQL 恢复演练。
 
 ### 产出
 
 - `0c3e571` docs(tuning): scope resource analysis to Docker
-- 本条日志随独立 `docs(worklog)` 提交落地。
+- `bf2be86f5` fix(backup): stop restore on SQL errors
+- 日志变更随独立 `docs(worklog)` 提交落地。
 
 ---
 

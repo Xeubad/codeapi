@@ -2,6 +2,21 @@ export default {
     ops: {
       title: '运维监控',
       description: '运维监控与排障',
+      resourceAnalysis: {
+        title: '资源观察',
+        description: '查看当前采样的资源和连接池状态，辅助评估 Docker 部署。',
+        observation: '只读观察',
+        noData: '暂无资源样本。请确认运维监控已启用，并等待采集。',
+        sampleTime: '样本时间：{time}',
+        stale: '样本已过期或采集时间未知，请检查采集状态。',
+        cpuScope: '容器或宿主机指标，取决于采集来源',
+        dbScope: '本应用实例连接数 / 最大打开连接数',
+        redisBase: '本应用实例连接数 / 基础池大小',
+        redisScope: 'Redis 基础池大小不是硬连接上限；服务端容量及其他客户端占用未包含在此处。',
+        limits: '单次样本不能确定最佳配置。调整前请结合负载历史、数据库容量与部署配置判断。',
+        dbUnavailable: '数据库健康检查未通过，请先检查连接。',
+        redisUnavailable: 'Redis 健康检查未通过，请先检查连接。'
+      },
       // Dashboard
       systemHealth: '系统健康',
       outputTps: '单次输出 TPS',

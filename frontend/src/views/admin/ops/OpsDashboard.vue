@@ -39,6 +39,8 @@
         @exit-fullscreen="exitFullscreen"
       />
 
+      <OpsResourceAnalysis v-if="opsEnabled && !isFullscreen && !(loading && !hasLoadedOnce)" :metrics="overview?.system_metrics" />
+
       <!-- Row: Concurrency + Throughput -->
       <div v-if="opsEnabled && !(loading && !hasLoadedOnce)" class="grid grid-cols-1 gap-6 lg:grid-cols-4">
         <div class="lg:col-span-1 min-h-[360px]">
@@ -158,6 +160,7 @@ import {
 } from '@/api/admin/ops'
 import { useAdminSettingsStore, useAppStore } from '@/stores'
 import OpsDashboardHeader from './components/OpsDashboardHeader.vue'
+import OpsResourceAnalysis from './components/OpsResourceAnalysis.vue'
 import OpsDashboardSkeleton from './components/OpsDashboardSkeleton.vue'
 import OpsConcurrencyCard from './components/OpsConcurrencyCard.vue'
 import OpsErrorDetailModal from './components/OpsErrorDetailModal.vue'

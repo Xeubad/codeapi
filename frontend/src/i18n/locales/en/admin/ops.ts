@@ -2,6 +2,21 @@ export default {
     ops: {
       title: 'Ops Monitoring',
       description: 'Operational monitoring and troubleshooting',
+      resourceAnalysis: {
+        title: 'Resource observation',
+        description: 'Review sampled resource and connection pool metrics for your Docker deployment.',
+        observation: 'Read-only',
+        noData: 'No resource samples yet. Enable ops monitoring and wait for collection.',
+        sampleTime: 'Sample time: {time}',
+        stale: 'The sample is stale or its time is unknown. Check the collector.',
+        cpuScope: 'Container or host metric, depending on the source',
+        dbScope: 'Application instance connections / maximum open connections',
+        redisBase: 'Application instance connections / base pool size',
+        redisScope: 'Redis base pool size is not a hard connection limit; server capacity and other clients are not included.',
+        limits: 'A single sample cannot determine optimal settings. Review load history, database capacity and deployment configuration before making changes.',
+        dbUnavailable: 'Database health check failed. Check the connection first.',
+        redisUnavailable: 'Redis health check failed. Check the connection first.'
+      },
       // Dashboard
       systemHealth: 'System Health',
       outputTps: 'Per-request output TPS',

@@ -38,6 +38,27 @@
 
 ## 2026年11月4日
 
+**主题（后续工作）**：资源调优观察面板启动开发
+
+### 改动
+
+- 在运维监控新增只读资源观察卡，复用已有 CPU、内存、应用数据库/Redis 池快照，标注采样时间、过期及 Redis 基础池语义；补齐中英文文案。
+- 更新资源调优手册的开发状态；持续历史分析、数值建议、确认应用、持久化和回滚尚未实现。
+
+### 关键决策
+
+- 用户明确要求直接开发且不做测试；不凭单次快照伪造推荐，也不擅自修改 Docker 或运行配置。
+
+### 验证
+
+- `pnpm --dir frontend exec vue-tsc --noEmit`、`pnpm --dir frontend exec vite build`、`git diff --check` 通过；按用户要求未运行测试。
+
+### 产出
+
+- `08b1bb4` wip(ops): add resource observation panel
+- 本条日志随独立文档提交落地。
+
+
 **主题**：细化 Docker Compose 动态调优及 1C1G 验证方案
 
 ### 改动

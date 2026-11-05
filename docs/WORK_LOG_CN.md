@@ -55,7 +55,7 @@
 
 ### 验证
 
-- `go test ./...`（backend 全量，含新增 `TestPricingDataDirDefaultFollowsDataDir`、`TestDescribeInstallStateListsLookupDirs`）通过；`golangci-lint` 本机未安装，未运行（由 CI `backend-ci` 覆盖）。
+- `go test ./...`（backend 全量，含新增 `TestPricingDataDirDefaultFollowsDataDir`、`TestDescribeInstallStateListsLookupDirs`）通过；`golangci-lint` 本机未安装，改用 CI 同版本镜像 `golangci/golangci-lint:v2.14.0` 对改动包补跑，修正 1 处 G703 后 0 issues。
 - `make build-backend` 后 `make run` 启动：`/` 200、`/health` 200、`/api/v1/settings/public` 200、`/api/v1/admin/groups` 401。
 - 启动后 `backend/` 顶层无 `logs/`、`model_pricing.json`、`config.yaml`；`data/logs/sub2api.log` 与 `data/model_pricing.json` 有更新，证明数据根唯一。
 - 不带 `DATA_DIR` 裸跑 `./bin/server`：报错按预期打印 `cwd=... data_dir=.; /app/data[config.yaml=false .installed=false]; ...`。

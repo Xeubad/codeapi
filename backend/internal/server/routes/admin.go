@@ -83,7 +83,7 @@ func RegisterAdminRoutes(
 		registerBackupRoutes(admin, h, stepUpAuth)
 
 		// 运维监控（Ops）
-		registerOpsRoutes(admin, h)
+		registerOpsRoutes(admin, h, stepUpAuth)
 
 		// 系统管理
 		registerSystemRoutes(admin, h)
@@ -189,9 +189,15 @@ func registerAdminAPIKeyRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	}
 }
 
-func registerOpsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+func registerOpsRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAuth middleware.StepUpAuthMiddleware) {
 	ops := admin.Group("/ops")
 	{
+		// Platform-managed pool overrides: read state freely, mutate under
+		// step-up (the file these write wins over env at next start).
+		ops.GET("/resource-tuning", h.Admin.Ops.GetResourceTuning)
+		ops.PUT("/resource-tuning", gin.HandlerFunc(stepUpAuth), h.Admin.Ops.UpdateResourceTuning)
+		ops.DELETE("/resource-tuning", gin.HandlerFunc(stepUpAuth), h.Admin.Ops.DeleteResourceTuning)
+
 		// Realtime ops signals
 		ops.GET("/concurrency", h.Admin.Ops.GetConcurrencyStats)
 		ops.GET("/user-concurrency", h.Admin.Ops.GetUserConcurrencyStats)

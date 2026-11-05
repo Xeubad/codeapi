@@ -1316,6 +1316,47 @@ async function updateMetricThresholds(thresholds: OpsMetricThresholds): Promise<
   await apiClient.put('/admin/ops/settings/metric-thresholds', thresholds)
 }
 
+// --- Resource tuning (platform-managed pool overrides) ---
+
+export interface OpsPoolValues {
+  db_max_open_conns: number
+  db_max_idle_conns: number
+  redis_pool_size: number
+  redis_min_idle_conns: number
+}
+
+export type OpsResourceTuningState = 'none' | 'pending' | 'active' | 'invalid'
+
+export interface OpsResourceTuningStatus {
+  running: OpsPoolValues
+  baseline: OpsPoolValues
+  managed: OpsPoolValues | null
+  managed_updated_at?: string
+  managed_state: OpsResourceTuningState
+  managed_error?: string
+  restart_required: boolean
+  file_path: string
+  limits: {
+    db_max_open_conns: number
+    redis_pool_size: number
+  }
+}
+
+async function getResourceTuning(): Promise<OpsResourceTuningStatus> {
+  const { data } = await apiClient.get<OpsResourceTuningStatus>('/admin/ops/resource-tuning')
+  return data
+}
+
+async function updateResourceTuning(values: OpsPoolValues): Promise<OpsResourceTuningStatus> {
+  const { data } = await apiClient.put<OpsResourceTuningStatus>('/admin/ops/resource-tuning', values)
+  return data
+}
+
+async function deleteResourceTuning(): Promise<OpsResourceTuningStatus> {
+  const { data } = await apiClient.delete<OpsResourceTuningStatus>('/admin/ops/resource-tuning')
+  return data
+}
+
 export const opsAPI = {
   getDashboardSnapshotV2,
   getDashboardOverview,
@@ -1364,6 +1405,9 @@ export const opsAPI = {
   updateAdvancedSettings,
   getMetricThresholds,
   updateMetricThresholds,
+  getResourceTuning,
+  updateResourceTuning,
+  deleteResourceTuning,
   listSystemLogs,
   cleanupSystemLogs,
   getSystemLogSinkHealth

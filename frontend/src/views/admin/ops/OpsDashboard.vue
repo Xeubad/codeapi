@@ -39,7 +39,7 @@
         @exit-fullscreen="exitFullscreen"
       />
 
-      <OpsResourceAnalysis v-if="opsEnabled && !isFullscreen && !(loading && !hasLoadedOnce)" :metrics="overview?.system_metrics" />
+      <OpsResourceAnalysis v-if="opsEnabled && !isFullscreen && !(loading && !hasLoadedOnce)" :metrics="overview?.system_metrics" :refresh-token="dashboardRefreshToken" />
 
       <!-- Row: Concurrency + Throughput -->
       <div v-if="opsEnabled && !(loading && !hasLoadedOnce)" class="grid grid-cols-1 gap-6 lg:grid-cols-4">

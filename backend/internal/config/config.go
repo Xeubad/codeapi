@@ -109,6 +109,13 @@ type Config struct {
 
 	// Enforce only API-key spending windows in simple mode.
 	SimpleModeKeyRateLimitEnabled bool `mapstructure:"simple_mode_key_rate_limit_enabled" yaml:"simple_mode_key_rate_limit_enabled"`
+
+	// Runtime state for the platform-managed pool override (never unmarshalled).
+	// PoolBaseline records the config.yaml/env values before the managed file is
+	// applied; ManagedPoolApplied/…Ignored describe what happened this boot.
+	PoolBaseline       ManagedPoolValues `mapstructure:"-"`
+	ManagedPoolApplied bool              `mapstructure:"-"`
+	ManagedPoolIgnored string            `mapstructure:"-"`
 }
 
 // SimpleModeConfig controls startup behavior in simple mode.
@@ -1968,6 +1975,11 @@ func load(allowMissingJWTSecret bool) (*Config, error) {
 	if cfg.Gateway.OpenAIWS.StickyResponseIDTTLSeconds <= 0 && cfg.Gateway.OpenAIWS.StickyPreviousResponseTTLSeconds > 0 {
 		cfg.Gateway.OpenAIWS.StickyResponseIDTTLSeconds = cfg.Gateway.OpenAIWS.StickyPreviousResponseTTLSeconds
 	}
+
+	// Platform-managed pool override (admin UI): captures the baseline and applies
+	// the managed file when present. Must run before Validate() so overridden
+	// values are validated like any other source.
+	cfg.applyManagedPoolOverride()
 
 	// Normalize UMQ mode: 白名单校验，非法值在加载时一次性 warn 并清空
 	if m := cfg.Gateway.UserMessageQueue.Mode; m != "" && m != UMQModeSerialize && m != UMQModeThrottle {

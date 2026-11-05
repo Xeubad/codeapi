@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -15,6 +16,14 @@ import (
 
 type OpsHandler struct {
 	opsService *service.OpsService
+	cfg        *config.Config
+}
+
+// SetConfig attaches the loaded config for endpoints that report on or mutate
+// startup-applied settings (resource tuning). Wired via ProvideOpsHandler so
+// the many NewOpsHandler(svc) test call sites stay unchanged.
+func (h *OpsHandler) SetConfig(cfg *config.Config) {
+	h.cfg = cfg
 }
 
 // GetErrorLogByID returns ops error log detail.

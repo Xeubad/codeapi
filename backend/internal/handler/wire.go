@@ -98,6 +98,14 @@ func ProvideAdminHandlers(
 	}
 }
 
+// ProvideOpsHandler constructs OpsHandler with the loaded config attached so
+// the resource-tuning endpoints can compare effective vs managed pool values.
+func ProvideOpsHandler(opsService *service.OpsService, cfg *config.Config) *admin.OpsHandler {
+	h := admin.NewOpsHandler(opsService)
+	h.SetConfig(cfg)
+	return h
+}
+
 func ProvideGatewayHandler(
 	gatewayService *service.GatewayService,
 	openAIGatewayService *service.OpenAIGatewayService,
@@ -275,7 +283,7 @@ var ProviderSet = wire.NewSet(
 	admin.NewRedeemHandler,
 	admin.NewPromoHandler,
 	ProvideAdminSettingHandler,
-	admin.NewOpsHandler,
+	ProvideOpsHandler,
 	ProvideSystemHandler,
 	admin.NewSubscriptionHandler,
 	admin.NewUsageHandler,

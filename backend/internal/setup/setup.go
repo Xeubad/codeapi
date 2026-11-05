@@ -109,7 +109,7 @@ func DescribeInstallState() string {
 }
 
 func fileExists(path string) bool {
-	_, err := os.Stat(path)
+	_, err := os.Stat(path) //nolint:gosec // G703: 路径由 DATA_DIR/固定候选目录拼接，非请求输入
 	return err == nil
 }
 

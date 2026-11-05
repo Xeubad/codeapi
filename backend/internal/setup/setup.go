@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -83,6 +84,33 @@ func GetConfigFilePath() string {
 // GetInstallLockPath returns the full path to .installed lock file
 func GetInstallLockPath() string {
 	return GetDataDir() + "/" + InstallLockFile
+}
+
+// DescribeInstallState 输出启动失败诊断：cwd、安装检测实际使用的数据目录，
+// 以及配置加载器会探测的每个目录及其文件命中情况。
+func DescribeInstallState() string {
+	cwd, err := os.Getwd()
+	if err != nil {
+		cwd = "?"
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "cwd=%s data_dir=%s", cwd, GetDataDir())
+	if configFile := strings.TrimSpace(os.Getenv("CONFIG_FILE")); configFile != "" {
+		fmt.Fprintf(&b, "; CONFIG_FILE=%s[exists=%t]", configFile, fileExists(configFile))
+	}
+	for _, dir := range config.ConfigLookupDirs() {
+		fmt.Fprintf(&b, "; %s[config.yaml=%t .installed=%t]",
+			dir,
+			fileExists(filepath.Join(dir, ConfigFileName)),
+			fileExists(filepath.Join(dir, InstallLockFile)),
+		)
+	}
+	return b.String()
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 // SetupConfig holds the setup configuration

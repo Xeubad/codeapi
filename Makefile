@@ -1,4 +1,4 @@
-.PHONY: build build-backend build-frontend test test-backend test-frontend test-frontend-critical
+.PHONY: build build-backend build-frontend run test test-backend test-frontend test-frontend-critical
 
 FRONTEND_CRITICAL_VITEST := \
 	src/i18n/__tests__/localeKeyCompleteness.spec.ts \
@@ -38,6 +38,10 @@ build: build-backend build-frontend
 # 编译后端（复用 backend/Makefile）
 build-backend:
 	@$(MAKE) -C backend build
+
+# 本地起后端（复用 backend/Makefile；自动加载 backend/.env）
+run:
+	@$(MAKE) -C backend run
 
 # 编译前端（需要已安装依赖）
 build-frontend:

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/lib/pq"
@@ -176,6 +177,32 @@ func TestNeedsSetupFallsBackToFileDetectionWhenSkipSetupIsDisabled(t *testing.T)
 				t.Fatalf("NeedsSetup() = %v, want %v", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestDescribeInstallStateListsLookupDirs(t *testing.T) {
+	dataDir := t.TempDir()
+	t.Setenv("DATA_DIR", dataDir)
+	if err := os.WriteFile(filepath.Join(dataDir, ConfigFileName), nil, 0o600); err != nil {
+		t.Fatalf("WriteFile(config) error = %v", err)
+	}
+
+	got := DescribeInstallState()
+	for _, want := range []string{"cwd=", "data_dir=" + dataDir, dataDir + "[config.yaml=true .installed=false]"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("DescribeInstallState() = %q, want it to contain %q", got, want)
+		}
+	}
+	for _, dir := range config.ConfigLookupDirs() {
+		if !strings.Contains(got, dir+"[") {
+			t.Fatalf("DescribeInstallState() = %q, want lookup dir %q listed", got, dir)
+		}
+	}
+
+	configFile := filepath.Join(t.TempDir(), "explicit.yaml")
+	t.Setenv("CONFIG_FILE", configFile)
+	if got := DescribeInstallState(); !strings.Contains(got, "CONFIG_FILE="+configFile+"[exists=false]") {
+		t.Fatalf("DescribeInstallState() = %q, want CONFIG_FILE probe listed", got)
 	}
 }
 

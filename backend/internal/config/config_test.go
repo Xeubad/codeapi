@@ -362,6 +362,20 @@ func TestConfigFileTakesPrecedenceOverDataDir(t *testing.T) {
 	require.Equal(t, "192.0.2.30", cfg.Server.Host)
 }
 
+func TestPricingDataDirDefaultFollowsDataDir(t *testing.T) {
+	viper.Reset()
+	t.Cleanup(viper.Reset)
+	t.Setenv("DATA_DIR", "")
+	setDefaults()
+	require.Equal(t, "./data", viper.GetString("pricing.data_dir"))
+
+	dataDir := t.TempDir()
+	t.Setenv("DATA_DIR", dataDir)
+	viper.Reset()
+	setDefaults()
+	require.Equal(t, dataDir, viper.GetString("pricing.data_dir"))
+}
+
 func TestLoadReturnsErrorForMissingConfigFile(t *testing.T) {
 	resetViperWithJWTSecret(t)
 	t.Setenv("CONFIG_FILE", filepath.Join(t.TempDir(), "missing.yaml"))

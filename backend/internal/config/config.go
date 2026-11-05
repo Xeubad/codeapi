@@ -2025,6 +2025,25 @@ func load(allowMissingJWTSecret bool) (*Config, error) {
 	return &cfg, nil
 }
 
+// ConfigLookupDirs 返回配置加载依次探测的目录。启动诊断与安装检测共用这一份清单，
+// 避免「加载器找得到、门禁说没装」的两套语义。
+func ConfigLookupDirs() []string {
+	dirs := make([]string, 0, 5)
+	if dataDir := strings.TrimSpace(os.Getenv("DATA_DIR")); dataDir != "" {
+		dirs = append(dirs, dataDir)
+	}
+	return append(dirs, "/app/data", ".", "./config", "/etc/sub2api")
+}
+
+// defaultPricingDataDir 让定价缓存和日志、插件一样落在 DATA_DIR 里；未设置时保留
+// 容器形态的 ./data（容器 cwd=/app，正好命中挂载的 /app/data）。
+func defaultPricingDataDir() string {
+	if dataDir := strings.TrimSpace(os.Getenv("DATA_DIR")); dataDir != "" {
+		return dataDir
+	}
+	return "./data"
+}
+
 func configureConfigSource(setConfigFile, addConfigPath func(string)) {
 	if configFile := strings.TrimSpace(os.Getenv("CONFIG_FILE")); configFile != "" {
 		setConfigFile(configFile)
@@ -2032,13 +2051,9 @@ func configureConfigSource(setConfigFile, addConfigPath func(string)) {
 	}
 
 	// Add config paths in priority order.
-	if dataDir := strings.TrimSpace(os.Getenv("DATA_DIR")); dataDir != "" {
-		addConfigPath(dataDir)
+	for _, dir := range ConfigLookupDirs() {
+		addConfigPath(dir)
 	}
-	addConfigPath("/app/data")
-	addConfigPath(".")
-	addConfigPath("./config")
-	addConfigPath("/etc/sub2api")
 }
 
 func setDefaults() {
@@ -2354,7 +2369,7 @@ func setDefaults() {
 	// Pricing - 从 models.dev 同步模型定价数据（无官方 .sha256，靠 update_interval_hours 定期重拉）
 	viper.SetDefault("pricing.remote_url", "https://models.dev/api.json")
 	viper.SetDefault("pricing.hash_url", "")
-	viper.SetDefault("pricing.data_dir", "./data")
+	viper.SetDefault("pricing.data_dir", defaultPricingDataDir())
 	viper.SetDefault("pricing.fallback_file", "./resources/model-pricing/model_prices_and_context_window.json")
 	viper.SetDefault("pricing.override_file", "")
 	viper.SetDefault("pricing.update_interval_hours", 24)

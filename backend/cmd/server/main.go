@@ -83,7 +83,7 @@ func main() {
 		} else {
 			// This fork does not expose the HTTP setup wizard. Provision through
 			// AUTO_SETUP env vars (containers) or the interactive --setup CLI.
-			log.Fatal("No installation found. Set AUTO_SETUP=true with DATABASE_*, REDIS_* and ADMIN_EMAIL/ADMIN_PASSWORD, or run this binary with --setup.")
+			log.Fatalf("No installation found. %s\nSet AUTO_SETUP=true with DATABASE_*, REDIS_* and ADMIN_EMAIL/ADMIN_PASSWORD, or run this binary with --setup.", setup.DescribeInstallState())
 		}
 	}
 

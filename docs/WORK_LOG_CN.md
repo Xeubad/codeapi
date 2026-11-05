@@ -66,6 +66,35 @@
 
 ---
 
+## 2026年11月6日
+
+**主题**：平台托管连接池调优第一期落地
+
+### 改动
+
+- `config/managed_pool.go`：`managed-pool.json` 托管覆盖文件，DATA_DIR 解析、`ManagedPoolValues` 校验（db_open ≤2000 / redis_pool ≤8192 / idle ≤ open）、原子写、删除回退；`load()` 在 Validate 前记录 `PoolBaseline` 并应用覆盖，文件损坏记 `ManagedPoolIgnored` 按基线启动。
+- `handler/admin/ops_resource_tuning_handler.go` + `ops_handler.go`：`GET/PUT/DELETE /admin/ops/resource-tuning`，状态区分 none/pending/active/invalid 与 restart_required；`OpsHandler.SetConfig` 经 `ProvideOpsHandler` 装配（`wire.go` + 手写同步 `wire_gen.go`）。
+- `server/routes/admin.go`：PUT/DELETE 挂 `stepUpAuth`，GET 不要求监控开关。
+- 前端 `OpsResourceAnalysis.vue`：观察卡升级为「资源与连接池」，加编辑对话框（四项字段 + 上下限提示）、保存/恢复部署配置、`TotpStepUpDialog` 接入；`ops.ts` API 新增三个函数；中英文案同步。
+
+### 关键决策
+
+- 不做在线热调参：Redis 客户端与 DB 池都是启动时构建，运行时改会与持久化值漂移；改为「保存 → 重启 → 生效核验」闭环，UI 展示 running → pending。
+- 托管文件损坏按基线启动而非 fail-fast：保留可用性，`managed_state=invalid` + `managed_error` 上报给管理员修复或删除。
+- `wire` 工具本地缺 go.sum 条目无法重跑 `go generate`，手动同步 `wire_gen.go` 等价改动（与 `ProvideAdminSettingHandler` 同为手写 provider 模式），`go build` 通过。
+
+### 验证
+
+- `go build ./...`、`go vet`（相关包）、`pnpm exec vue-tsc --noEmit`、`vite build`、i18n 键完整性 `vitest run localeKeyCompleteness.spec.ts`（3 通过）、`git diff --check` 均通过。
+- 按用户要求未运行单元/集成测试；`wire` 代码生成未跑（环境缺依赖），`wire_gen.go` 为手动同步。
+
+### 产出
+
+- `c3ec82f` feat(ops): platform-managed pool tuning with restart apply
+- 本条日志随独立文档提交落地。
+
+---
+
 ## 2026年11月4日
 
 **主题（后续工作）**：资源调优观察面板启动开发

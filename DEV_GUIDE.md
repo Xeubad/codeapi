@@ -41,6 +41,24 @@ go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13
 npm install -g pnpm
 ```
 
+### 本地起服务姿势（前后端分离）
+
+后端和前端分开起时，浏览器只开前端 3000，`/api`、`/v1`、`/setup` 由 Vite 代理到后端 8080。
+
+```bash
+# 后端（仓库根执行；唯一入口，会先加载 backend/.env）
+make run
+
+# 前端（另一个终端）
+pnpm --dir frontend dev     # http://localhost:3000
+```
+
+- 本地数据根是 `backend/data/`：`config.yaml`、`.installed`、`logs/`、`pages/`、`plugins/`、`model_pricing.json` 全在这里，`backend/` 顶层不留运行期文件。
+- `backend/.env` 的 `DATA_DIR` **必须是绝对路径**。安装检测只认 `DATA_DIR` 这一个目录，相对路径会把「cwd 必须是 backend」变成第二个启动前提，从别的目录或进程管理器启动就会报 `No installation found`。
+- 绕开 `make run` 直接跑 `./bin/server` 会缺 `DATA_DIR`，同样报错；该报错会打印 `cwd`、`data_dir` 与每个候选目录的 `config.yaml` / `.installed` 命中情况，照着看即可定位。
+- 重启前先释放 8080：`kill $(lsof -nP -iTCP:8080 -sTCP:LISTEN -t)`。portguard 在非交互终端下只报告占用者、不杀进程。
+- Docker 形态不需要设 `DATA_DIR`：镜像 `WORKDIR /app`，配置加载与安装检测都命中挂载的 `/app/data`，日志、插件、定价缓存也在同一处。
+
 ## 三、CI/CD 流水线
 
 ### GitHub Actions Workflows

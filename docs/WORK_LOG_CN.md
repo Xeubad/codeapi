@@ -36,6 +36,36 @@
 
 ---
 
+## 2026年11月5日
+
+**主题**：本地数据根收敛到 `DATA_DIR`，修复前后端分离启动必崩
+
+### 改动
+
+- 本地布局按 `.env` 规则回迁：`backend/config.yaml`、`logs/`、`model_pricing.json(+sha256)`、`pages/`、`plugins/` 全部移入 `backend/data/`，`backend/` 顶层不再产生运行期文件。
+- `backend/.env` 的 `DATA_DIR` 改为绝对路径，头部说明改为唯一入口 `make run`；新增 `backend/Makefile` 的 `run` 目标（source `.env` 后 exec）与根 `Makefile` 同名别名。
+- `config.ConfigLookupDirs()` 成为配置候选目录的单一来源，`configureConfigSource` 与启动诊断共用；`pricing.data_dir` 默认改为 `$DATA_DIR`（未设置时仍是 `./data`，容器形态不变）。
+- `No installation found` 现在打印 `cwd`、`data_dir` 与每个候选目录的 `config.yaml` / `.installed` 命中结果。
+
+### 关键决策
+
+- 2026-10-25 布局上移时保留了 `DATA_DIR=./data` 的旧 `.env`（gitignored，不进 diff），叠加安装检测只认单目录、`pricing.data_dir` 默认 `./data`，形成「配置在 backend/、门禁找 backend/data」的必崩组合。本次选择按 `.env` 规则走（与 Docker `/app/data` 同构），而不是删掉 `.env`。
+- `DATA_DIR` 固定绝对路径：相对路径等于把 cwd 也变成启动前提，等于再埋一次同类雷。
+- 安装检测保持严格（只认 `GetDataDir()`），不做多路径回退——`DATA_DIR` 是唯一契约；只把「它查过哪些路径」放进报错，避免把「指错目录」变成静默成功。
+
+### 验证
+
+- `go test ./...`（backend 全量，含新增 `TestPricingDataDirDefaultFollowsDataDir`、`TestDescribeInstallStateListsLookupDirs`）通过；`golangci-lint` 本机未安装，未运行（由 CI `backend-ci` 覆盖）。
+- `make build-backend` 后 `make run` 启动：`/` 200、`/health` 200、`/api/v1/settings/public` 200、`/api/v1/admin/groups` 401。
+- 启动后 `backend/` 顶层无 `logs/`、`model_pricing.json`、`config.yaml`；`data/logs/sub2api.log` 与 `data/model_pricing.json` 有更新，证明数据根唯一。
+- 不带 `DATA_DIR` 裸跑 `./bin/server`：报错按预期打印 `cwd=... data_dir=.; /app/data[config.yaml=false .installed=false]; ...`。
+
+### 产出
+
+- `5b0778543` fix(config): make DATA_DIR the single local data root
+
+---
+
 ## 2026年11月4日
 
 **主题（后续工作）**：资源调优观察面板启动开发

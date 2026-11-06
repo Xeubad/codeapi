@@ -37,6 +37,38 @@
           <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ item.detail }}</div>
         </div>
       </div>
+      <!-- 自动优化建议：只建议不应用，需管理员确认后重启生效 -->
+      <div v-if="adviceItems.length" class="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-dark-700 dark:bg-dark-900">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div class="text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
+            {{ t('admin.ops.resourceAnalysis.adviceTitle') }}
+            <span class="ml-2 font-normal normal-case text-gray-400">{{ t('admin.ops.resourceAnalysis.adviceSamples', { count: tuning?.advice?.sample_count ?? 0 }) }}</span>
+          </div>
+          <button
+            v-if="hasApplyable"
+            type="button"
+            class="rounded-lg border border-primary-500 px-3 py-1 text-xs font-medium text-primary-600 transition-colors hover:bg-primary-50 disabled:opacity-50 dark:border-primary-400 dark:text-primary-400 dark:hover:bg-dark-800"
+            @click="applyAdvice"
+          >
+            {{ t('admin.ops.resourceAnalysis.applyAdvice') }}
+          </button>
+        </div>
+        <ul class="mt-3 space-y-2">
+          <li v-for="it in adviceItems" :key="it.key" class="flex flex-wrap items-baseline justify-between gap-2 text-sm">
+            <span class="font-medium text-gray-700 dark:text-gray-300">{{ fieldLabel(it.key) }}</span>
+            <span class="tabular-nums text-gray-600 dark:text-gray-400">
+              {{ it.current }} <span class="text-gray-400">→</span>
+              <span :class="candidateClass(it)">{{ it.candidate }}</span>
+              <span class="ml-2 text-xs" :class="candidateClass(it)">{{ actionLabel(it) }}</span>
+            </span>
+          </li>
+        </ul>
+        <p v-if="adviceWarnings.length" class="mt-3 text-xs text-amber-700 dark:text-amber-400">
+          {{ adviceWarnings.join(' · ') }}
+        </p>
+        <p class="mt-1 text-xs text-gray-400 dark:text-gray-500">{{ t('admin.ops.resourceAnalysis.adviceHint') }}</p>
+      </div>
+
       <ul class="mt-4 space-y-2 text-sm text-gray-600 dark:text-gray-300">
         <li v-if="metrics.db_ok === false" class="text-red-600 dark:text-red-400">{{ t('admin.ops.resourceAnalysis.dbUnavailable') }}</li>
         <li v-if="metrics.redis_ok === false" class="text-red-600 dark:text-red-400">{{ t('admin.ops.resourceAnalysis.redisUnavailable') }}</li>
@@ -168,6 +200,43 @@ const fields = computed(() => {
     { key: 'redis_min_idle_conns' as const, label: t('admin.ops.resourceAnalysis.fieldRedisIdle'), hint: t('admin.ops.resourceAnalysis.hintRedisIdle') },
   ]
 })
+
+// ---- 自动优化建议（只读，不自动应用） ----
+const adviceItems = computed(() => tuning.value?.advice?.items ?? [])
+const hasApplyable = computed(() => adviceItems.value.some(it => it.action === 'increase' || it.action === 'decrease'))
+const adviceWarnings = computed(() => (tuning.value?.advice?.warnings ?? []).map(w => t(`admin.ops.resourceAnalysis.warn_${w}`, w)))
+
+function fieldLabel(key: string): string {
+  const f = fields.value.find(x => x.key === key)
+  return f ? f.label : key
+}
+
+function actionLabel(it: { action: string }): string {
+  return t(`admin.ops.resourceAnalysis.action_${it.action}`, it.action)
+}
+
+function candidateClass(it: { action: string }): string {
+  switch (it.action) {
+    case 'increase': return 'text-emerald-600 dark:text-emerald-400'
+    case 'decrease': return 'text-amber-600 dark:text-amber-400'
+    case 'insufficient': return 'text-gray-400'
+    default: return 'text-gray-600 dark:text-gray-300'
+  }
+}
+
+// 一键填充：把建议候选写进表单，仍需人工确认 + step-up 后保存
+function applyAdvice() {
+  if (!tuning.value?.advice) return
+  const next = { ...form.value }
+  for (const it of tuning.value.advice.items) {
+    if (it.action === 'increase' || it.action === 'decrease') {
+      next[it.key] = it.candidate
+    }
+  }
+  form.value = next
+  formError.value = ''
+  editOpen.value = true
+}
 
 const formValid = computed(() => {
   const f = form.value

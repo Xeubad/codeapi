@@ -283,7 +283,123 @@ LIMIT 1`
 		out.AccountSwitchCount = &v
 	}
 
+	assignSystemMetrics(&out, systemMetricsNulls{
+		cpu: cpu, memUsed: memUsed, memTotal: memTotal, memPct: memPct,
+		dbOK: dbOK, redisOK: redisOK, redisTotal: redisTotal, redisIdle: redisIdle,
+		dbActive: dbActive, dbIdle: dbIdle, dbWaiting: dbWaiting,
+		goroutines: goroutines, queueDepth: queueDepth, accountSwitchCount: accountSwitchCount,
+	})
 	return &out, nil
+}
+
+type systemMetricsNulls struct {
+	cpu, memPct                 sql.NullFloat64
+	memUsed, memTotal           sql.NullInt64
+	dbOK, redisOK               sql.NullBool
+	redisTotal, redisIdle       sql.NullInt64
+	dbActive, dbIdle, dbWaiting sql.NullInt64
+	goroutines, queueDepth      sql.NullInt64
+	accountSwitchCount          sql.NullInt64
+}
+
+func assignSystemMetrics(out *service.OpsSystemMetricsSnapshot, n systemMetricsNulls) {
+	if n.cpu.Valid {
+		v := n.cpu.Float64
+		out.CPUUsagePercent = &v
+	}
+	if n.memUsed.Valid {
+		v := n.memUsed.Int64
+		out.MemoryUsedMB = &v
+	}
+	if n.memTotal.Valid {
+		v := n.memTotal.Int64
+		out.MemoryTotalMB = &v
+	}
+	if n.memPct.Valid {
+		v := n.memPct.Float64
+		out.MemoryUsagePercent = &v
+	}
+	if n.dbOK.Valid {
+		v := n.dbOK.Bool
+		out.DBOK = &v
+	}
+	if n.redisOK.Valid {
+		v := n.redisOK.Bool
+		out.RedisOK = &v
+	}
+	if n.redisTotal.Valid {
+		v := int(n.redisTotal.Int64)
+		out.RedisConnTotal = &v
+	}
+	if n.redisIdle.Valid {
+		v := int(n.redisIdle.Int64)
+		out.RedisConnIdle = &v
+	}
+	if n.dbActive.Valid {
+		v := int(n.dbActive.Int64)
+		out.DBConnActive = &v
+	}
+	if n.dbIdle.Valid {
+		v := int(n.dbIdle.Int64)
+		out.DBConnIdle = &v
+	}
+	if n.dbWaiting.Valid {
+		v := int(n.dbWaiting.Int64)
+		out.DBConnWaiting = &v
+	}
+	if n.goroutines.Valid {
+		v := int(n.goroutines.Int64)
+		out.GoroutineCount = &v
+	}
+	if n.queueDepth.Valid {
+		v := int(n.queueDepth.Int64)
+		out.ConcurrencyQueueDepth = &v
+	}
+	if n.accountSwitchCount.Valid {
+		v := n.accountSwitchCount.Int64
+		out.AccountSwitchCount = &v
+	}
+}
+
+func (r *opsRepository) ListSystemMetrics(ctx context.Context, windowMinutes int, limit int) ([]service.OpsSystemMetricsSnapshot, error) {
+	if r == nil || r.db == nil {
+		return nil, fmt.Errorf("nil ops repository")
+	}
+	if windowMinutes <= 0 {
+		windowMinutes = 1
+	}
+	if limit <= 0 || limit > 1000 {
+		limit = 180
+	}
+	q := `
+SELECT
+  id, created_at, window_minutes, cpu_usage_percent, memory_used_mb, memory_total_mb,
+  memory_usage_percent, db_ok, redis_ok, redis_conn_total, redis_conn_idle,
+  db_conn_active, db_conn_idle, db_conn_waiting, goroutine_count,
+  concurrency_queue_depth, account_switch_count
+FROM ops_system_metrics
+WHERE window_minutes = $1 AND platform IS NULL AND group_id IS NULL
+ORDER BY created_at DESC
+LIMIT $2`
+	rows, err := r.db.QueryContext(ctx, q, windowMinutes, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var result []service.OpsSystemMetricsSnapshot
+	for rows.Next() {
+		var out service.OpsSystemMetricsSnapshot
+		var n systemMetricsNulls
+		if err := rows.Scan(&out.ID, &out.CreatedAt, &out.WindowMinutes, &n.cpu, &n.memUsed, &n.memTotal,
+			&n.memPct, &n.dbOK, &n.redisOK, &n.redisTotal, &n.redisIdle, &n.dbActive, &n.dbIdle,
+			&n.dbWaiting, &n.goroutines, &n.queueDepth, &n.accountSwitchCount); err != nil {
+			return nil, err
+		}
+		assignSystemMetrics(&out, n)
+		result = append(result, out)
+	}
+	return result, rows.Err()
 }
 
 func (r *opsRepository) UpsertJobHeartbeat(ctx context.Context, input *service.OpsUpsertJobHeartbeatInput) error {

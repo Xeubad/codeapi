@@ -55,6 +55,12 @@ type OpsMetricsCollector struct {
 	redisClient *redis.Client
 	instanceID  string
 
+	// Tracks cumulative sql.DBStats counters so each minute window stores the
+	// *delta* actually observed in that window (nil on restart/first sample).
+	lastDBWaitCount    int64
+	lastDBWaitDuration time.Duration
+	lastDBStatsValid   bool
+
 	lastCgroupCPUUsageNanos uint64
 	lastCgroupCPUSampleAt   time.Time
 
@@ -271,7 +277,8 @@ func (c *OpsMetricsCollector) collectAndPersist(ctx context.Context) error {
 
 	dbOK := c.checkDB(ctx)
 	redisOK := c.checkRedis(ctx)
-	active, idle := c.dbPoolStats()
+	dbPool := c.dbPoolStats()
+	dbWaiting, _, dbWaitStatsOK := c.dbWaitDeltas(dbPool)
 	redisTotal, redisIdle, redisStatsOK := c.redisPoolStats()
 
 	successCount, tokenConsumed, err := c.queryUsageCounts(ctx, windowStart, windowEnd)
@@ -358,8 +365,14 @@ func (c *OpsMetricsCollector) collectAndPersist(ctx context.Context) error {
 			return intPtr(redisIdle)
 		}(),
 
-		DBConnActive:          intPtr(active),
-		DBConnIdle:            intPtr(idle),
+		DBConnActive: intPtr(dbPool.InUse),
+		DBConnIdle:   intPtr(dbPool.Idle),
+		DBConnWaiting: func() *int {
+			if !dbWaitStatsOK {
+				return nil
+			}
+			return intPtr(int(dbWaiting))
+		}(),
 		GoroutineCount:        intPtr(goroutines),
 		ConcurrencyQueueDepth: concurrencyQueueDepth,
 	}
@@ -869,12 +882,38 @@ func (c *OpsMetricsCollector) redisPoolStats() (total int, idle int, ok bool) {
 	return int(stats.TotalConns), int(stats.IdleConns), true
 }
 
-func (c *OpsMetricsCollector) dbPoolStats() (active int, idle int) {
+func (c *OpsMetricsCollector) dbPoolStats() sql.DBStats {
 	if c == nil || c.db == nil {
-		return 0, 0
+		return sql.DBStats{}
 	}
-	stats := c.db.Stats()
-	return stats.InUse, stats.Idle
+	return c.db.Stats()
+}
+
+// dbWaitDeltas converts cumulative sql.DBStats wait counters into per-window
+// deltas. First sample after process start returns ok=false because the
+// baseline cumulative counts predate the observation window — persisting them
+// as "waiting" would falsely report a backlog from before monitoring began.
+func (c *OpsMetricsCollector) dbWaitDeltas(stats sql.DBStats) (count int64, duration time.Duration, ok bool) {
+	if c == nil || c.db == nil {
+		return 0, 0, false
+	}
+	defer func() {
+		c.lastDBWaitCount = stats.WaitCount
+		c.lastDBWaitDuration = stats.WaitDuration
+		c.lastDBStatsValid = true
+	}()
+	if !c.lastDBStatsValid {
+		return 0, 0, false
+	}
+	count = stats.WaitCount - c.lastDBWaitCount
+	if count < 0 {
+		count = 0 // counter reset (should not happen, but never report negative)
+	}
+	duration = stats.WaitDuration - c.lastDBWaitDuration
+	if duration < 0 {
+		duration = 0
+	}
+	return count, duration, true
 }
 
 var opsMetricsCollectorReleaseScript = redis.NewScript(`

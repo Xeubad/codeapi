@@ -39,7 +39,21 @@ export default {
         redisScope: 'Redis 基础池大小不是硬连接上限；服务端容量及其他客户端占用未包含在此处。',
         limits: '单次样本不能确定最佳配置。调整前请结合负载历史、数据库容量与部署配置判断。',
         dbUnavailable: '数据库健康检查未通过，请先检查连接。',
-        redisUnavailable: 'Redis 健康检查未通过，请先检查连接。'
+        redisUnavailable: 'Redis 健康检查未通过，请先检查连接。',
+        adviceTitle: '自动优化建议',
+        adviceSamples: '基于最近 {count} 条采样',
+        applyAdvice: '采用建议值',
+        adviceHint: '建议不会自动生效；确认后需重启应用容器。样本不足或依赖异常时不会产生建议。',
+        action_increase: '建议上调',
+        action_decrease: '建议下调',
+        action_keep: '保持',
+        action_unchanged: '与当前一致',
+        action_insufficient: '样本不足',
+        warn_pending_restart: '有待生效的托管参数，重启后再评估',
+        warn_insufficient_samples: '采样不足，建议仅供参考',
+        warn_stale_samples: '采样时间过旧，建议可能不反映当前负载',
+        warn_db_unhealthy: '数据库不健康，建议暂停调整',
+        warn_redis_unhealthy: 'Redis 不健康，建议暂停调整'
       },
       // Dashboard
       systemHealth: '系统健康',

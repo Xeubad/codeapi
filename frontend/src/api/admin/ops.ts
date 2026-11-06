@@ -1327,6 +1327,25 @@ export interface OpsPoolValues {
 
 export type OpsResourceTuningState = 'none' | 'pending' | 'active' | 'invalid'
 
+export interface OpsTuningAdviceItem {
+  key: keyof OpsPoolValues
+  current: number
+  candidate: number
+  action: 'keep' | 'increase' | 'decrease' | 'unchanged' | 'insufficient'
+  reason: string
+  evidence?: Record<string, unknown>
+}
+
+export interface OpsTuningAdvice {
+  generated_at: string
+  sample_count: number
+  oldest_sample?: string
+  newest_sample?: string
+  stalled: boolean
+  items: OpsTuningAdviceItem[]
+  warnings?: string[]
+}
+
 export interface OpsResourceTuningStatus {
   running: OpsPoolValues
   baseline: OpsPoolValues
@@ -1340,6 +1359,7 @@ export interface OpsResourceTuningStatus {
     db_max_open_conns: number
     redis_pool_size: number
   }
+  advice?: OpsTuningAdvice
 }
 
 async function getResourceTuning(): Promise<OpsResourceTuningStatus> {

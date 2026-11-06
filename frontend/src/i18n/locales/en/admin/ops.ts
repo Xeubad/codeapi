@@ -39,7 +39,21 @@ export default {
         redisScope: 'Redis base pool size is not a hard connection limit; server capacity and other clients are not included.',
         limits: 'A single sample cannot determine optimal settings. Review load history, database capacity and deployment configuration before making changes.',
         dbUnavailable: 'Database health check failed. Check the connection first.',
-        redisUnavailable: 'Redis health check failed. Check the connection first.'
+        redisUnavailable: 'Redis health check failed. Check the connection first.',
+        adviceTitle: 'Auto-optimization advice',
+        adviceSamples: 'Based on last {count} samples',
+        applyAdvice: 'Apply suggested values',
+        adviceHint: 'Advice is never applied automatically; confirmation and a container restart are required. No advice is produced when samples are insufficient or dependencies are unhealthy.',
+        action_increase: 'Increase suggested',
+        action_decrease: 'Decrease suggested',
+        action_keep: 'Keep',
+        action_unchanged: 'Same as current',
+        action_insufficient: 'Insufficient data',
+        warn_pending_restart: 'A managed override is pending restart; re-evaluate afterwards',
+        warn_insufficient_samples: 'Not enough samples; advice is informational only',
+        warn_stale_samples: 'Samples are stale; advice may not reflect current load',
+        warn_db_unhealthy: 'Database unhealthy; do not tune now',
+        warn_redis_unhealthy: 'Redis unhealthy; do not tune now'
       },
       // Dashboard
       systemHealth: 'System Health',

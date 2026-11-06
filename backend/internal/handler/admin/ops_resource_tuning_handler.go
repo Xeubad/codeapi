@@ -1,12 +1,14 @@
 package admin
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
+	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 )
 
@@ -34,9 +36,12 @@ type opsResourceTuningStatus struct {
 	RestartRequired bool                    `json:"restart_required"`
 	FilePath        string                  `json:"file_path"`
 	Limits          opsResourceTuningLimits `json:"limits"`
+	// Advice is the observation-driven recommendation computed from recent
+	// system metrics. It is advisory only — never auto-applied.
+	Advice *service.OpsTuningAdvice `json:"advice,omitempty"`
 }
 
-func (h *OpsHandler) resourceTuningStatus() (*opsResourceTuningStatus, error) {
+func (h *OpsHandler) resourceTuningStatus(ctx context.Context) (*opsResourceTuningStatus, error) {
 	if h.cfg == nil {
 		return nil, errors.New("config unavailable")
 	}
@@ -84,7 +89,39 @@ func (h *OpsHandler) resourceTuningStatus() (*opsResourceTuningStatus, error) {
 		st.ManagedState = "invalid"
 		st.ManagedError = h.cfg.ManagedPoolIgnored
 	}
+	h.attachAdvice(ctx, st)
 	return st, nil
+}
+
+// attachAdvice computes tuning advice from recent system metrics. Advisory
+// only: failures degrade to a missing field instead of failing the request.
+func (h *OpsHandler) attachAdvice(ctx context.Context, st *opsResourceTuningStatus) {
+	if h.opsService == nil || st == nil {
+		return
+	}
+	samples, err := h.opsService.ListSystemMetrics(ctx, 60)
+	if err != nil {
+		return
+	}
+	cur := service.OpsTuningPoolValues{
+		DBMaxOpenConns:    st.Running.DBMaxOpenConns,
+		DBMaxIdleConns:    st.Running.DBMaxIdleConns,
+		RedisPoolSize:     st.Running.RedisPoolSize,
+		RedisMinIdleConns: st.Running.RedisMinIdleConns,
+	}
+	var pending *service.OpsTuningPoolValues
+	if st.Managed != nil && st.ManagedState == "pending" {
+		p := service.OpsTuningPoolValues{
+			DBMaxOpenConns:    st.Managed.DBMaxOpenConns,
+			DBMaxIdleConns:    st.Managed.DBMaxIdleConns,
+			RedisPoolSize:     st.Managed.RedisPoolSize,
+			RedisMinIdleConns: st.Managed.RedisMinIdleConns,
+		}
+		pending = &p
+	}
+	advisor := service.NewOpsResourceTuningAdvisor()
+	advice := advisor.Advise(samples, cur, pending)
+	st.Advice = &advice
 }
 
 // GetResourceTuning reports effective/baseline/managed pool values.
@@ -94,7 +131,7 @@ func (h *OpsHandler) GetResourceTuning(c *gin.Context) {
 		response.Error(c, http.StatusServiceUnavailable, "Ops service not available")
 		return
 	}
-	st, err := h.resourceTuningStatus()
+	st, err := h.resourceTuningStatus(c.Request.Context())
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, err.Error())
 		return
@@ -135,7 +172,7 @@ func (h *OpsHandler) UpdateResourceTuning(c *gin.Context) {
 		response.Error(c, http.StatusInternalServerError, fmt.Sprintf("save managed pool override: %v", err))
 		return
 	}
-	st, err := h.resourceTuningStatus()
+	st, err := h.resourceTuningStatus(c.Request.Context())
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, err.Error())
 		return
@@ -154,7 +191,7 @@ func (h *OpsHandler) DeleteResourceTuning(c *gin.Context) {
 		response.Error(c, http.StatusInternalServerError, fmt.Sprintf("remove managed pool override: %v", err))
 		return
 	}
-	st, err := h.resourceTuningStatus()
+	st, err := h.resourceTuningStatus(c.Request.Context())
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, err.Error())
 		return

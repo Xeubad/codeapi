@@ -76,6 +76,9 @@
 - `handler/admin/ops_resource_tuning_handler.go` + `ops_handler.go`：`GET/PUT/DELETE /admin/ops/resource-tuning`，状态区分 none/pending/active/invalid 与 restart_required；`OpsHandler.SetConfig` 经 `ProvideOpsHandler` 装配（`wire.go` + 手写同步 `wire_gen.go`）。
 - `server/routes/admin.go`：PUT/DELETE 挂 `stepUpAuth`，GET 不要求监控开关。
 - 前端 `OpsResourceAnalysis.vue`：观察卡升级为「资源与连接池」，加编辑对话框（四项字段 + 上下限提示）、保存/恢复部署配置、`TotpStepUpDialog` 接入；`ops.ts` API 新增三个函数；中英文案同步。
+- 观测驱动建议引擎 `service/ops_tuning_advisor.go`：读取最近 ≤10 条一分钟系统指标，四个连接池参数仅在「持续达到阈值或出现等待增量」时产出候选（增 25% / 减 50%，空闲值有下界），样本 <5、依赖过半不健康或样本过旧时返回 `insufficient` 不猜测；`GET /admin/ops/resource-tuning` 响应附带 `advice`（不新增接口、永不自动应用）。
+- 采集器补齐 `db_conn_waiting`：持久化 `sql.DBStats.WaitCount` 的每分钟增量，重启首个样本不输出基线值（避免把历史累计误报为积压）；新增 `OpsRepository.ListSystemMetrics` 供窗口分析。
+- 前端建议区块：逐项显示 current → candidate + 动作标签与警告（pending_restart / insufficient / stale / unhealthy），「采用建议值」一键填充表单，仍需人工确认 + step-up 保存。
 
 ### 关键决策
 
@@ -87,10 +90,12 @@
 
 - `go build ./...`、`go vet`（相关包）、`pnpm exec vue-tsc --noEmit`、`vite build`、i18n 键完整性 `vitest run localeKeyCompleteness.spec.ts`（3 通过）、`git diff --check` 均通过。
 - 按用户要求未运行单元/集成测试；`wire` 代码生成未跑（环境缺依赖），`wire_gen.go` 为手动同步。
+- 建议引擎补充：`go test -tags unit ./internal/service -count=1`（8477 通过，含 advisor 10 个新测试）、`go test ./internal/repository -count=1`（773 通过）、`go test -tags unit ./internal/handler/admin -count=1`（713 通过）、`pnpm typecheck` 通过；真实负载下的阈值有效性未实测（文档 §11.4 的对照实验仍未执行）。
 
 ### 产出
 
 - `c3ec82f` feat(ops): platform-managed pool tuning with restart apply
+- `305eb6b` feat(ops): observation-driven pool tuning advisor
 - 本条日志随独立文档提交落地。
 
 ---
